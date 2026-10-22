@@ -120,6 +120,19 @@ about credits, quota or billing), `error: model not available` (HTTP 404), `erro
 429 or a 503 reads `error: 429` / `error: 503`). The provider's full raw error body is written to
 `judge_log.csv` (`error_detail`) and **never** appears in the page or in any download.
 
+**Retries and the rejected reply.** A call is retried once when the reply is malformed (the retry
+note quotes what was wrong, e.g. `text after the last label is unlabelled: "Overall this is a hold."`),
+and once, after a short pause, on a transient failure — a timeout, HTTP 503 or HTTP 429 (a second one is
+the error). A call that is invalid twice keeps the rejected reply (cut to 1,500 characters) in
+`error_detail` of `judge_log.csv`, so the cause can be read afterwards; the page still shows only
+"error: invalid output". The panel's reading is guidance on length: it is cut at a sentence, never
+withheld for being long.
+
+**Pack details.** Bank and insurer packs show cash-flow lines as "not meaningful for banks and insurers"
+rather than plain figures. The debt lines are dated (the balance sheet of the quarter) and, under
+NET-DEBT-2, total debt is the statement's own Total Debt row with a separate "leases add …" line; the
+provider's own "Net Debt" row is dropped from the pack's balance sheet.
+
 **The split counts judges, not calls.** Each judge contributes exactly once - its stable verdict, or
 "unstable", "incomplete", "error" or "not run" - so one judge's two calls are never "HOLD 2":
 "1 HOLD, 2 error" is one judge that answered and two that did not.

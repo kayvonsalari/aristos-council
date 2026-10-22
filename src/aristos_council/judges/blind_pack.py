@@ -201,6 +201,31 @@ def _price(report) -> list[str]:
                      pac.trailing_pe, pac.forward_pe_this_year, pac.forward_pe_next_year)
 
 
+# BANK-PACK-1: for a bank or insurer the cash-flow measures describe deposits and loans moving, not
+# the business earning cash (live: OpenAI made "Operating cash flow was -$147.8bn in FY2025" its
+# driving fact on JPM). The page replaces free cash flow with a sentence; the pack does the same for
+# every such line - the line is KEPT, its figures replaced by the page's own words, so a judge reads
+# why there is no number rather than guessing at a gap. The test is the page's own
+# (``abs_readings.is_financial_sector``), so the page and the pack cannot disagree.
+_BANK_CASH_FLOW_LINES = ("operating cash flow", "operating activities", "free cash flow",
+                         "capital expenditure", "working capital")
+
+
+def _is_financial(fundamentals) -> bool:
+    from ..abs_readings import is_financial_sector
+    return is_financial_sector(fundamentals)
+
+
+def _bank_cash_flow_line(label: str) -> bool:
+    low = label.lower()
+    return any(w in low for w in _BANK_CASH_FLOW_LINES)
+
+
+def _not_meaningful_line(label: str) -> str:
+    from ..abs_readings import NOT_MEANINGFUL_FOR_FINANCIALS
+    return f"{label}: {NOT_MEANINGFUL_FOR_FINANCIALS}"
+
+
 def _series(fundamentals) -> list[str]:
     """The annual series the page's readings are built from, oldest first, each figure wearing its
     year and its currency. Order and years come from ``series_pack`` (FACTS-ORDER-1); the figures
@@ -217,6 +242,9 @@ def _series(fundamentals) -> list[str]:
                                   ("diluted_eps", "Diluted earnings per share", True),
                                   ("operating_cash_flow_annual", "Operating cash flow", False),
                                   ("free_cash_flow_annual", "Free cash flow", False)):
+        if _is_financial(fundamentals) and _bank_cash_flow_line(label):
+            out.append(_not_meaningful_line(label))
+            continue
         packed = pack_series(fundamentals, fld, label=label, order=ORDER_OLDEST_FIRST)
         if not packed_ok(packed):
             continue
@@ -258,23 +286,32 @@ def _analysts(report) -> list[str]:
 
 
 def _debt_cash(report, fundamentals=None) -> list[str]:
-    """The page's debt-and-cash readings. PACK-NETDEBT-1: the page's net-debt figure is the LATEST
-    balance sheet, while the balance-sheet statement carries a year-end "Net Debt" line for each fiscal
-    year; with both in one pack they read as two unlabelled disagreeing figures ($140.0bn and $141.2bn
-    on Ford). The reading therefore carries its balance-sheet date, and a note says the statement's
-    line is the year-end one."""
+    """The page's debt-and-cash readings. PACK-NETDEBT-1 dated the net-debt figure; NET-DEBT-1 states
+    total debt, cash and short-term investments, and net debt as separate lines, EACH with the balance
+    sheet's date, under the one definition the page uses (``abs_readings.NET_DEBT_DEFINITION``). Live:
+    NVCR's judges saw "cash and investments $447.7m" and "net cash $207.1m" with no debt figure and
+    could not reconcile them; MSFT's saw the provider's own "Net Debt" line ($19.4bn) beside the page's
+    $52.0bn. That provider line is dropped from the pack's balance sheet (``_statement``)."""
     debt = getattr(report.check, "debt_and_cash", None)
     if debt is None:
         return []
-    lines = [_clean(x) for x in list(debt.lines())]
-    if lines and getattr(debt.net_debt, "available", False) and "balance sheet" not in lines[0]:
-        from ..abs_readings import _balance_sheet_date
-        lines[0] = f"{lines[0]} ({_balance_sheet_date(fundamentals)})"
+    from ..abs_readings import NET_DEBT_DEFINITION, _balance_sheet_date
+    when = _balance_sheet_date(fundamentals)
+    dated = {r.text() for r in (debt.net_debt, debt.total_debt, debt.cash, debt.leases)
+             if getattr(r, "available", False)}
+    lines = [(f"{_clean(x)} ({when})" if x in dated and "balance sheet" not in x else _clean(x))
+             for x in list(debt.lines())]
     notes = [_clean(x) for x in list(debt.notes())]
-    if lines:
-        notes.append("The 'Net Debt' line in the balance sheet above is each fiscal year's year-end "
-                     "figure; the net-debt reading here is the latest balance sheet.")
+    if dated:
+        notes.append(f"Net debt here is {NET_DEBT_DEFINITION}. The balance sheet above is at each "
+                     f"fiscal year-end; the provider's own 'Net Debt' line, which leaves out short-term "
+                     f"investments, is not shown.")
     return lines + notes
+
+
+# NET-DEBT-1 - balance-sheet lines left out of the pack because they define net debt differently from
+# the page (see ``_debt_cash``).
+_DROPPED_STATEMENT_LINES = {"balance": {"net debt"}}
 
 
 def _growth(report) -> list[str]:
@@ -348,8 +385,10 @@ def _fmt_statement_value(line: str, v, ccy) -> str:
     return format_money(v, ccy, abbreviate=True)
 
 
-def _statement(statements, key: str, ccy) -> list[str]:
-    """One statement, every line item the provider gives, oldest period first."""
+def _statement(statements, key: str, ccy, *, financial: bool = False) -> list[str]:
+    """One statement, every line item the provider gives, oldest period first. For a bank or
+    insurer (``financial``) the cash-flow statement's operating-cash-flow, free-cash-flow, capex and
+    working-capital lines carry the page's not-meaningful sentence in place of their figures."""
     block = (statements or {}).get(key) or {}
     periods, rows = block.get("periods") or [], block.get("rows") or {}
     if not rows:
@@ -357,6 +396,11 @@ def _statement(statements, key: str, ccy) -> list[str]:
     head = "fiscal years ending " + ", ".join(periods) + " (oldest first" + (f"; {ccy}" if ccy else "") + ")"
     out = [head]
     for line, vals in rows.items():
+        if line.strip().lower() in _DROPPED_STATEMENT_LINES.get(key, ()):
+            continue
+        if financial and key == "cashflow" and _bank_cash_flow_line(str(line)):
+            out.append(_not_meaningful_line(str(line)))
+            continue
         cells = [(_fmt_statement_value(line, v, ccy) if v is not None else "n/a") for v in vals]
         out.append(f"{line}: " + " | ".join(cells))
     return out
@@ -395,7 +439,8 @@ def build_blind_pack(report, fundamentals=None, statements=None, news=None, *,
         ("Financial series", _series(fundamentals)),
         ("Income statement", _statement(statements, "income", ccy)),
         ("Balance sheet", _statement(statements, "balance", ccy)),
-        ("Cash flow statement", _statement(statements, "cashflow", ccy)),
+        ("Cash flow statement", _statement(statements, "cashflow", ccy,
+                                           financial=_is_financial(fundamentals))),
         ("Valuation against its own history", _valuation(report)),
         ("What analysts say", _analysts(report)),
         ("Debt and cash", _debt_cash(report, fundamentals)),

@@ -33,6 +33,8 @@ from .adapter import (
     PriceBar,
     PriceHistory,
     StreetConsensus,
+    listing_unit_dividend,
+    minor_unit_scale,
     sane_dividend_yield,
 )
 
@@ -123,6 +125,10 @@ class YFinanceAdapter(MarketDataAdapter):
             balance = tk.balance_sheet
         except Exception:
             balance = None
+        try:
+            quarterly_balance = tk.quarterly_balance_sheet
+        except Exception:
+            quarterly_balance = None
         # Cash-flow statement for the FCF-basis payout criterion (best-effort, like the
         # others): absence -> None fields -> the criterion falls back to the EPS basis.
         try:
@@ -133,6 +139,20 @@ class YFinanceAdapter(MarketDataAdapter):
         # Recovered DPS, reused for the payout derivation below (same source the
         # screen sees), so dividend yield AND payout survive the summaryDetail gap.
         dps = _dividend_per_share(info)
+        # GBX-YIELD-1: on a pence-quoted line (London "GBp") the price is in pence while
+        # the vendor's dividend rate is in pounds, so dividend / price read 100x too low
+        # (SHEL.L 0.03%, GLEN.L 0.02%). Put the dividend in the price's unit; the payout
+        # ratio below keeps the vendor's own unit, because EPS is in that unit too.
+        dps_listing, yield_listing = dps, _dividend_yield(info)
+        scale = minor_unit_scale(info.get("currency"))
+        if scale != 1.0:
+            dps_listing = listing_unit_dividend(dps, _trailing_year_dividends(tk), scale)
+            if not _looks_like_fund(info):
+                price = (_as_float(info.get("currentPrice"))
+                         or _as_float(info.get("regularMarketPrice"))
+                         or _as_float(info.get("previousClose")))
+                yield_listing = (sane_dividend_yield(dps_listing / price)
+                                 if dps_listing is not None and price else None)
         # Dividend-growth streak + last cut, DERIVED from the payment history (a
         # yield-trap separator that's free but yfinance never surfaces as a scalar).
         (streak_years, last_cut, year_totals, year_stats,
@@ -196,6 +216,8 @@ class YFinanceAdapter(MarketDataAdapter):
                         "Cash Cash Equivalents And Short Term Investments")
 
         return Fundamentals(
+            statements_currency_note=_statements_currency_note(
+                _as_float(info.get("totalRevenue")), _annual_series(income, "Total Revenue")),
             ticker=ticker,
             name=info.get("longName") or info.get("shortName"),
             company_name=(info.get("longName") or None),   # display label (None-guarded)
@@ -206,8 +228,8 @@ class YFinanceAdapter(MarketDataAdapter):
             # floats; normalize empty/missing to None.
             currency=(info.get("currency") or None),
             financial_currency=(info.get("financialCurrency") or None),
-            dividend_yield=_dividend_yield(info),   # normalised to DECIMAL
-            dividend_per_share=dps,
+            dividend_yield=yield_listing,   # normalised to DECIMAL
+            dividend_per_share=dps_listing,   # in the price's unit (GBX-YIELD-1)
             payout_ratio=_payout_ratio(info, dps),
             eps=_as_float(info.get("trailingEps")),
             pe_ratio=_as_float(info.get("trailingPE")),
@@ -243,7 +265,8 @@ class YFinanceAdapter(MarketDataAdapter):
             dividend_year_totals=year_totals,
             dividend_year_stats=year_stats,
             dividend_payment_dates=pay_dates,
-            total_debt=_as_float(info.get("totalDebt")),
+            total_debt=_statement_total_debt(quarterly_balance, _as_float(info.get("totalDebt")))[0],
+            lease_liabilities=_statement_total_debt(quarterly_balance, _as_float(info.get("totalDebt")))[1],
             debt_to_equity=_as_float(info.get("debtToEquity")),
             total_cash=_as_float(info.get("totalCash")),   # EV = mcap + debt − cash
             # Financials-lens vendor scalars (FIN-1): the measures banks are priced by.
@@ -382,6 +405,27 @@ def _dividend_per_share(info: dict) -> float | None:
     return _as_float(info.get("trailingAnnualDividendRate"))
 
 
+def _trailing_year_dividends(tk, today: date | None = None) -> float | None:
+    """The sum of the payments in the last 365 days, from the payment history (GBX-YIELD-1).
+
+    Yahoo's history for a London line is in the line's own unit (HSBA.L's 2025 payments sum to
+    49.55, pence, for HSBC's $0.66), so this needs no currency guess. None when the history
+    cannot be read or is empty; 0.0 when nothing was paid in the window."""
+    try:
+        divs = tk.dividends
+        if divs is None or len(divs) == 0:
+            return None
+        end = today or date.today()
+        start = date.fromordinal(end.toordinal() - 365)
+        total = 0.0
+        for ts, amt in divs.items():
+            if start < ts.date() <= end:
+                total += float(amt)
+        return total
+    except Exception:
+        return None
+
+
 def _dividend_streak_from_ticker(tk) -> tuple:
     """(streak_years, last_reduction_year, year_totals, year_stats) from a yfinance
     Ticker's dividend history.
@@ -422,6 +466,45 @@ def _dividend_streak_from_ticker(tk) -> tuple:
     stats = [[float(y), float(sum(per_year[y])), float(statistics.median(per_year[y])),
               float(len(per_year[y]))] for y in sorted(per_year)]
     return streak, last_cut, totals, stats, sorted(pay_dates)
+
+
+def _statement_total_debt(quarterly_balance, info_total_debt):
+    """``(total_debt, lease_liabilities)`` - NET-DEBT-2. Debt is the balance sheet's OWN "Total Debt" row
+    for the latest quarter (borrowings plus finance leases, the same row the statement prints); the
+    provider's headline ``totalDebt`` also carries operating-lease liabilities (MSFT, Jun 2026: $128.8bn
+    headline against a $56.8bn row), so the excess is returned separately as ``lease_liabilities`` and is
+    never counted as debt. With no statement row the headline is used and no lease figure is claimed."""
+    row = None
+    try:
+        if quarterly_balance is not None and "Total Debt" in quarterly_balance.index:
+            col = quarterly_balance.columns[0]
+            row = _as_float(quarterly_balance.loc["Total Debt", col])
+    except Exception:                                   # noqa: BLE001 - a statement gap is not a crash
+        row = None
+    if row is None or row < 0:
+        return info_total_debt, None
+    excess = (info_total_debt - row) if info_total_debt is not None else None
+    # a rounding-size gap (Ford: 163.296bn against 163.296bn) is no lease figure
+    leases = excess if excess is not None and excess > max(1e6, 0.001 * row) else None
+    return row, leases
+
+
+# STATEMENTS-CCY-1. The headline "trailing revenue" and the latest annual statement revenue are the SAME
+# business a few months apart, so they sit within a factor of two or so of each other. A factor of three or
+# more means the two are not in one currency (Vale: 218bn vs 38.4bn = 5.7x, the BRL/USD rate - the statements
+# are USD, yfinance labels them BRL). The figure is a test, never a conversion: nothing is rescaled.
+STATEMENTS_CCY_RATIO = 3.0
+
+
+def _statements_currency_note(headline_revenue, statement_revenue) -> str:
+    latest = next((v for v in (statement_revenue or []) if v), None)
+    if not headline_revenue or not latest or headline_revenue <= 0 or latest <= 0:
+        return ""
+    ratio = max(headline_revenue / latest, latest / headline_revenue)
+    if ratio < STATEMENTS_CCY_RATIO:
+        return ""
+    return (f"the provider's headline revenue ({headline_revenue:,.0f}) and its latest annual statement "
+            f"({latest:,.0f}) differ {ratio:.1f}x, so they are not in one currency")
 
 
 def _market_cap(info: dict) -> float | None:

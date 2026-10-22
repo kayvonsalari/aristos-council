@@ -70,6 +70,30 @@ _BAD_NUMBER = re.compile(r"(?<![\w.])-?\d[\d,]*\.\d+\.\d+(?![\w])")
 # PAST an optional currency symbol and whitespace for a digit — a genuine bad rank has no
 # number at all after the slash, by any route; a price pair always does.
 _BAD_RANK = re.compile(r"(?<![\w/])\d+\s*/\s*(?!\s*[$€£¥]?\s*\d)")
+# RANK-CHECK-FALSEPOS-2 — the lookarounds above still let a price pair through when the
+# currency is a CODE: KO's forward P/E line "(USD 92.68 / USD 3.52 consensus EPS)" was
+# flagged as 'A rank is missing its cohort size: "68 /"'. A rank candidate is dropped when
+# its first number is the tail of a decimal or thousands group ("92.68", "1,234"), when a
+# currency symbol or code stands right before it, or when a currency, "price" or "EPS"
+# follows the slash — all of those are money, never a rank.
+_CCY_CODES = r"USD|EUR|GBP|GBX|GBp|JPY|CHF|KRW|SEK|DKK|NOK|CAD|AUD|HKD|TWD|CNY|RMB|INR|BRL|ZAR|SGD|MXN"
+_NUMBER_TAIL = re.compile(r"\d[.,]$")
+_MONEY_BEFORE = re.compile(rf"(?:[$€£¥]|\b(?:{_CCY_CODES}))\s*$")
+_MONEY_AFTER_SLASH = re.compile(rf"\s*(?:[$€£¥]|(?:{_CCY_CODES}|price|EPS)\b)", re.I)
+
+
+def _is_rank_candidate(text: str, match: re.Match) -> bool:
+    """False when a rank-shaped match is really part of a number or a money/price
+    expression (RANK-CHECK-FALSEPOS-2)."""
+    before = text[:match.start()]
+    if _NUMBER_TAIL.search(before) or _MONEY_BEFORE.search(before):
+        return False
+    slash = text.index("/", match.start())
+    return not _MONEY_AFTER_SLASH.match(text, slash + 1)
+
+
+def _rank_matches(pattern: re.Pattern, text: str) -> list[re.Match]:
+    return [m for m in pattern.finditer(text) if _is_rank_candidate(text, m)]
 
 
 @dataclass(frozen=True)
@@ -186,11 +210,12 @@ def validate_narration(narration, *, ranker_verdict: Optional[str] = None,
                 "unparseable_figure",
                 f"A figure cannot be read as a number: "
                 f"\"{_BAD_NUMBER.search(text).group(0)}\"."))
-        if _BAD_RANK.search(text):
+        bad_ranks = _rank_matches(_BAD_RANK, text)
+        if bad_ranks:
             issues.append(StructuralIssue(
                 "unparseable_rank",
                 f"A rank is missing its cohort size: "
-                f"\"{_BAD_RANK.search(text).group(0).strip()}\"."))
+                f"\"{bad_ranks[0].group(0).strip()}\"."))
         for match in _PERCENT.finditer(text):
             if not _parses(match.group(1)):
                 issues.append(StructuralIssue(
@@ -201,7 +226,7 @@ def validate_narration(narration, *, ranker_verdict: Optional[str] = None,
                 issues.append(StructuralIssue(
                     "unparseable_amount",
                     f"A money amount cannot be read: \"{match.group(0).strip()}\"."))
-        for match in _RANK.finditer(text):
+        for match in _rank_matches(_RANK, text):
             rank, cohort = int(match.group(1)), int(match.group(2))
             if cohort == 0 or rank > cohort:
                 issues.append(StructuralIssue(

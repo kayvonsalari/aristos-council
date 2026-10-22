@@ -93,6 +93,9 @@ class FactorInputs:
     # rate was fetched. ``fx_failed`` is True when the currencies differ but the rate
     # could NOT be fetched — the EV route then ABSTAINS (never mixes currencies).
     fx: Optional[CurrencyConversion] = None
+    # FX-DEBT-MV-1: accounts -> quote-MAJOR rate (abs_readings.AccountsFx) for the debt-to-market-value
+    # screen rule; None when the currencies match, a rate was not had, or the accounts are mixed.
+    quote_fx: object = None
     fx_failed: bool = False
     # ETF static layer (ETF-STATIC-1): the outcome of filling slow ETF fields from the
     # committed static CSV for THIS name. ``filled`` maps a Fundamentals field to its
@@ -311,6 +314,8 @@ def _epv_margin_of_safety_source(fi: FactorInputs) -> str:
         return f"{SRC_ABSTAINED}: no fundamentals"
     if r.margin_of_safety is None:
         return f"{SRC_ABSTAINED}: {r.note}"
+    if r.epv is not None and r.epv <= 0:            # EPV-TIES-1: ranked, and the reason is kept
+        return f"{SRC_COMPUTED}, {r.note}"
     return f"{SRC_COMPUTED}, tax {r.tax_source}"
 
 
@@ -1139,6 +1144,8 @@ def _gather_valuation_band(adapter, ticker: str, fundamentals, *, today: date
     ``with_valuation_band=False`` and leaves the band ``None`` (no section), unchanged."""
     if fundamentals is None:
         return ValuationBand(note="fundamentals unavailable for this name")
+    if getattr(fundamentals, "statements_currency_note", ""):
+        return ValuationBand(note=fundamentals.statements_currency_note)
     try:
         prices = adapter.get_price_history(
             ticker, start=today - timedelta(days=round(365.25 * BAND_YEARS) + 10),
@@ -1277,7 +1284,9 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
     # unchanged.
     fx = None
     fx_failed = False
-    if fundamentals is not None:
+    if fundamentals is not None and getattr(fundamentals, "statements_currency_note", ""):
+        fx_failed = True      # STATEMENTS-CCY-1: the accounts are not in one currency - no EV, no EPV
+    elif fundamentals is not None:
         price_ccy = fundamentals.currency
         acct_ccy = fundamentals.financial_currency
         if price_ccy and acct_ccy and price_ccy != acct_ccy:
@@ -1287,6 +1296,17 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
                                         as_of=today.isoformat())
             else:
                 fx_failed = True
+
+    quote_fx = None
+    if (fundamentals is not None and not getattr(fundamentals, "statements_currency_note", "")
+            and fundamentals.currency and fundamentals.financial_currency):
+        from .abs_readings import latest_accounts_fx
+        from .tools.criteria.registry import _MINOR_TO_MAJOR
+        q = fundamentals.currency.strip()
+        q_major = _MINOR_TO_MAJOR.get(q, q)
+        a = fundamentals.financial_currency.strip()
+        if q_major.upper() != a.upper():
+            quote_fx = latest_accounts_fx(adapter, a, q_major, today)
 
     # Absolute valuation band (VALBAND-1) — display column + registered factor. Computed
     # AFTER the static/FX layers so it reads the same fundamentals every other leg does.
@@ -1308,7 +1328,7 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
         return_6m=total_return(closes, _TD_6M) if closes else None,
         return_12m=total_return(closes, _TD_12M) if closes else None,
         annualized_volatility=snap.annualized_volatility if snap else None,
-        last_close=closes[-1] if closes else None, fx=fx, fx_failed=fx_failed,
+        last_close=closes[-1] if closes else None, fx=fx, fx_failed=fx_failed, quote_fx=quote_fx,
         static=static_fill, fund_size_fx=fund_size_fx,
         fund_size_fx_failed=fund_size_fx_failed,
         fund_size_currency_unverified=fund_size_currency_unverified,
@@ -1390,7 +1410,7 @@ def price_divergence_flag(fi: FactorInputs, screen_criteria) -> Optional[str]:
         Evidence, PRICE_MOMENTUM_CRITERION, run_screen)
     ev = Evidence(fundamentals=fi.fundamentals, last_close=fi.last_close,
                   return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[],
-                  valuation_band=fi.valuation_band)
+                  valuation_band=fi.valuation_band, accounts_fx=getattr(fi, "quote_fx", None))
     res = run_screen(screen_criteria, ev, ticker=fi.ticker)
     if not any(c.passed is False and c.name != PRICE_MOMENTUM_CRITERION
                for c in res.criteria):
@@ -1420,6 +1440,8 @@ def screen_unavailable_reason(outcomes: dict, fundamentals) -> Optional[str]:
     (above). First not-evaluated rule in screen order names the reason."""
     from .tools.criteria.registry import REGISTRY
     from .tools.screening import _non_usd_currency
+    from .operating_profit import (has_no_operating_profit, has_no_revenue,
+                                   no_operating_profit_reason, no_revenue_reason)
     for name, o in outcomes.items():
         if o.get("passed") is not None:
             continue
@@ -1427,6 +1449,12 @@ def screen_unavailable_reason(outcomes: dict, fundamentals) -> Optional[str]:
             continue
         if name == "min_market_cap" and _non_usd_currency(fundamentals) is not None:
             continue
+        # GROWTH-REASON-1: when the gap has a known cause, say it in the words the other
+        # lenses use (a loss-maker has no return on capital to read; no sales, no growth rate).
+        if name == "min_roic" and has_no_operating_profit(fundamentals):
+            return no_operating_profit_reason(fundamentals)
+        if name == "min_revenue_cagr" and has_no_revenue(fundamentals):
+            return no_revenue_reason(fundamentals)
         label = getattr(REGISTRY.get(name), "label", "") or name
         if label[1:2].islower():
             label = label[0].lower() + label[1:]
@@ -1456,7 +1484,7 @@ def screen_evaluate(screen_criteria, fi: FactorInputs):
         return None, {}, {}, {}
     ev = Evidence(fundamentals=fi.fundamentals, last_close=fi.last_close,
                   return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[],
-                  valuation_band=fi.valuation_band)
+                  valuation_band=fi.valuation_band, accounts_fx=getattr(fi, "quote_fx", None))
     reason = None
     bases: dict[str, str] = {}
     abstentions: dict[str, str] = {}

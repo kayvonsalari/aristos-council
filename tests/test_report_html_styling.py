@@ -178,6 +178,15 @@ Nothing else moved. The guard (and the wording itself) is pinned independently o
 fixture by ``tests/test_merged_multi_report.py::
 test_every_verdict_rank_and_exclusion_matches_the_per_strategy_reports`` and
 ``rank_engine.too_few_to_rank_text``, so this was not simply relaxed.
+
+BASELINE MOVED AGAIN, AND THE SNAPSHOT RE-TAKEN (2026-10-22, REPEATS-NAMES-1). The summary
+line's shortlist clause now counts the way the shortlist TABLE beneath it does: the lenses that
+voted on the name, with the ones that did not apply said apart. One line moves in each of the
+four files: "shortlist: 1 on 1 of 3" becomes "shortlist: 1 on 1 of 1 (2 did not apply)", which is
+the table row's own "1 of 1: Magic Formula RAW (2 did not apply)". The "3" was the count of
+voting lenses, two of which never judged the name; it is the value the change exists to remove,
+so the snapshot is edited on that one line and nothing else. Pinned independently by
+``tests/test_repeats_names_1.py``.
 """
 
 from __future__ import annotations

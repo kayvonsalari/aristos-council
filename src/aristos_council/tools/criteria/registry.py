@@ -86,6 +86,10 @@ class Evidence:
     # doesn't compute it leaves it None and the criterion NOT-EVALs — the same honest
     # abstention every other criterion makes on a missing input, never a phantom fail.
     valuation_band: object | None = None
+    # FX-DEBT-MV-1: the accounts -> quote-MAJOR-currency rate (``abs_readings.AccountsFx``: rate, dated
+    # as_of, source) for the one criterion that sets an accounts-currency amount beside the market value.
+    # None when the two currencies are the same, or when no rate could be had (the criterion abstains).
+    accounts_fx: object | None = None
 
 
 @dataclass(frozen=True)
@@ -422,6 +426,10 @@ def _min_altman_z(ev: Evidence, threshold: float) -> CriterionResult:
                            observed=r.value, threshold=threshold, note=r.note)
 
 
+_MINOR_TO_MAJOR = {"GBp": "GBP", "GBX": "GBP", "GBPENCE": "GBP", "GBP_PENCE": "GBP", "ZAc": "ZAR",
+                   "ZAC": "ZAR", "ILA": "ILS"}
+
+
 def _max_debt_to_market_cap(ev: Evidence, threshold: float) -> CriterionResult:
     """Balance-sheet leverage as total_debt / market_cap (a yield-trap separator:
     VZ ~1.2x fails). Chosen over debt-to-equity BECAUSE it is ROBUST TO NEGATIVE
@@ -435,12 +443,37 @@ def _max_debt_to_market_cap(ev: Evidence, threshold: float) -> CriterionResult:
             name="max_debt_to_market_cap", passed=None, observed=None,
             threshold=threshold,
             note="leverage unavailable (total_debt or market_cap missing)")
+    # VALE-EVEBIT-1: debt is in the ACCOUNTS currency, market cap in the QUOTE currency. A secondary line
+    # whose quote currency differs from its accounts (Vale's Madrid line: euros against reais; Shell's
+    # London line: pounds against dollars) compared two different monies - Vale read "total debt 2.2x of
+    # market value". House rule 8: a screen criterion abstains rather than converts. The same money in a
+    # minor unit (London GBp quote, GBP accounts: the cap is in pounds) is not a mismatch; a missing
+    # currency evaluates normally.
+    quote, accounts = (f.currency or "").strip(), (f.financial_currency or "").strip()
+    quote_major = _MINOR_TO_MAJOR.get(quote, quote)
+    converted = ""
+    if quote and accounts and quote_major.upper() != accounts.upper():
+        if getattr(f, "statements_currency_note", ""):
+            return CriterionResult(
+                name="max_debt_to_market_cap", passed=None, observed=None, threshold=threshold,
+                note=f"NOT EVALUATED: {f.statements_currency_note}")
+        fx = ev.accounts_fx
+        if (fx is None or not getattr(fx, "rate", 0) or fx.rate <= 0
+                or str(fx.from_ccy).upper() != accounts.upper()
+                or str(fx.to_ccy).upper() != quote_major.upper()):
+            return CriterionResult(
+                name="max_debt_to_market_cap", passed=None, observed=None, threshold=threshold,
+                note=(f"NOT EVALUATED: debt is in {accounts} and market value in {quote}, and no "
+                      f"exchange rate could be had to put them in one currency (house rule 8)"))
+        debt = debt * fx.rate
+        converted = (f"; debt converted {fx.from_ccy}->{fx.to_ccy} at {fx.rate:.4g} "
+                     f"({fx.as_of}, {fx.source})")
     ratio = debt / cap
     return CriterionResult(
         name="max_debt_to_market_cap", passed=ratio <= threshold, observed=ratio,
         threshold=threshold,
         note=f"total_debt/market_cap = {ratio:.2f} vs ceiling {threshold:.2f} "
-             f"(market-cap based — robust to negative-equity buyback names)")
+             f"(market-cap based — robust to negative-equity buyback names){converted}")
 
 
 def _max_peg_ratio(ev: Evidence, threshold: float) -> CriterionResult:

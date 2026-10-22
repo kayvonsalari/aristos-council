@@ -90,14 +90,15 @@ def test_two_timeouts_record_error_timeout_with_the_raw_detail():
 
 
 def test_a_non_timeout_failure_is_still_not_retried():
+    # GEMINI-RETRY-2: a 503 is now retried (tests/test_gemini_retry_2.py); a 400 still is not
     n = []
 
     def caller(spec, system, user):
         n.append(1)
-        raise CallError("HTTP 503: busy", status=503)
+        raise CallError("HTTP 400: bad request", status=400)
 
     call = panel._ask_once(_config(1, 1).judges[0], "s", "u", caller, 1)
-    assert len(n) == 1 and call.error == "503"
+    assert len(n) == 1 and call.error == "400"
 
 
 def test_a_timeout_then_a_malformed_reply_still_gets_its_one_format_retry():

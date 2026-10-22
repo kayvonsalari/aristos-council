@@ -1,0 +1,19 @@
+# EQUINOR-CHECK-1 - companies whose "dividend cut" is the end of an EXTRAORDINARY dividend that was paid
+# inside the same regular payments. The payment history carries one amount per payment, so it cannot
+# separate the extraordinary part from the regular one, and the cut rule's verdict STANDS (owner ruling,
+# 2026-10-22). The page adds one plain sentence beside the cut reason; no number or verdict changes.
+#
+# A DATED, REASONED LIST - no detection by pattern. Add a company only when its own announcements name the
+# extraordinary dividend and say it was paid with the ordinary one. `tickers` are the symbols a report
+# carries (Yahoo form).
+note: >-
+  The fall reflects the end of an extraordinary dividend paid inside the regular payments; the data
+  cannot separate the two.
+companies:
+  - name: Equinor ASA
+    tickers: [EQNR.OL, EQNR]
+    date: 2026-10-22
+    reason: >-
+      Equinor paid an extraordinary dividend with each quarterly ordinary dividend through 2024 and
+      stopped it for 2025 (returning cash through buybacks instead); the sweep read "dividend cut in
+      2025: total fell 40%, typical payment fell 50%".

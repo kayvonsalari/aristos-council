@@ -169,7 +169,7 @@ def test_the_rendered_lens_table_never_puts_BUY_in_a_check_cell():
     body = narration_markdown(narration)
     forensic_row = next(l for l in body.splitlines() if l.startswith("| Forensic "))
     assert "BUY" not in forensic_row, forensic_row
-    assert "CLEAN" in forensic_row
+    assert "clean" in forensic_row and "CLEAN" not in forensic_row     # COUNCIL-CAPS-2: a mark is not shouted
     # ...and the voting lens keeps its verdict word
     raw_row = next(l for l in body.splitlines() if l.startswith("| Magic Formula RAW "))
     assert "BUY" in raw_row

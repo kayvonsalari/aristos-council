@@ -140,7 +140,12 @@ def _window_key(start, end) -> str:
 # 25,387,552,768 beside an operating cash flow of 10,149,273,000, so the page went on
 # printing an impossible pair and the new guard fired on a build that was supposed to be
 # fixed. The field set is unchanged, so only this token can catch it.
-ADAPTER_SCHEMA_VERSION = 5
+# v6 (GBX-YIELD-1): on a pence-quoted line Fundamentals.dividend_per_share and dividend_yield
+# changed unit (pence, the price's unit) without changing name, so a cached London entry would
+# keep serving the 100x-low yield. Same reason as v5.
+# v7 (NET-DEBT-2): Fundamentals.total_debt changed meaning without changing name - it is now the balance
+# sheet's own "Total Debt" row (leases excluded), the headline's excess being the new lease_liabilities.
+ADAPTER_SCHEMA_VERSION = 7
 
 
 def _schema_marker(cls) -> str:

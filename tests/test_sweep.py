@@ -230,7 +230,7 @@ def test_summary_lists_every_finding_with_entry_section_line_and_rule(tmp_path):
                  say=lambda m: None)
     text = (tmp_path / "summary.md").read_text(encoding="utf-8")
     assert "| A | Lens table | report.md:5 | '$-' money formatting |" in text
-    assert "1 finding(s)" in text and "No findings**" not in text
+    assert "### A: 1 finding\n" in text and "No findings**" not in text
 
 
 def test_judge_rows_that_failed_are_reported_with_their_reason(tmp_path):
@@ -347,11 +347,11 @@ def _ranked(*verdicts):
     return [SimpleNamespace(verdict=v, excluded=False, combined_rank=i) for i, v in enumerate(verdicts)]
 
 
-def test_rule_buy_without_sell_at_small_list_sizes():
+def test_rule_buy_without_sell_needs_five_names():   # was "at small list sizes"; SWEEP-CHECK-TUNE-1
     multi = lambda ranked: SimpleNamespace(results={"s": SimpleNamespace(ranked=ranked)},
                                            strategy_names={"s": "Lens"}, lens_agreement=None)
     rules = lambda objs: {f.rule for f in checks.check_structured(objs, entry="E")}
-    assert checks.R_BUY_NO_SELL in rules({"multi": multi(_ranked("buy", "hold", "hold"))})       # 3 names
+    assert checks.R_BUY_NO_SELL not in rules({"multi": multi(_ranked("buy", "hold", "hold"))})   # 3 names never vote
     assert checks.R_BUY_NO_SELL not in rules({"multi": multi(_ranked("buy", "hold", "sell"))})
     assert checks.R_BUY_NO_SELL not in rules({"multi": multi(_ranked("hold", "hold", "hold"))})  # no BUY
     assert checks.R_BUY_NO_SELL not in rules({"multi": multi(_ranked("buy"))})                    # one name
@@ -421,3 +421,47 @@ def test_the_cli_loads_dotenv_so_judge_and_council_keys_reach_the_run(tmp_path, 
     cli.main(["run", "--sets-file", str(p), "--out", str(tmp_path / "o")],
              producers={"company": _fake(), "list": _fake()})
     assert called == [1]
+
+
+# SWEEP-CHECK-TUNE-1 ---------------------------------------------------------
+def _rows(*pairs):
+    return [SimpleNamespace(verdict=v, excluded=False, combined_rank=r) for v, r in pairs]
+
+
+def test_buy_without_sell_ignores_lenses_under_five_names_and_ties_across_the_cut():
+    multi = lambda ranked: {"multi": SimpleNamespace(results={"s": SimpleNamespace(ranked=ranked)},
+                                                     strategy_names={"s": "Lens"}, lens_agreement=None)}
+    rules = lambda objs: {f.rule for f in checks.check_structured(objs, entry="E")}
+    # (a) 2-4 names never vote: no finding (F.US and 1211.HK, 2026-10-22)
+    assert checks.R_BUY_NO_SELL not in rules(multi(_rows(("buy", 1), ("hold", 2))))
+    assert checks.R_BUY_NO_SELL not in rules(multi(_rows(("buy", 1), ("hold", 2), ("hold", 3), ("hold", 4))))
+    # (b) 5 names, bottom band = 1 name; the last two tied -> the tie straddles the SELL cut -> HOLD
+    assert checks.R_BUY_NO_SELL not in rules(multi(_rows(("buy", 1), ("hold", 2), ("hold", 3), ("hold", 4), ("hold", 4))))
+    # 10 names, bottom band = 2; tie of positions 8-9 (1-based) straddles the cut after 8
+    ten = _rows(*[("buy" if i < 2 else "hold", r) for i, r in enumerate([1, 2, 3, 4, 5, 6, 7, 8, 8, 10])])
+    assert checks.R_BUY_NO_SELL not in rules(multi(ten))
+    # still flags a real asymmetry: a BUY, no tie touching the bottom band, no SELL
+    assert checks.R_BUY_NO_SELL in rules(multi(_rows(("buy", 1), ("hold", 2), ("hold", 3), ("hold", 4), ("hold", 5))))
+    # a tie wholly inside the bottom band is SELL by rule, so a missing SELL there is real
+    ten_in = _rows(*[("buy" if i < 2 else "hold", r) for i, r in enumerate([1, 2, 3, 4, 5, 6, 7, 8, 9, 9])])
+    assert checks.R_BUY_NO_SELL in rules(multi(ten_in))
+
+
+def test_a_news_headline_or_quoted_title_is_not_a_truncated_name():
+    md = ("# T\n\n## News\n\n- Recent news:\n"
+          "  - 2026-10-19: What Does Ford Motor (F) Recall Of 3,700 Pickups Signal?\n"
+          "A column called \"Ford Motor Co\" in quotes.\n")
+    got = checks.truncated_name_findings(md.splitlines(), ["Ford Motor Company"])
+    assert got == []
+    assert checks.truncated_name_findings(["Our view of Ford Motor is mixed."], ["Ford Motor Company"])
+
+
+def test_list_detail_rule_explanations_are_not_a_repeated_paragraph():
+    block = ("## {} — detail\n\n**Company size** · rule: at least $5.0bn (applied before the screen) · **7 names**\n\n"
+             "_Below a certain size a company's reported figures are thinner, its shares are harder to leave._\n\n"
+             "Altius Minerals Corporation (ALS.TO), IGO Limited (IGO.AX), Liontown Limited (LTR.AX)\n\n")
+    text = "# T\n\n" + block.format("Value") + block.format("Cyclical")
+    assert checks.repeated_paragraph_findings(text.splitlines()) == []
+    plain = "# T\n\n## A\n\n" + "The same long paragraph about something quite specific here. " * 2 + \
+            "\n\n## B\n\n" + "The same long paragraph about something quite specific here. " * 2 + "\n"
+    assert checks.repeated_paragraph_findings(plain.splitlines())

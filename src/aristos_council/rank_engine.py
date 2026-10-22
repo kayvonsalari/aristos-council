@@ -198,11 +198,14 @@ def _rank_one_factor(values: list[tuple[int, Optional[float]]], direction: str,
 # three-name boundary, so the stored output for tiny synthetic fixtures does not move.
 MIN_RANKABLE_COHORT = 5
 
-# B25-3 - THE one setting for a tie that straddles a verdict cut. "best_position": every name tied on the
-# combined rank takes the verdict of the tie group's BEST position (MSFT 2026-10-08, Value + Momentum:
-# AAPL 1, TSMC 1, MSFT/ASML/CSCO tied 3rd, NVDA 6th - the three tied names are HOLD, not SELL, because
-# 3rd of 6 is HOLD). Symmetric on the BUY side. "alphabetical" is the old behaviour (ticker order breaks the tie).
-TIE_VERDICT_RULE = "best_position"
+# B25-3 / TIES-SELL-1 - THE one setting for a tie that straddles a verdict cut, the SAME rule at both ends:
+# "straddle_hold": a tie group that straddles a cut line (BUY or SELL) is HOLD; only a tie group lying wholly
+# inside the top band is BUY and only one wholly inside the bottom band is SELL. Owner ruling 2026-10-22: the
+# old "best_position" rule gave a straddling tie its BEST position's verdict - BUY at the top, HOLD at the
+# bottom - so ties could hand out BUYs while emptying the SELL slot. "best_position" and "alphabetical" (ticker
+# order splits the tie) remain selectable for reproducing old runs; the goldens written under the
+# alphabetical tie-break pin it with the ``tie_rule`` test marker.
+TIE_VERDICT_RULE = "straddle_hold"
 SMALL_GROUP_MIN = 5          # the warning band is 5..9 whatever the voting line is
 SMALL_GROUP_MAX = 9
 _ARITHMETIC_CUT_BELOW = 3
@@ -268,12 +271,33 @@ def _verdict_for_position(i: int, n: int, cut: str, k: int, percentile: float) -
     return "hold"
 
 
+def _tie_group_verdict(q: int, start: int, end: int, n: int, cut: str, k: int,
+                       percentile: float) -> str:
+    """The verdict of position ``q`` in a tie group spanning positions ``start..end`` (0-based), under
+    ``TIE_VERDICT_RULE`` (TIES-SELL-1; see the setting above)."""
+    if TIE_VERDICT_RULE == "alphabetical":
+        return _verdict_for_position(q, n, cut, k, percentile)
+    if TIE_VERDICT_RULE == "best_position":
+        return _verdict_for_position(start, n, cut, k, percentile)
+    verdicts = {_verdict_for_position(p, n, cut, k, percentile) for p in range(start, end + 1)}
+    # wholly inside one band keeps that band's verdict; straddling a cut line is HOLD
+    return verdicts.pop() if len(verdicts) == 1 else "hold"
+
+
 # BUY-CAP (27B-1) - a RELATIVE gate on a BUY: "buy_requires: {revenue_growth: top_half}" means a name
 # whose rank on THAT factor falls outside the top half (or third) of the ranked set is capped at HOLD,
 # never BUY. A cap, not a screen: it never excludes, never makes a SELL, and acts only on names the
 # cut would have bought. Each entry is the share of the ranked set that may buy.
 BUY_REQUIRES_SHARES = {"top_half": 2.0, "top_third": 3.0}      # divisor: n / d names qualify
-_BUY_CAP_PHRASE = {"revenue_growth": "growing slower than the industry median"}
+_BUY_CAP_PHRASE = {"revenue_growth": "growing slower than the median of {scope}"}
+# GROWTH-CAP-WORDING-1: the median is of the names this run ranked, not of "the industry". A list
+# run ranks the pasted list or cohort; the company page ranks the company's peer group. The rank
+# engine writes the list wording and the company page swaps the scope (``cap_reason_for_peers``).
+CAP_SCOPE_LIST = "this list"
+CAP_SCOPE_PEERS = "its peer group"
+# The rule itself, stated where a report lists a lens's rules (the factor's plain name).
+_BUY_RULE_SUBJECT = {"revenue_growth": "sales growth"}
+_BUY_RULE_SHARE = {"top_half": "the top half", "top_third": "the top third"}
 
 
 def _passes_buy_requirement(rank: float, n: int, rule: str) -> bool:
@@ -288,9 +312,26 @@ def _cap_reason(factor: str, rule: str, position: int) -> str:
     phrase = _BUY_CAP_PHRASE.get(factor) if rule == "top_half" else None
     if phrase is None:
         label = factor_column_label(factor).lower()
-        phrase = (f"{label} below the industry median" if rule == "top_half"
-                  else f"{label} outside the industry's top third")
-    return f"ranked {_ordinal(position)}, but {phrase}, so HOLD"
+        phrase = (f"{label} below the median of {{scope}}" if rule == "top_half"
+                  else f"{label} outside the top third of {{scope}}")
+    return f"ranked {_ordinal(position)}, but {phrase.format(scope=CAP_SCOPE_LIST)}, so HOLD"
+
+
+def cap_reason_for_peers(reason: str) -> str:
+    """The company page's wording of a cap reason: the median is of its peer group."""
+    return (reason or "").replace(f" of {CAP_SCOPE_LIST}, so HOLD",
+                                  f" of {CAP_SCOPE_PEERS}, so HOLD")
+
+
+def buy_requirement_lines(buy_requires) -> list[str]:
+    """``["a BUY needs sales growth in the top half of the ranked names"]`` - the BUY cap as a
+    rule a report lists beside the screen's (GROWTH-CAP-WORDING-1). Empty without a cap."""
+    out = []
+    for factor, rule in (buy_requires or {}).items():
+        subject = _BUY_RULE_SUBJECT.get(factor) or factor_column_label(factor).lower()
+        share = _BUY_RULE_SHARE.get(rule, rule)
+        out.append(f"a BUY needs {subject} in {share} of the ranked names")
+    return out
 
 
 def rank_universe(
@@ -365,15 +406,16 @@ def rank_universe(
 
     # Sort best-first; tie-break by ticker for determinism.
     ranked.sort(key=lambda r: (r.combined_rank, r.ticker))
-    group_start = 0
-    for i, r in enumerate(ranked):
-        if i and ranked[i - 1].combined_rank != r.combined_rank:
-            group_start = i
-        # B25-3 (TIE_VERDICT_RULE): names tied on the combined rank share the verdict of the tie group's BEST
-        # position, so the alphabet never splits a tie across a cut ("alphabetical" restores the old behaviour).
-        at = group_start if TIE_VERDICT_RULE == "best_position" else i
-        r.verdict = _verdict_for_position(at, n, cut, k, percentile)
-        r.rank_position = i + 1          # record position (no effect on the sort/cut)
+    m = len(ranked)
+    i = 0
+    while i < m:
+        j = i
+        while j + 1 < m and ranked[j + 1].combined_rank == ranked[i].combined_rank:
+            j += 1
+        for q in range(i, j + 1):
+            ranked[q].verdict = _tie_group_verdict(q, i, j, n, cut, k, percentile)
+            ranked[q].rank_position = q + 1      # record position (no effect on the sort/cut)
+        i = j + 1
     assign_cohort_positions(ranked)      # display-only #N of M (RANK-DISPLAY-1)
     if buy_requires:
         for r in ranked:

@@ -357,7 +357,8 @@ def run_company_check(
     abstained: list[str] = []
     if not screen_less:
         ev = Evidence(fundamentals=f, last_close=fi.last_close,
-                      return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[])
+                      return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[],
+                      accounts_fx=getattr(fi, "quote_fx", None))
         screen_result = run_screen(screen_criteria, ev, ticker=ticker)
         for c in screen_result.criteria:
             basis = getattr(c, "basis", "") or ""
@@ -460,6 +461,7 @@ def run_company_check(
     # data is an abstention with a reason, not a broken page.
     if with_analyst_trend:
         from .abs_readings import analyst_trend as _analyst_trend
+        from .company_story import short_company_name as _story_short_name
         from .data.analyst_trend import fetch_analyst_trend
         fetch = analyst_fetcher or fetch_analyst_trend
         # the fallback is offered only when there is one, so a plain fetcher (a test double with the
@@ -472,7 +474,9 @@ def run_company_check(
             trend_data,
             # the ACCOUNTS' currency (the estimates are per-share profits in it); None -> stated
             # as "currency not stated by the source", never guessed from the quote currency
-            currency=getattr(f, "financial_currency", None), company=company_name or ticker,
+            currency=getattr(f, "financial_currency", None),
+            # REPEATS-NAMES-1: the same short name the story uses ("Coca-Cola", "Ford", "JPMorgan")
+            company=_story_short_name(ticker, company_name),
             price=price, price_currency=price_ccy, own_listing=own)
 
     # COMPANY-FACTS-TABLE-1 (Batch 15 item 1) — opt-in for the same reason analyst trend is:

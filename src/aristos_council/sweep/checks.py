@@ -12,7 +12,7 @@ Rules over Markdown text (``check_markdown``):
   a repeated paragraph / sentence          a ticked lens absent from the lens table
 Rules over the structured results (``check_structured``):
   the same lens or check stated two ways   SELL votes missing from the agreement
-  BUY without a matching SELL at small list sizes
+  BUY without a matching SELL (lenses that ranked 5+ names)
 Rules over the judge panel (``check_judges``):
   a judge field starting with a verdict token       an error / incomplete / invalid judge row
 """
@@ -32,7 +32,7 @@ R_UNIT_SCALE = "inconsistent unit scale within one series"
 R_PLURAL = "singular/plural slip"
 R_MARKUP = "unmatched ** or _"
 R_LENS_TWO_WAYS = "the same lens or check stated two ways"
-R_BUY_NO_SELL = "BUY without a matching SELL rule at small list sizes"
+R_BUY_NO_SELL = "BUY without a matching SELL"
 R_SELL_MISSING = "SELL votes missing from the agreement line"
 R_COLUMN_NAMES = "diagnostic column names in reader text"
 R_TRUNCATED = "truncated company name"
@@ -205,6 +205,18 @@ def column_name_findings(lines: list[str]) -> list[tuple[int, str]]:
 _DANGLING = re.compile(r"(?:\s&|\s(?:and|of|the|The)|[A-Za-z]-|…|\.\.\.)$")
 
 
+# A news headline ("  - 2026-10-19: What Does Ford Motor (F) Recall ...") and a quoted title are another
+# publisher's words, not a name this report printed (F.US report.md:99, 2026-10-22).
+_NEWS_BULLET = re.compile(r"^\s*[-*]\s+\d{4}-\d{2}-\d{2}:.*$")
+_QUOTED = re.compile(r"\"[^\"]*\"|“[^”]*”|'[^']{12,}'")
+
+
+def _without_quoted(line: str) -> str:
+    if _NEWS_BULLET.match(line):
+        return ""
+    return _QUOTED.sub(" ", line)
+
+
 def truncated_name_findings(lines: list[str], names: Iterable[str] = ()) -> list[tuple[int, str]]:
     out: list[tuple[int, str]] = []
     for i, ln in enumerate(lines, 1):
@@ -216,9 +228,12 @@ def truncated_name_findings(lines: list[str], names: Iterable[str] = ()) -> list
         prefix = " ".join(words[:-1])
         if len(prefix.split()) < 2:
             continue
-        pat = re.compile(re.escape(prefix) + r"(?!\s+" + re.escape(words[-1]) + r")(?![\w-])")
+        # The last word may be printed with or without its trailing full stop: the market index
+        # spells it "JPMorgan Chase & Co", the provider "JPMorgan Chase & Co." - both are whole.
+        last = re.escape(words[-1].rstrip(".")) + r"\.?(?![\w-])"
+        pat = re.compile(re.escape(prefix) + r"(?!\s+" + last + r")(?![\w-])")
         for i, ln in enumerate(lines, 1):
-            m = pat.search(ln)
+            m = pat.search(_without_quoted(ln))
             if m:
                 out.append((i, f"{full!r} appears as {prefix!r}"))
                 break
@@ -236,9 +251,46 @@ def _norm(s: str) -> str:
     return re.sub(r"[\s*_`>-]+", " ", s).strip().lower()
 
 
+# Per-lens boilerplate the list report prints under EVERY lens by design (the rules-applied note, the
+# detail legend and headline). A repeat of these is the layout, not a fault; a finding for each one
+# buried the real repeats (62 findings on one sweep, most of them these lines).
+_BOILERPLATE_RE = (
+    re.compile(r"^ranked [\d,]+ of [\d,]+ names?\.( excluded [\d,]+: by rule below, worst miss first\.)?$"),
+    re.compile(r"^[^.]{0,120}\. excluded [\d,]+: by rule below, worst miss first\.$"),
+)
+
+
+def _boilerplate() -> set:
+    from ..pipeline import (NO_SCREEN_NOTE, NON_PREFILTER_NOTE, PREFILTER_NOTE,
+                            detail_badge_line)
+    return {_norm(t) for t in (PREFILTER_NOTE, NON_PREFILTER_NOTE, NO_SCREEN_NOTE,
+                               detail_badge_line())}
+
+
+# The list report's "<Lens> - detail" sections explain each rule under every lens that applies it: the
+# rule line ("**Company size** · rule: ..."), its italic explainer, and the names that rule removed. Two
+# lenses sharing a rule print the same words by design (SWEEP-CHECK-TUNE-1).
+_RULE_LINE = re.compile(r"^\*\*[^*]+\*\*\s*·\s*rule:")
+_NAME_LIST = re.compile(r"^(?:[^|()]+\([A-Z0-9][A-Z0-9.\-]*\)(?:,\s*)?)+$")
+
+
+def _is_rule_explanation(raw: str, heading: str) -> bool:
+    if not heading.endswith("detail"):
+        return False
+    raw = raw.strip()
+    return bool(_RULE_LINE.match(raw) or (raw.startswith("_") and raw.endswith("_"))
+                or _NAME_LIST.match(raw))
+
+
+def _is_boilerplate(text: str, fixed: set) -> bool:
+    return text in fixed or any(rx.match(text) for rx in _BOILERPLATE_RE)
+
+
 def repeated_paragraph_findings(lines: list[str]) -> list[tuple[int, str]]:
     """The same paragraph under two different headings, or the same sentence in two different lens
-    notes ("Magic Formula RAW track record: ...", "Quality track record: ...")."""
+    notes ("Magic Formula RAW track record: ...", "Quality track record: ..."). The list report's
+    per-lens boilerplate (``_BOILERPLATE_RE`` / ``_boilerplate``) is not counted."""
+    fixed = _boilerplate()
     out: list[tuple[int, str]] = []
     # paragraphs under headings
     seen: dict[str, tuple[int, str]] = {}
@@ -246,8 +298,9 @@ def repeated_paragraph_findings(lines: list[str]) -> list[tuple[int, str]]:
 
     def flush():
         nonlocal para
-        text = _norm(" ".join(para))
-        if len(text) >= 60:
+        raw = " ".join(para)
+        text = _norm(raw)
+        if len(text) >= 60 and not _is_boilerplate(text, fixed) and not _is_rule_explanation(raw, heading):
             if text in seen and seen[text][1] != heading:
                 out.append((start, f"the same paragraph under '{seen[text][1]}' and '{heading}': "
                                    f"{text[:80]}"))
@@ -322,29 +375,13 @@ def check_markdown(text: str, *, entry: str, file: str = "report.md", ticked: It
 # --------------------------------------------------------------------------- #
 # structured rules
 # --------------------------------------------------------------------------- #
-SMALL_LIST_MAX = 4          # a quintile cut needs 5 names (B25-1); below that there is no SELL rule
-
-
-def buy_without_sell_small(label: str, ranked, *, where: str = "") -> list[rs.Finding]:
-    """2-4 live names, a BUY among them, no SELL: the lens had no rule that could ever rate the last
-    name SELL, yet it printed a BUY. (``report_sweep.buy_without_sell_findings`` covers 5 and up.)"""
-    live = [r for r in ranked if not getattr(r, "excluded", False)]
-    if not 2 <= len(live) <= SMALL_LIST_MAX:
-        return []
-    verdicts = [(getattr(r, "verdict", "") or "").lower() for r in live]
-    if "buy" in verdicts and "sell" not in verdicts:
-        return [rs.Finding(rs.BUY_WITHOUT_SELL, where or label,
-                           f"{label}: only {len(live)} names ranked, {verdicts.count('buy')} BUY, "
-                           "0 SELL (no SELL rule at this size)")]
-    return []
-
-
 def _lens_results(objs: dict):
     out = []
     company = objs.get("company")
     if company is not None:
         for sid, record in (getattr(company, "lens_ranks", None) or {}).items():
-            rows = [SimpleNamespace(verdict=r.get("verdict", ""), excluded=False)
+            rows = [SimpleNamespace(verdict=r.get("verdict", ""), excluded=False,
+                                   combined_rank=r.get("combined_rank"))
                     for r in record.get("ranked", [])]
             out.append((sid, rows))
     multi = objs.get("multi")
@@ -370,7 +407,6 @@ def check_structured(objs: dict, *, entry: str) -> list[SweepFinding]:
         found += rs.list_agreement_findings(multi, where)
     for label, ranked in _lens_results(objs):
         found += rs.buy_without_sell_findings(label, ranked, where=where)
-        found += buy_without_sell_small(label, ranked, where=where)
     return [SweepFinding(entry, "(structured result)", "", 0, _RS_RULE.get(f.rule, f.rule), f.detail)
             for f in found]
 

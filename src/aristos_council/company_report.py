@@ -53,7 +53,8 @@ from .company_check import (CompanyCheckResult, absolute_reading_lines, analyst_
                             run_company_check)
 from .data.adapter import normalize_ticker
 from .peer_table import rank_columns
-from .rank_engine import MIN_RANKABLE_COHORT, small_group_text, too_few_to_rank_text
+from .rank_engine import (MIN_RANKABLE_COHORT, buy_requirement_lines, cap_reason_for_peers,
+                          small_group_text, too_few_to_rank_text)
 from .smallcap_band import SMALLCAP_CEILING_USD
 from .shadow_rank import WouldRank, would_rank
 from .tools.valuation_band import ordinal
@@ -128,6 +129,9 @@ class LensVote:
     # TIE-CHECK-1 - the number of OTHER companies sharing this one's combined rank-sum (0 = not tied)
     tied_with: int = 0
     cap_reason: str = ""        # BUY-CAP (27B-1): why a would-be BUY reads HOLD
+    # GROWTH-CAP-WORDING-1 - the lens's BUY cap as a rule ("a BUY needs sales growth in the top half
+    # of the ranked names"), stated beside what the lens asks. Empty for a lens without one.
+    buy_rule: str = ""
 
     @property
     def votes(self) -> bool:
@@ -612,7 +616,7 @@ def _annotate_specialist_repetition(rep, state, lens_labels=()) -> None:
     shows) and quotes each flagged sentence as printed. Only a decision with no narration falls back to
     the raw theses on ``state`` (an abstained specialist, with no real thesis, is excluded either way)."""
     from .narration_check import check_printed_repetition, check_specialist_repetition
-    from .narration_render import as_narration
+    from .narration_render import as_narration, printed_specialist_views
     from .state import Stance
 
     d = getattr(rep, "decision", None)
@@ -620,8 +624,7 @@ def _annotate_specialist_repetition(rep, state, lens_labels=()) -> None:
         return
     narration = as_narration(getattr(d, "narration", None))
     if narration is not None and getattr(narration, "specialist_views", None):
-        printed = {v.specialist: (v.reasoning or "") for v in narration.specialist_views
-                   if getattr(v, "assessed", True) and (v.reasoning or "").strip()}
+        printed = printed_specialist_views(narration)      # TEXTCHECK-TABLEFACT-2: the rendered text
         flags = check_printed_repetition(printed, lens_labels=lens_labels)
     else:
         theses = {op.specialist.value: op.thesis for op in (state.specialist_opinions or [])
@@ -898,7 +901,9 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
         strategy = getattr(result, "rank_strategy", None)
         base = dict(strategy_id=sid, label=multi.strategy_names.get(sid, "") or sid,
                     kind=getattr(strategy, "kind", "selector") or "selector",
-                    asks=(getattr(strategy, "asks", "") or "").strip())
+                    asks=(getattr(strategy, "asks", "") or "").strip(),
+                    buy_rule="; ".join(buy_requirement_lines(
+                        getattr(strategy, "buy_requires", None))))
         cell = row.cells.get(sid) if row is not None else None
         if cell is None or cell.status == "absent":
             votes.append(LensVote(**base, status="absent"))
@@ -921,7 +926,7 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
                                   position=cell.position, cohort_size=cell.cohort_size,
                                   factor_note=cell.factor_note,
                                   tied_with=getattr(cell, "tied_with", 0),
-                                  cap_reason=getattr(cell, "cap_reason", ""),
+                                  cap_reason=cap_reason_for_peers(getattr(cell, "cap_reason", "")),
                                   factors_measured=getattr(cell, "factors_measured", 0),
                                   factors_total=getattr(cell, "factors_total", 0),
                                   components=(_check_components(result, ticker)
@@ -937,8 +942,24 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
                 # (a scope-gate exclusion has no pool entry and so no reading). Never a vote.
                 shadow = would_rank(strategy, getattr(result, "ranked", []) or [],
                                     getattr(result, "shadow_pool", None) or {}, row.ticker)
+                if shadow is not None and _non_payer_on_dividend_lens(result, row.ticker):
+                    shadow = None
             votes.append(LensVote(**base, status=cell.status, reason=reason, would_rank=shadow))
     return votes
+
+
+def _non_payer_on_dividend_lens(result, ticker: str) -> bool:
+    """WOULD-RANK-NONPAYER-1 - True when a dividend lens (its screen asks for a dividend yield)
+    measured this company's yield at zero. Where a company that pays nothing would sit among
+    dividend payers is not a reading: live, Viking read "would rank 29th of 41" and NovoCure "26th
+    of 41" on Defensive Income beside "dividend yield 0%". A payer keeps it (Microsoft at 0.74%
+    "would rank 4th of 14"). A yield the screen could not read (null) is not zero (rule 3)."""
+    outcome = ((getattr(result, "screen_outcomes", None) or {}).get(ticker) or {}).get(
+        "min_dividend_yield")
+    if not outcome:
+        return False
+    observed = outcome.get("observed")
+    return isinstance(observed, (int, float)) and observed <= 0
 
 
 def _plain_reason(reason: str) -> str:
@@ -1486,7 +1507,7 @@ def story_text_lines(report: CompanyReport) -> list[str]:
 def workings_text_lines(report: CompanyReport) -> list[str]:
     """Section 4 - everything that supports the answer, in the design's order. The text download
     keeps every section; the fold is a display choice of the other renderers."""
-    from .company_story import narration_check_line, table_rows
+    from .company_story import lens_notes_chance, narration_check_line, table_rows
 
     c = report.check
     lines = ["SHOW THE WORKINGS", ""]
@@ -1524,6 +1545,9 @@ def workings_text_lines(report: CompanyReport) -> list[str]:
     notes = [r for r in table_rows(report) if r.asks or r.badge_detail or r.full_reason]
     if notes:
         lines.append("LENS NOTES (what each lens asks, its full reason, its track record)")
+        chance = lens_notes_chance(notes)
+        if chance:
+            lines.append(f"  {chance}")
         for r in notes:
             if r.asks:
                 lines.append(f"  {r.lens}: {r.asks}")

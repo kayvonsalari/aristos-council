@@ -350,7 +350,7 @@ def test_the_narrator_writes_one_checked_paragraph_when_the_panel_differs():
 
 
 @pytest.mark.parametrize("bad, why", [
-    ("word " * 90, "words"),
+    # PANEL-READING-LENGTH-1: an over-long paragraph is no longer withheld (tests/test_panel_reading_length_1.py)
     ("You should buy this company now.", "recommendation"),
     ("The combined verdict of the panel is hold.", "combines"),
     ("The panel says SELL.", "verdict word nobody gave"),
@@ -667,3 +667,10 @@ def test_an_unstable_judge_shows_both_verdicts_and_a_missing_key_says_so():
     rows = {r["judge"].split(" ")[0]: r for r in render.cards(res)}
     assert rows["Claude"]["verdict"] == "unstable: BUY / HOLD" and "BUY: r1" in rows["Claude"]["reasoning"]
     assert rows["OpenAI"]["verdict"] == "not run — no key"
+
+
+def test_an_invalid_call_keeps_the_rejected_reply_in_the_log_detail():
+    """JPM-JUDGE-INVALID-1: the raw reply was discarded, so the cause of an 'invalid output' was unreadable."""
+    spec = _config().judges[0]
+    call = panel._ask_once(spec, "sys", "user", _scripted({"anthropic": ["garbage reply"]}), 1)
+    assert call.status == "invalid" and "| raw: garbage reply" in call.error_detail

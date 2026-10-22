@@ -1654,7 +1654,8 @@ def _workings_html(report) -> str:
     """COMPANY-STORY-1 section 4: everything that supports the answer, folded (open on click; print
     opens it), in the design's order."""
     from ..company_check import company_sources
-    from ..company_story import SECTION_WORKINGS, narration_check_line, table_rows
+    from ..company_story import (SECTION_WORKINGS, lens_notes_chance, narration_check_line,
+                                  table_rows)
     from ..peer_table import rank_columns
 
     c = report.check
@@ -1678,12 +1679,15 @@ def _workings_html(report) -> str:
         items = []
         for r in notes:
             if r.asks:
-                items.append(f"<strong>{_esc(r.lens)}</strong> asks: {_esc(r.asks)}")
+                items.append(f"<strong>{_esc(r.lens)}</strong> asks: {_esc(r.asks_note)}")
             if r.full_reason:
                 items.append(f"<strong>{_esc(r.lens)}</strong> did not apply: {_esc(r.full_reason)}")
             if r.badge_detail:
                 items.append(f"<strong>{_esc(r.lens)}</strong> track record: {_esc(r.badge_detail)}")
-        inner.append('<section class="section"><h2>Lens notes</h2>' + _bullets(items) + "</section>")
+        chance = lens_notes_chance(notes)
+        lead = f'<p class="note">{_esc(chance)}</p>' if chance else ""
+        inner.append('<section class="section"><h2>Lens notes</h2>' + lead + _bullets(items)
+                     + "</section>")
     sources = company_sources(c)
     if sources:
         inner.append('<section class="section"><h2>Sources</h2>'

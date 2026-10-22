@@ -261,23 +261,46 @@ def needs_reading(status: str) -> bool:
 # --------------------------------------------------------------------------- #
 # running the judges
 # --------------------------------------------------------------------------- #
-def _ask_once(spec: JudgeSpec, system: str, user: str, caller, call_no: int) -> JudgeCall:
-    """One call, retried ONCE if the reply is malformed and ONCE if it times out (a second
-    timeout is "error: timeout", the raw detail kept). Any other failed network call is an error,
-    not something a retry of the same words fixes, so it is not retried."""
+# GEMINI-RETRY-2: a busy server (503), a rate limit (429) or a timeout is retried ONCE, after a short
+# pause, for every judge family - Gemini answered 503 on 5 of 7 pages in the 2026-10-22 sweep.
+TRANSIENT_STATUSES = (429, 503)
+TRANSIENT_BACKOFF_SECONDS = 2.0
+
+
+def is_transient(exc) -> bool:
+    """A failure a second try a moment later can fix: a timeout, HTTP 503 or HTTP 429 - but not a
+    429 that says the account is out of credits, which no wait cures."""
+    from .clients import error_label
+
+    label = error_label(exc)
+    if label == "no credits":
+        return False
+    return bool(getattr(exc, "timeout", False)) or label == "timeout" or \
+        getattr(exc, "status", None) in TRANSIENT_STATUSES
+
+
+def _ask_once(spec: JudgeSpec, system: str, user: str, caller, call_no: int, *,
+              sleep: Optional[Callable] = None) -> JudgeCall:
+    """One call, retried ONCE if the reply is malformed and ONCE (after a short pause) if the call
+    failed transiently - timeout, HTTP 503, HTTP 429. A second transient failure is recorded as the
+    error ("error: 503", the raw detail kept for the log). Any other failed call (400, 404, no
+    credits...) is an error, not something a retry of the same words fixes, so it is not retried.
+    ``sleep`` is the test seam for the pause."""
     from .clients import CallError, error_label
 
     call = JudgeCall(call_no=call_no, attempts=0)
     why = ""
+    raw = ""
     malformed = False                 # a bad reply has been seen: the next ask carries the retry note
-    timed_out = False                 # a timeout has been seen: one more try, then "error: timeout"
+    retried = ""                      # the transient failure already retried (raw detail), "" if none
     while True:
         call.attempts += 1
         try:
             text = caller(spec, system, user + RETRY_NOTE + f" The problem was: {why}." if malformed else user)
         except CallError as exc:
-            if (exc.timeout or error_label(exc) == "timeout") and not timed_out:
-                timed_out = True
+            if is_transient(exc) and not retried:
+                retried = str(exc) or error_label(exc)
+                (sleep or time.sleep)(TRANSIENT_BACKOFF_SECONDS)
                 continue
             call.status, call.error, call.error_detail = "error", error_label(exc), str(exc)
             return call
@@ -285,6 +308,7 @@ def _ask_once(spec: JudgeSpec, system: str, user: str, caller, call_no: int) -> 
             call.status, call.error, call.error_detail = "error", "failed", f"{type(exc).__name__}: {exc}"
             return call
         answer, why = parse_answer(text)
+        raw = text
         if answer is not None:
             call.status = "ok"
             call.verdict, call.confidence = answer.verdict, answer.confidence
@@ -292,11 +316,14 @@ def _ask_once(spec: JudgeSpec, system: str, user: str, caller, call_no: int) -> 
             call.driving_fact, call.key_risk = answer.driving_fact, answer.key_risk
             call.unexplained = answer.unexplained
             call.own_knowledge_claims = answer.own_knowledge_claims
+            if retried:               # the log keeps what was recovered from; the page never shows it
+                call.error_detail = f"recovered on retry after: {retried}"
             return call
         if malformed:
             break
         malformed = True
-    call.status, call.error, call.error_detail = "invalid", "invalid output", why
+    # the log keeps the rejected reply itself (cut), so a format error can be diagnosed afterwards
+    call.status, call.error, call.error_detail = "invalid", "invalid output", f"{why} | raw: {(raw or '')[:1500]}"
     return call
 
 
@@ -320,7 +347,7 @@ def settle(spec: JudgeSpec, calls: list) -> JudgeResult:
 
 
 def run_judges(pack_text: str, config: PanelConfig, caller: Callable, *,
-               environ=None) -> list:
+               environ=None, sleep: Optional[Callable] = None) -> list:
     """Ask every judge with a key ``config.calls_per_judge`` times, in parallel. A judge with no
     key is returned as ``not_run`` and nothing is sent for it."""
     system = prompt_text()
@@ -338,7 +365,7 @@ def run_judges(pack_text: str, config: PanelConfig, caller: Callable, *,
     done: dict = {}
     if jobs:
         with ThreadPoolExecutor(max_workers=min(8, len(jobs))) as pool:
-            futures = {(i, n): pool.submit(_ask_once, spec, system, user, caller, n)
+            futures = {(i, n): pool.submit(_ask_once, spec, system, user, caller, n, sleep=sleep)
                        for i, n, spec in jobs}
             done = {key: f.result() for key, f in futures.items()}
     for i, spec in enumerate(config.judges):

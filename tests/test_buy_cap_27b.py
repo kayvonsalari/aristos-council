@@ -47,7 +47,7 @@ def test_a_buy_whose_growth_rank_is_in_the_bottom_half_is_capped_at_hold_with_th
     capped = rank_universe(rows, SPECS, buy_requires={"revenue_growth": "top_half"})
     slow = next(r for r in capped if r.ticker == "SLOW")
     assert slow.verdict == "hold"
-    assert slow.cap_reason == "ranked 1st, but growing slower than the industry median, so HOLD"
+    assert slow.cap_reason == "ranked 1st, but growing slower than the median of this list, so HOLD"
     # nothing else moved: same order, same ranks, verdicts equal except the capped name
     assert [r.ticker for r in capped] == [r.ticker for r in plain]
     assert ([r.verdict for r in capped if r.ticker != "SLOW"]
@@ -119,7 +119,7 @@ def test_the_loader_rejects_a_cap_on_a_factor_the_strategy_does_not_rank_or_an_u
 def test_the_ranked_table_shows_the_reason_beside_the_verdict():
     table, _ = ranked_table_rows(rank_universe(_slow_grower_rows(), SPECS,
                                                buy_requires={"revenue_growth": "top_half"}))
-    assert "growing slower than the industry median, so HOLD" in table[0]["Verdict"]
+    assert "growing slower than the median of this list, so HOLD" in table[0]["Verdict"]
 
 
 # --------------------------------------------------------------------------- #
@@ -164,5 +164,5 @@ def test_the_grid_cell_carries_the_cap_reason_and_is_unchanged_without_one():
     from aristos_council.pipeline import MultiStrategyCell
     base = dict(strategy_id="x_v1", status="ranked", position=1, cohort_size=10, verdict="hold")
     assert MultiStrategyCell(**base).render() == "#1 of 10 · HOLD"
-    capped = MultiStrategyCell(**base, cap_reason="ranked 1st, but growing slower than the industry median, so HOLD")
-    assert capped.render() == "#1 of 10 · HOLD · ranked 1st, but growing slower than the industry median, so HOLD"
+    capped = MultiStrategyCell(**base, cap_reason="ranked 1st, but growing slower than the median of this list, so HOLD")
+    assert capped.render() == "#1 of 10 · HOLD · ranked 1st, but growing slower than the median of this list, so HOLD"

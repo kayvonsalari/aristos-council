@@ -60,13 +60,17 @@ table, the markdown download, and Company mode:
   are not in it). Ties **share** a position (competition ranking) and are marked `(tied)`.
   On a Company Report the vote reads `19th of 27 (tied with 3)`: three other companies carry the same
   rank-sum, so all four are 19th.
-- **How a tie is broken.** Two names with the same rank-sum are the same distance from the top, so they
-  **share a position** (1, 2, 3, 3, 3, 3, 7: the next name is 7th, not 4th). The verdict cut, though,
-  is applied down the SORTED list, and the sort breaks a tie **alphabetically by ticker** (a fixed rule
-  that does not look at anything about the company). So tied names can land on either side of a
-  BUY/HOLD/SELL boundary, and the report then says so: `(=21.0 — tie broken alphabetically)`
-  (REPORT_MARKS.md). Example: on 2026-10-06 JPM, BAC, WFC and C all had a Financials rank-sum of 47.0
-  (genuine ties, not a bug); C, BAC and JPM sorted ahead of WFC and read HOLD, WFC read SELL.
+- **How a tie is voted (TIES-SELL-1).** Two names with the same rank-sum are the same distance from the
+  top, so they **share a position** (1, 2, 3, 3, 3, 3, 7: the next name is 7th, not 4th) and always share
+  ONE verdict. The rule is the **same at both ends**: a tie group that lies wholly inside the top band is
+  BUY, one wholly inside the bottom band is SELL, and a tie group that **straddles a cut line** (BUY or
+  SELL) is **HOLD**. So a tie can never give out a BUY or a SELL that its members did not all earn.
+  Examples: 6 ranked, three tied from 3rd above a 6th (MSFT, 2026-10-08) → the tie is HOLD; 5 ranked with
+  three tied for 3rd (KO's Defensive Income peers, 2026-10-22) → the tie straddles the SELL cut, HOLD;
+  10 ranked with two tied for 1st → both BUY. The setting is `TIE_VERDICT_RULE` in `rank_engine.py`
+  (`"straddle_hold"`); `"best_position"` (B25-3: a straddling tie took its best position's verdict, so a
+  tie could take BUY at the top but never SELL at the bottom) and `"alphabetical"` (ticker order splits
+  the tie) remain for reproducing old runs.
 - **`score S`** — the combined rank-sum itself.
 - **`(best B · worst W)`** — the bounds that give the score its scale: `B` = number of factors
   (rank 1 on all of them), `W` = factors × cohort size. Without them, "score 11" says nothing.
@@ -535,7 +539,7 @@ worst recent year, and little debt against its operating profit, for companies w
    invested capital is skipped; fewer than 3 usable years abstains. Years are paired by position in the
    newest-first statement lists (the convention the through-cycle ROIC already uses); yfinance
    typically serves 4 annual columns, so on live data this is usually "worst of 4".
-3. **Net debt ÷ EBIT** = (total debt − cash) ÷ latest-year EBIT (operating income when EBIT is absent).
+3. **Net debt ÷ EBIT** = (total debt − cash and short-term investments, the §4.6 definition) ÷ latest-year EBIT (operating income when EBIT is absent).
    Lower is better; net cash is negative and ranks best. Zero or negative EBIT abstains, ranks last
    and says why ("operating profit (EBIT) is zero or negative, so debt cannot be measured against it").
 
@@ -567,9 +571,14 @@ conversion on a foreign listing; a failed FX fetch abstains rather than mix curr
 market-cap stand-in: EPV is an enterprise value and is compared with one. **Abstains** — ranks last,
 reason shown — when fewer than 3 years of margin exist or when no positive enterprise value can be
 formed. A company whose **latest operating profit is zero or negative** no longer reaches the factor
-at all: since 18A the lens says "does not apply - no operating profit" (§2.9). (The factor still
-carries its own note for a normalised profit that is zero or negative while the latest year is
-positive.) **Never gating**: a ranked lens with no
+at all: since 18A the lens says "does not apply - no operating profit" (§2.9). A company whose latest
+year is positive but whose **five-year average margin is negative** (EPV-TIES-1) is valued with the
+same formula, untaxed (a loss pays no tax): its no-growth value is below zero and its margin of safety
+below -100%, so it ranks below every company with positive earning power, ordered by how far below
+zero, with the reason shown. It used to abstain, and `missing: worst` then put every such company on
+one shared last rank (NVCR's peers, 2026-10-22: 6 tied 18th of 23; VKTX's: 5 tied 3rd of 7). Only
+the true gaps above (under 3 years, no positive enterprise value) still share the last rank.
+**Never gating**: a ranked lens with no
 veto. Weakest on deep cyclicals at a peak or trough (hence the 5-year average); the constants are blunt
 by design.
 
@@ -687,7 +696,7 @@ strategy YAML, not code. Current registry (thresholds shown from the live strate
 | `min_price_momentum` | −0.10 (12m) | **Breakdowns, not flatness**: a defensive down >10% on the year is breaking (T at −26%); a quiet staple down 0–10% passes. The ranker handles the gradient among survivors. |
 | `min_dividend_streak` | 10 years | Cut history: T (cut 2022 → streak 0) and MMM (cut 2024) fail; PG/KO/JNJ/MCD pass. |
 | `max_dividend_cuts` | 5 years | **"Was it ever CUT?", which is not "did it RISE?"** A year is a cut only when its **year total AND its typical payment** both fell more than `cut_tolerance` (default **10%**) against the prior year. Neither measure is safe alone, and that is the whole rule: each ordinary artefact moves exactly ONE of them while a real cut moves BOTH. A year with one fewer payment drops the total and leaves the typical payment alone (Canadian Natural, 5 payments then 4: total −22.1%, median payment +15.6%); a special dividend does the same (EOG: regular +10%, total −34%); a **cadence change does the opposite**, halving the typical payment while the total rises (Eni, 2 payments a year then 4: total +14.4%, median −44.1%) — which is why the median alone is not an improvement on the total. Real cuts (BP, Shell, SLB, Suncor, Equinor in 2020) move both together. `observed` is the size of the largest qualifying fall in the TOTAL, as a fraction, rendered as a whole percentage. The threshold is the WINDOW (a count of complete years), not a cap on the observed value, so the rule states its own phrase rather than the generated "at most 5". **Single-payment years** are compared on the total alone: a median of one number is not a *typical* payment, it IS that payment, and judging it as typical would make every switch to annual payment read as a cut. A company that held its dividend flat passes; for a cyclical payer that flat dividend is the evidence of durability. Too little history (fewer than window+1 complete years) or no dividend history is **NOT-EVAL**, never a fail — a non-payer is failed by `min_dividend_yield`. See **§4.2** for the tolerance and the stated limitation. |
-| `max_debt_to_market_cap` | 1.0 | Balance-sheet risk: total debt ≤ market cap. VZ (~1.13×, $201B) fails. Uses debt/market-cap, **not** debt/equity — robust to negative-equity buyback names (MCD). |
+| `max_debt_to_market_cap` | 1.0 (FX-DEBT-MV-1: when the accounts and the quote are in different currencies, debt is converted to the quote's major currency at the latest dated yfinance month-end rate (the valuation band's FX path; the note names the pair, rate and month) — Shell 0.245, TotalEnergies 0.316; no rate, or accounts that fail the statements-currency check, abstain) | Balance-sheet risk: total debt ≤ market cap. VZ (~1.13×, $201B) fails. Uses debt/market-cap, **not** debt/equity — robust to negative-equity buyback names (MCD). |
 | `min_roic` | 0.12 (magic_value_screen) | The quality floor for value strategies. |
 | `min_f_score` | *none — enabled by no lens* | Accounting quality: nine binary checks on the annual statements (see **§4.1**). Registered and optional; no threshold is documented because no strategy adopts one yet. |
 | `revenue_cagr`, `peg_ratio` | growth_v1 | GARP criteria; **PEG** (the P/E ratio divided by the earnings-growth rate — a valuation-against-growth measure, where roughly ≤1 reads as "reasonably priced for the growth") uses in-house earnings-growth with a cyclical-base guard. |
@@ -1027,7 +1036,38 @@ says nothing about either. These two readings say something about one company on
 the factor registry, and nothing on any page is ranked by them (pinned by
 `tests/test_abs_readings.py`). They are facts about a set of accounts.
 
-**Debt and cash.** Net debt is total debt minus cash; a MISSING cash balance is disclosed
+**Net debt — the one definition (NET-DEBT-1, narrowed by NET-DEBT-2).** Net debt is **total debt —
+the balance sheet's own "Total Debt" row for the latest quarter (borrowings and finance leases) —
+minus cash, cash equivalents and short-term investments** (yfinance `totalCash`). The provider's
+headline `totalDebt` also carries operating-lease liabilities (Microsoft, Jun 2026: $128.8bn headline
+against a $56.8bn row), so that excess is **not counted as debt**: where it exists the page adds one
+line, "leases add $72.0bn (not counted as debt above)" (`Fundamentals.lease_liabilities`, the headline
+minus the row, shown only when it exceeds a rounding-size gap; Ford's two figures agree, so it shows
+none). With no statement row the headline is used and no lease figure is claimed. Microsoft's net
+position therefore reads "holds $20.0bn more cash than debt" ($56.8bn − $76.8bn), where under
+NET-DEBT-1 it read "owes $52.0bn". The
+same two figures feed this reading, the Quality lens's net debt ÷ EBIT, enterprise value, and the
+judge pack, which states total debt, cash and short-term investments, and net debt as three
+separate lines, each with the balance sheet's date. The page shows the two parts under the net-debt
+line so the subtraction can be checked. The provider's own statement line "Net Debt" is a
+different measure (it leaves out leases and short-term investments) and is never shown beside it:
+on Microsoft, Jun 2026, it read $19.4bn against this definition's $52.0bn. The year-end statement
+lines (Total Debt, Cash And Cash Equivalents) are at each fiscal year-end, a different date, and
+their cash line excludes short-term investments (BYD, Dec 2025: CNY 119.1bn of debt and CNY 75.4bn
+of cash; Jun 2026 under this definition: CNY 125.9bn of debt against CNY 128.7bn of cash and
+short-term investments).
+
+**Statements in two currencies (STATEMENTS-CCY-1).** yfinance's headline money figures
+(`totalDebt`, `totalCash`, `totalRevenue`) are in `financialCurrency`, but some annual statements are
+in another currency under the same label (Vale: headline revenue BRL 218bn, annual statement 38.4bn,
+which is USD). The adapter compares the headline revenue with the latest annual statement revenue; a
+gap of 3x or more sets `Fundamentals.statements_currency_note`, and every figure that would divide or
+convert one by the other abstains with that note: enterprise value and EPV, the valuation band, both
+net-debt ratios, and the debt page's payback, interest-cover and operating-cash-flow lines. Nothing is
+rescaled; the check cannot say which currency the statements are in, and a mislabel under 3x is not
+caught.
+
+**Debt and cash.** Net debt is as defined above; a MISSING cash balance is disclosed
 ("cash not reported, so this is gross debt") rather than treated as zero, which is house
 rule 3 applied to the balance sheet. Net debt over operating cash flow is stated in years
 ("would take 5.0 years of operating cash flow to repay its debt"), and abstains when cash

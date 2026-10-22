@@ -100,31 +100,72 @@ def mark_text(text: str) -> str:
 # --------------------------------------------------------------------------- #
 # cards
 # --------------------------------------------------------------------------- #
+# JUDGE-TAGS-2: the source tag is bookkeeping for the LABELLED fields (the fact that drove it, the
+# reasoning) - the ones whose provenance the reader must see. Key risk, could-not-account-for and
+# would-change-its-mind are free sentences: a tag a judge put there anyway is dropped, the text shown
+# plain. (Live: OpenAI on KO rendered "- *Could not account for:* *nothing.* `own knowledge`".)
+PLAIN_FIELDS = _answer.FREE
+
+
+def _field(key: str, text: str) -> str:
+    return _answer.strip_tags(text) if key in PLAIN_FIELDS else (text or "")
+
+
 def cards(result: PanelResult) -> list[dict]:
     """One dict per judge: the head line fields, then each labelled field (empty for a judge that
-    gave no answer - an error shows its short label and NOTHING else)."""
+    gave no answer - an error shows its short label and NOTHING else).
+
+    Only an UNSTABLE judge (two valid answers that differ) shows its answers side by side, each
+    prefixed with its verdict; ``card["sides"][key]`` holds them as ``[(verdict, text), ...]`` so a
+    renderer can mark each side on its own. An INCOMPLETE judge (one call answered) shows that one
+    answer plain, as a stable one does - its verdict is already in the head line."""
+    attrs = {"driving_fact": "driving_fact", "reasoning": "reason", "key_risk": "key_risk",
+             "unexplained": "unexplained", "would_change_my_mind": "would_change_my_mind"}
     out = []
     for j in result.judges:
         card = {"judge": f"{j.label} ({j.model})", "verdict": j.verdict_text(), "confidence": "",
                 "status": j.status, "own_knowledge": 0, "claims_pack": 0, "claims_own": 0,
-                **{key: "" for key, _ in FIELDS}}
+                "sides": {}, **{key: "" for key, _ in FIELDS}}
         ok = [c for c in j.calls if c.status == "ok"]
-        if j.status == STABLE and ok:
+        if j.status in (STABLE, INCOMPLETE) and ok:
             c = ok[0]
-            card.update(confidence=c.confidence, driving_fact=c.driving_fact, reasoning=c.reason,
-                        key_risk=c.key_risk, unexplained=c.unexplained,
-                        would_change_my_mind=c.would_change_my_mind)
-        elif j.status in (UNSTABLE, INCOMPLETE) and ok:
-            def both(attr):
-                return " | ".join(f"{c.verdict}: {getattr(c, attr)}" for c in ok)
-            card.update(confidence=" / ".join(c.confidence for c in ok), driving_fact=both("driving_fact"),
-                        reasoning=both("reason"), key_risk=both("key_risk"),
-                        unexplained=both("unexplained"), would_change_my_mind=both("would_change_my_mind"))
+            card["confidence"] = c.confidence
+            card.update({key: _field(key, getattr(c, attr)) for key, attr in attrs.items()})
+        elif j.status == UNSTABLE and ok:
+            card["confidence"] = " / ".join(c.confidence for c in ok)
+            for key, attr in attrs.items():
+                sides = [(c.verdict, _field(key, getattr(c, attr))) for c in ok]
+                card["sides"][key] = sides
+                card[key] = " | ".join(f"{v}: {t}" for v, t in sides)
         card["own_knowledge"] = sum(c.own_knowledge_claims for c in ok)
         if ok:                                         # the claims on the card as displayed (the first answer)
             card["claims_pack"], card["claims_own"] = _answer.count_claims(ok[0].driving_fact, ok[0].reason)
         out.append(card)
     return out
+
+
+def field_markdown(card, key: str) -> str:
+    """One card field as Markdown. Side by side (an unstable judge) each side is marked on its own -
+    "HOLD: *claim* `own knowledge` | BUY: claim." - so no italic or tag runs across the " | "."""
+    sides = card.get("sides", {}).get(key)
+    if sides:
+        return " | ".join(f"{v}: {_mark_field_markdown(key, t)}" for v, t in sides)
+    return _mark_field_markdown(key, card[key])
+
+
+def field_html(card, key: str) -> str:
+    sides = card.get("sides", {}).get(key)
+    if sides:
+        return " | ".join(f"{_html.escape(v)}: {_mark_field_html(key, t)}" for v, t in sides)
+    return _mark_field_html(key, card[key])
+
+
+def _mark_field_markdown(key: str, text: str) -> str:
+    return text if key in PLAIN_FIELDS else mark_markdown(text)
+
+
+def _mark_field_html(key: str, text: str) -> str:
+    return _html.escape(text) if key in PLAIN_FIELDS else mark_html(text)
 
 
 def _lens_votes(record) -> str:
@@ -227,7 +268,7 @@ def markdown_lines(result: PanelResult) -> list[str]:
             out.append(f"- *{claims_line(card)}*")
         for key, caption in FIELDS:
             if card[key]:
-                out.append(f"- *{caption}:* {mark_markdown(card[key])}")
+                out.append(f"- *{caption}:* {field_markdown(card, key)}")
         out.append("")
     out += [*summary_lines(result), ""]
     paragraph, note = reading_text(result)
@@ -247,7 +288,7 @@ def html_section(result: PanelResult, esc=_html.escape) -> str:
     for card in cards(result):
         out.append(f'<div class="judge"><p><strong>{esc(_head(card))}</strong></p>')
         extra = f"<li><em>{esc(claims_line(card))}</em></li>" if claims_line(card) else ""
-        items = extra + "".join(f"<li><em>{esc(caption)}:</em> {mark_html(card[key])}</li>"
+        items = extra + "".join(f"<li><em>{esc(caption)}:</em> {field_html(card, key)}</li>"
                         for key, caption in FIELDS if card[key])
         if items:
             out.append(f"<ul>{items}</ul>")

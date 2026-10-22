@@ -92,11 +92,22 @@ def short_name(report) -> str:
     """"Ford", "BYD", "JPMorgan": the company's common short name from ``data/short_names.yaml`` when
     it is listed there (SHORT-NAME-2), else the legal name cut at the first comma, then legal suffixes
     from the end ("JPMorgan Chase & Co." is NOT cut at the ampersand)."""
-    listed = _listed_short_name(getattr(report, "ticker", ""))
+    return short_company_name(getattr(report, "ticker", ""),
+                              getattr(getattr(report, "check", None), "company_name", ""))
+
+
+def short_company_name(ticker: str, legal_name: str) -> str:
+    """The ONE name rule every sentence about the company uses (the story and, REPEATS-NAMES-1, the
+    analyst lines, which read "Analysts expect The Coca-Cola / Ford Motor / JPMorgan Chase & Co. to
+    earn" while the story beside them said Coca-Cola, Ford, JPMorgan). ``ticker`` as the report
+    carries it ("F", not "F.US"); falls back to the ticker when there is no name."""
+    listed = _listed_short_name(ticker)
     if listed:
         return listed
-    name = str(getattr(report.check, "company_name", "") or "").strip() or report.ticker
-    text = name.split(",")[0].strip()
+    from .abs_readings import plain_company_name
+    name = str(legal_name or "").strip() or str(ticker or "")
+    # the abs_readings cut first (a trailing "(...)", ASA, Oyj, "Co Ltd"), then the story's own
+    text = plain_company_name(name).split(",")[0].strip() or name
     changed = True
     while changed:
         changed = False
@@ -109,7 +120,7 @@ def short_name(report) -> str:
     # people use has none ("Coca-Cola", "Procter & Gamble", "Home Depot").
     if text[:4].lower() == "the " and len(text) > 4:
         text = text[4:].strip()
-    return text or report.ticker
+    return text or str(ticker or "")
 
 
 _NUM = re.compile(r"[-+]?\d[\d,\.]*")
@@ -507,9 +518,18 @@ class TableRow:
     asks: str = ""
     badge_detail: str = ""
     full_reason: str = ""         # every sentence of the reason and the would-rank text (the notes)
+    buy_rule: str = ""            # GROWTH-CAP-WORDING-1: the lens's BUY cap, stated with what it asks
 
     def cells(self) -> list[str]:
         return [self.lens, self.outcome, self.badge, self.reason]
+
+    @property
+    def asks_note(self) -> str:
+        """What the lens asks, then its BUY cap: the company page's statement of the lens's rules
+        (it has no "Rules applied" section; the list report states the same cap there)."""
+        if not self.buy_rule or "a buy needs" in self.asks.lower():     # the caption already states it
+            return self.asks
+        return f"{self.asks} BUY cap: {self.buy_rule} (otherwise HOLD).".strip()
 
 
 def _outcome(v) -> str:
@@ -557,30 +577,44 @@ def sentence_starts_capital(text: str) -> str:
     return _SENTENCE_START.sub(lambda m: m.group(1).upper(), text)
 
 
-def _full_reason(v) -> str:
+def _full_reason(v, ticker: str = "") -> str:
     if v.status != "excluded":
         return ""
     text = _plain_reason(v.reason)
     if v.would_rank is not None:
         text += f". {v.would_rank.text}"
     full = text if (text != _first_reason(v.reason) or v.would_rank is not None) else ""
+    # EQUINOR-CHECK-1: a cut that is the end of an extraordinary dividend says so, in one plain sentence
+    from .dividend_notes import extraordinary_dividend_note
+    extra = extraordinary_dividend_note(ticker, v.reason or "")
+    if extra:
+        full = f"{(full or text).rstrip('. ')}. {extra}"
     return sentence_starts_capital(full)
 
 
 def table_rows(report) -> list[TableRow]:
-    from .backtest import evidence_summary
-
-    chance = evidence_summary().sentence()          # CHANCE-LINE-1: the same line under every badge
     rows = []
     for v in report.votes:
         detail = ""
         if v.badge is not None:
-            detail = f"{v.badge.detail_line()} - {v.badge.explanation()} {chance}"      # B24-E2
+            detail = f"{v.badge.detail_line()} - {v.badge.explanation()}"      # B24-E2
         rows.append(TableRow(lens=v.label, outcome=_outcome(v),
                              badge=v.badge.label if v.badge is not None else "none",
                              reason=_row_reason(v), asks=v.asks, badge_detail=detail,
-                             full_reason=_full_reason(v)))
+                             full_reason=_full_reason(v, getattr(report, "ticker", "")),
+                             buy_rule=getattr(v, "buy_rule", "") if v.asks else ""))
     return rows
+
+
+def lens_notes_chance(rows) -> str:
+    """CHANCE-LINE-1, stated ONCE under the lens notes (REPEATS-NAMES-1): the sentence that puts
+    every badge in the context of all the tests run. It is the same for every lens, and printed
+    after each one it read five times on Coca-Cola; each lens line now keeps only its own result.
+    "" when no lens carries a track record."""
+    if not any(getattr(r, "badge_detail", "") for r in rows):
+        return ""
+    from .backtest import evidence_summary
+    return evidence_summary().sentence()
 
 
 _FLOOR_NOTE = re.compile(r"tested range starts at \$(\d+(?:\.\d+)?)bn")

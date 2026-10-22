@@ -158,10 +158,13 @@ def test_an_unreliable_effective_rate_falls_back_to_the_flat_rate(tax, pretax):
     assert r.tax_rate == q.EPV_TAX_RATE and r.tax_source == "flat 25%"
 
 
-def test_negative_normalised_profit_has_no_value_and_a_reason():
+def test_negative_normalised_profit_ranks_below_zero_with_a_reason():
+    """EPV-TIES-1: a negative normalised profit no longer abstains (which tied every such company on one
+    last rank); its margin of safety is below -100%, below any company with positive earning power."""
     f = _epv_f(ebit=[-50.0, -40.0, -30.0, -30.0, -20.0])
     r = q.earnings_power_value(f, ev=600.0)
-    assert r.margin_of_safety is None and "negative or zero" in r.note
+    assert r.margin_of_safety is not None and r.margin_of_safety < -1.0
+    assert "negative or zero" in r.note and r.epv < 0
 
 
 def test_epv_abstains_without_enough_years_or_an_enterprise_value():

@@ -91,10 +91,18 @@ _SECTION_TITLES = {
 # the tests something exact to assert and give a live run something to surface.
 def _verdict_cell(verdict: str) -> str:
     """The lens table's Verdict cell. A verdict word is set in capitals (BUY / HOLD / SELL); a lens that
-    did not vote says so in ordinary case - "Does not apply", not "DOES NOT APPLY" (COUNCIL-CAPS-1)."""
+    did not vote says so in ordinary case - "Does not apply", not "DOES NOT APPLY" (COUNCIL-CAPS-1) - and a
+    check's mark stays in ordinary case too (COUNCIL-CAPS-2)."""
+    from .report_language import CHECK_WORDS
+
     raw = (verdict or "").strip()
     if "not apply" in raw.lower():
         return raw[:1].upper() + raw[1:].lower()
+    # COUNCIL-CAPS-2: a check's mark is a reading, not a verdict, so it is never set in capitals. Live,
+    # KO.US 2026-10-22: "NO CONCERN — 16TH OF 28 (A CHECK: MARKS, NEVER VOTES)". Any stray verdict word in
+    # it is removed afterwards by ``scrub_check_cell``.
+    if any(word in raw.lower() for word in CHECK_WORDS.values()):
+        return raw if any(c.islower() for c in raw) else raw.lower()
     return raw.upper()
 
 
@@ -379,6 +387,29 @@ def _specialist_cells(view) -> tuple[str, str, str]:
     stance = (view.stance or "").strip() or "—"
     conf = "—" if view.confidence is None else f"{view.confidence:.2f}"
     return stance, conf, money_text((view.reasoning or "").strip())
+
+
+@_glossed_once
+def printed_specialist_views(narration) -> dict[str, str]:
+    """``{specialist: the text the page prints for it}`` for every assessed specialist with a view
+    (TEXTCHECK-TABLEFACT-2). The prose fields are passed through ``money_text`` in the order the markdown
+    and HTML print them, inside one gloss scope, so a once-per-section gloss lands exactly where it does on
+    the page and a quoted sentence matches the printed one."""
+    if narration.echoed_verdict:
+        money_text(narration.echoed_verdict.strip())
+    for a in narration.lens_attribution or []:
+        if a.reasoning:
+            money_text(a.reasoning.strip())
+    if narration.disagreement_note:
+        money_text(narration.disagreement_note.strip())
+    for c in narration.neutral_context or []:
+        money_text(c.strip())
+    out: dict[str, str] = {}
+    for view in narration.specialist_views or []:
+        why = _specialist_cells(view)[2]
+        if view.assessed and (view.reasoning or "").strip() and why.strip():
+            out[view.specialist] = why
+    return out
 
 
 def narration_sections(narration) -> list[tuple[str, str]]:

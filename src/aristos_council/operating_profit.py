@@ -65,7 +65,11 @@ def operating_profit_basis(fundamentals) -> str:
     a loss but whose recent quarters recovered reads "no operating profit" until its next annual
     accounts. The year-end date is printed when the provider carried one (a dated series); without
     it the reason says "latest fiscal year" and never invents a date."""
-    name = _latest_series_name(fundamentals)
+    return _series_basis(fundamentals, _latest_series_name(fundamentals))
+
+
+def _series_basis(fundamentals, name: Optional[str]) -> str:
+    """The fiscal-year words for the newest value of one annual series (see above)."""
     ended = None
     if name is not None:
         dated = (getattr(fundamentals, "aligned_period_ends", None) or {}).get(name) or []
@@ -93,3 +97,23 @@ def has_no_operating_profit(fundamentals) -> bool:
     """True only when the latest operating profit is KNOWN and is zero or negative."""
     latest = latest_operating_profit(fundamentals)
     return latest is not None and latest <= 0
+
+
+# GROWTH-REASON-1. Growth's screen reads return on capital and revenue growth, and both ABSTAIN
+# (null != false) on a loss-maker or a company with no sales. Its reason then read "return on
+# invested capital not available" (Ford, NovoCure) and "revenue growth (annual average) not
+# available" (Viking) beside five other lenses saying "no operating profit (fiscal year to Dec
+# 2025)". The cause is known, so the reason names it. Wording only: the name was excluded before
+# and still is.
+NO_REVENUE_REASON = "no revenue"
+
+
+def has_no_revenue(fundamentals) -> bool:
+    """True only when the latest annual revenue is KNOWN and is zero or negative."""
+    series = getattr(fundamentals, "total_revenue", None) if fundamentals is not None else None
+    return bool(series) and series[0] is not None and float(series[0]) <= 0
+
+
+def no_revenue_reason(fundamentals) -> str:
+    """``"no revenue (fiscal year to Dec 2025)"`` - same shape as the operating-profit reason."""
+    return f"{NO_REVENUE_REASON} ({_series_basis(fundamentals, 'total_revenue')})"

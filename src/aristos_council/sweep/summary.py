@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from collections import Counter
 
+from ..plurals import plural
 from . import checks
 
 NONE = "no findings"
@@ -48,7 +49,7 @@ def summary_markdown(manifest: dict, results: list) -> str:
            f"{'on' if manifest['flags']['council'] else 'off'} (per-entry settings in the manifest).",
            "",
            f"{t['ok']} of {t['entries']} entries ran, {t['failed']} failed; {t['model_calls']} model "
-           f"calls, about ${t['approx_cost_usd']:.2f}; {t['findings']} finding(s).", ""]
+           f"calls, about ${t['approx_cost_usd']:.2f}; {plural(t['findings'], 'finding')}.", ""]
     for r in results:
         out += entry_table(r)
     all_findings = [f for r in results for f in r.findings]
@@ -63,7 +64,7 @@ def summary_markdown(manifest: dict, results: list) -> str:
     for r in results:
         mine = r.findings
         out.append(f"### {r.entry.id}: "
-                   + (f"{len(mine)} finding(s)" if mine else
+                   + (plural(len(mine), "finding") if mine else
                       NONE if r.status == "ok" else "not run (the entry failed)"))
         out.append("")
         if mine:

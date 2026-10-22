@@ -30,7 +30,8 @@ _TOPICS = {
     "operating profit": r"operating (?:profit|income|loss)",
     "bank or insurer": r"\bbank|\binsurer|not for this sector|\bsector\b|financial compan",
     "dividend": r"dividend|\byield\b|payout",
-    "revenue growth": r"revenue (?:grew|growth|growing|compound)|sales (?:grew|growth)|\bcagr\b",
+    "revenue growth": (r"revenue (?:grew|growth|growing|compound)|sales (?:grew|growth)|\bcagr\b"
+                       r"|\bno (?:revenue|sales)\b"),
     "market cap": r"market cap|market value of|worth at least|too small",
     "debt": r"\bdebt\b|leverage",
     "return on capital": r"return on (?:invested )?capital|\broic\b",

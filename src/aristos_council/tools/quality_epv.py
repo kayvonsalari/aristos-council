@@ -96,6 +96,8 @@ def net_debt_to_ebit(f) -> tuple[Optional[float], str]:
         return None, "no fundamentals"
     if f.total_debt is None or f.total_cash is None:
         return None, f"{'total debt' if f.total_debt is None else 'cash'} unavailable"
+    if getattr(f, "statements_currency_note", ""):
+        return None, f.statements_currency_note
     ebit = _clean(f.ebit)[:1] or _clean(f.operating_income)[:1]
     if not ebit:
         return None, "no operating-profit (EBIT) history"
@@ -159,15 +161,23 @@ def earnings_power_value(f, ev: Optional[float], fx_rate: float = 1.0) -> EPVRea
     tax_rate, tax_source = _effective_tax(f, EPV_MARGIN_YEARS)
     base = dict(avg_margin=avg_margin, margin_years=len(margins), tax_rate=tax_rate,
                 tax_source=tax_source, normalised_ebit=normalised)
-    if normalised <= 0:
-        return EPVReading(None, note=(f"normalised operating profit is negative or zero "
-                                      f"(average margin {avg_margin:.1%} over {len(margins)}y) "
-                                      "— nothing to capitalise"), **base)
     if ev is None:
         return EPVReading(None, note="enterprise value unavailable (debt or cash missing)", **base)
     if ev <= 0:
         return EPVReading(None, enterprise_value=ev,
                           note="enterprise value not positive (cash exceeds market cap plus debt)", **base)
+    if normalised <= 0:
+        # EPV-TIES-1: this used to return no value, and ``missing: worst`` then put every such company on
+        # ONE shared last rank - a floor (NVCR's peers: 6 tied 18th of 23; VKTX's: 5 tied 3rd of 7, e.g.
+        # 9969.HK at a -58.6% average margin level with VCYT at -3.6%). The same formula, untaxed (a loss
+        # pays no tax), gives a no-growth value below zero and a margin of safety below -100%: still below
+        # every company with positive earning power, now ordered by how far below zero.
+        epv = normalised * fx_rate / EPV_COST_OF_CAPITAL
+        return EPVReading(epv / ev - 1.0, epv=epv, enterprise_value=ev,
+                          note=(f"normalised operating profit is negative or zero (average margin "
+                                f"{avg_margin:.1%} over {len(margins)}y): the no-growth value is below "
+                                "zero, so it ranks below every company with positive earning power"),
+                          **{**base, "tax_rate": 0.0, "tax_source": "none on a loss"})
     epv = normalised * fx_rate * (1.0 - tax_rate) / EPV_COST_OF_CAPITAL
     return EPVReading(epv / ev - 1.0, epv=epv, enterprise_value=ev,
                       note=(f"EPV = {avg_margin:.1%} avg margin ({len(margins)}y) x latest revenue "

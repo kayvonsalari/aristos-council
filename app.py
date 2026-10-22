@@ -3554,13 +3554,13 @@ def _render_judge_panel(panel) -> None:
             if jr.claims_line(card):
                 st.caption(jr.claims_line(card))
             if card["driving_fact"]:
-                st.markdown(f"*The fact that drove it:* {jr.mark_markdown(card['driving_fact'])}")
+                st.markdown(f"*The fact that drove it:* {jr.field_markdown(card, 'driving_fact')}")
             if card["reasoning"]:
                 with st.expander("Why"):
-                    st.markdown(jr.mark_markdown(card["reasoning"]))
+                    st.markdown(jr.field_markdown(card, "reasoning"))
             for key, caption in jr.FIELDS[2:]:
                 if card[key]:
-                    st.markdown(f"*{caption}:* {jr.mark_markdown(card[key])}")
+                    st.markdown(f"*{caption}:* {jr.field_markdown(card, key)}")
     for line in jr.summary_lines(panel):
         st.markdown(line)
     paragraph, note = jr.reading_text(panel)
