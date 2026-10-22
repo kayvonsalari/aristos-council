@@ -72,11 +72,12 @@ V3_CAPTION = (
     "Growing faster than most of its industry at a fair price: companies worth at least $5bn whose sales are "
     "still growing (above 0% a year) and that earn a positive return on capital, not banks or insurers; "
     "ranked on sales growth, return on capital, price and trend; a BUY needs sales growth above the "
-    "industry median.")
+    "median of the companies it is ranked against (the list it runs on, or its peer group).")
 
 
 def test_v3_caption_is_the_approved_text_and_v2_display_text_is_untouched():
-    """GROWTH-V3-CAPTION-1 (2026-10-21): only v3's ``asks`` changed (owner-approved); every verdict-affecting
+    """GROWTH-V3-CAPTION-1 (2026-10-21) and GROWTH-CAP-WORDING-1 (2026-10-22, owner-approved on PR #193: the
+    median is of the list or the peer group, not "the industry"): only v3's ``asks`` changed; every verdict-affecting
     field is pinned above, and v2's display text is byte-for-byte what it was."""
     assert " ".join(_load("growth_garp_v3")["asks"].split()) == V3_CAPTION
     v2 = _load("growth_garp_v2")

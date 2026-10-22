@@ -7,7 +7,8 @@ list", the company page "the median of its peer group". The cap is also stated w
 rules: "a BUY needs sales growth in the top half of the ranked names" - in the list report's "Rules
 applied" section, and on the company page (which has no rules section) beside what the lens asks.
 
-The strategy YAML's ``asks`` caption still says "above the industry median"; it is immutable here.
+The strategy YAML's ``asks`` caption now says the same (owner-approved display text, 2026-10-22); the company
+page then does not repeat the cap after it.
 """
 from __future__ import annotations
 
@@ -128,3 +129,15 @@ def test_rules_applied_block_carries_the_cap_for_a_growth_result():
                              screen_bases={}, meta={})
     assert f"BUY cap: {RULE} (otherwise HOLD)." in rules_applied(result).ranker_lines
     assert any(RULE in line for line in format_rules_applied(result))
+
+
+def test_the_v3_caption_states_the_cap_in_list_and_peer_group_words_and_is_not_repeated():
+    """Owner-approved 2026-10-22: the caption no longer says "industry median"; the company page's
+    footnote then does not add the cap a second time."""
+    from aristos_council.company_story import TableRow
+    asks = " ".join(GROWTH.asks.split())
+    assert "industry median" not in asks
+    assert asks.endswith("a BUY needs sales growth above the median of the companies it is ranked "
+                         "against (the list it runs on, or its peer group).")
+    row = TableRow(lens="Growth", outcome="", badge="", reason="", asks=asks, buy_rule=RULE)
+    assert row.asks_note == asks

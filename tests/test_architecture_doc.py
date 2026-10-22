@@ -105,7 +105,8 @@ def test_the_lens_and_badge_tables_are_generated_so_they_cannot_drift():
     for internal in ("not beyond luck", "not proven", ">insufficient<", ">proven<"):
         assert internal not in text, f"the backtest's own verdict leaked into the page: {internal}"
     assert "12% on their capital" in text           # Value + Momentum's rule
-    assert "a BUY needs sales growth above the industry median" in text   # Growth's rule (v3 since 2026-10-21; v2 was "sales up at least 10% a year")
+    assert ("a BUY needs sales growth above the median of the companies it is ranked against"
+            in text)    # Growth's rule (v3 since 2026-10-21, list/peer-group wording since 2026-10-22)
 
 
 def test_the_page_states_what_each_feature_really_uses_for_news_and_for_click_through():

@@ -527,7 +527,7 @@ class TableRow:
     def asks_note(self) -> str:
         """What the lens asks, then its BUY cap: the company page's statement of the lens's rules
         (it has no "Rules applied" section; the list report states the same cap there)."""
-        if not self.buy_rule:
+        if not self.buy_rule or "a buy needs" in self.asks.lower():     # the caption already states it
             return self.asks
         return f"{self.asks} BUY cap: {self.buy_rule} (otherwise HOLD).".strip()
 
