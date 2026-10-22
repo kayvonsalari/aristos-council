@@ -577,13 +577,18 @@ def sentence_starts_capital(text: str) -> str:
     return _SENTENCE_START.sub(lambda m: m.group(1).upper(), text)
 
 
-def _full_reason(v) -> str:
+def _full_reason(v, ticker: str = "") -> str:
     if v.status != "excluded":
         return ""
     text = _plain_reason(v.reason)
     if v.would_rank is not None:
         text += f". {v.would_rank.text}"
     full = text if (text != _first_reason(v.reason) or v.would_rank is not None) else ""
+    # EQUINOR-CHECK-1: a cut that is the end of an extraordinary dividend says so, in one plain sentence
+    from .dividend_notes import extraordinary_dividend_note
+    extra = extraordinary_dividend_note(ticker, v.reason or "")
+    if extra:
+        full = f"{(full or text).rstrip('. ')}. {extra}"
     return sentence_starts_capital(full)
 
 
@@ -596,7 +601,7 @@ def table_rows(report) -> list[TableRow]:
         rows.append(TableRow(lens=v.label, outcome=_outcome(v),
                              badge=v.badge.label if v.badge is not None else "none",
                              reason=_row_reason(v), asks=v.asks, badge_detail=detail,
-                             full_reason=_full_reason(v),
+                             full_reason=_full_reason(v, getattr(report, "ticker", "")),
                              buy_rule=getattr(v, "buy_rule", "") if v.asks else ""))
     return rows
 
