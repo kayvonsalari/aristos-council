@@ -942,8 +942,24 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
                 # (a scope-gate exclusion has no pool entry and so no reading). Never a vote.
                 shadow = would_rank(strategy, getattr(result, "ranked", []) or [],
                                     getattr(result, "shadow_pool", None) or {}, row.ticker)
+                if shadow is not None and _non_payer_on_dividend_lens(result, row.ticker):
+                    shadow = None
             votes.append(LensVote(**base, status=cell.status, reason=reason, would_rank=shadow))
     return votes
+
+
+def _non_payer_on_dividend_lens(result, ticker: str) -> bool:
+    """WOULD-RANK-NONPAYER-1 - True when a dividend lens (its screen asks for a dividend yield)
+    measured this company's yield at zero. Where a company that pays nothing would sit among
+    dividend payers is not a reading: live, Viking read "would rank 29th of 41" and NovoCure "26th
+    of 41" on Defensive Income beside "dividend yield 0%". A payer keeps it (Microsoft at 0.74%
+    "would rank 4th of 14"). A yield the screen could not read (null) is not zero (rule 3)."""
+    outcome = ((getattr(result, "screen_outcomes", None) or {}).get(ticker) or {}).get(
+        "min_dividend_yield")
+    if not outcome:
+        return False
+    observed = outcome.get("observed")
+    return isinstance(observed, (int, float)) and observed <= 0
 
 
 def _plain_reason(reason: str) -> str:
