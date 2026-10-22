@@ -409,3 +409,15 @@ def test_rule_judge_error_or_incomplete_rows_carry_their_reason():
 
 def test_every_rule_has_a_name_and_the_list_is_complete():
     assert len(set(checks.ALL_RULES)) == len(checks.ALL_RULES) == 14
+
+
+def test_the_cli_loads_dotenv_so_judge_and_council_keys_reach_the_run(tmp_path, monkeypatch):
+    """The first real sweep ran with every judge 'not run - no key': the app loads .env in main(),
+    the sweep CLI did not."""
+    from aristos_council.sweep import __main__ as cli
+    called = []
+    monkeypatch.setattr(cli, "load_env", lambda: called.append(1))
+    p = _write(tmp_path, [{"id": "A", "kind": "company", "ticker": "A"}])
+    cli.main(["run", "--sets-file", str(p), "--out", str(tmp_path / "o")],
+             producers={"company": _fake(), "list": _fake()})
+    assert called == [1]
