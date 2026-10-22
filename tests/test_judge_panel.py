@@ -350,7 +350,7 @@ def test_the_narrator_writes_one_checked_paragraph_when_the_panel_differs():
 
 
 @pytest.mark.parametrize("bad, why", [
-    ("word " * 90, "words"),
+    # PANEL-READING-LENGTH-1: an over-long paragraph is no longer withheld (tests/test_panel_reading_length_1.py)
     ("You should buy this company now.", "recommendation"),
     ("The combined verdict of the panel is hold.", "combines"),
     ("The panel says SELL.", "verdict word nobody gave"),

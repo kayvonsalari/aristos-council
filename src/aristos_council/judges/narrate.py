@@ -4,8 +4,12 @@ Written only when the panel disagrees with (or is mixed against) the verdict of 
 least one judge is stable. It runs on the narrator's own model tier (the "decision" tier the
 council's narration uses) and its output goes through a check in the spirit of the narration
 check: the paragraph is a READING, so it is withheld - with its reason, never silently rewritten -
-if it is longer than 80 words, gives a recommendation, asserts a verdict word nobody gave, or
-combines the judges into a new verdict. One corrective retry, as the plain-English summary has.
+if it gives a recommendation, asserts a verdict word nobody gave, or combines the judges into a new
+verdict. One corrective retry, as the plain-English summary has.
+
+PANEL-READING-LENGTH-1: length is guidance, never a veto. The prompt asks for 80 words; a longer
+paragraph is still shown - cut at the last sentence end that keeps it within 80 words when there is
+one, else whole. (Live, MSFT: "The reading was withheld: it is 90 words; the limit is 80".)
 """
 from __future__ import annotations
 
@@ -42,9 +46,6 @@ def check_reading(paragraph: str, allowed_verdicts) -> list[str]:
     if not text:
         return ["the paragraph is empty"]
     problems: list[str] = []
-    words = len(text.split())
-    if words > MAX_WORDS:
-        problems.append(f"it is {words} words; the limit is {MAX_WORDS}")
     if "\n" in text or _MARKUP.search(text):
         problems.append("it is not a single plain paragraph")
     if _RECOMMENDS.search(text):
@@ -56,6 +57,25 @@ def check_reading(paragraph: str, allowed_verdicts) -> list[str]:
     if stray:
         problems.append("it asserts a verdict word nobody gave: " + ", ".join(w.upper() for w in stray))
     return problems
+
+
+_SENTENCE_END = re.compile(r"[.!?][\"”’)\]]*(?=\s|$)")
+
+
+def fit_length(paragraph: str, limit: int = MAX_WORDS) -> str:
+    """The paragraph as shown: whole when it is within ``limit`` words; otherwise cut at the LAST
+    sentence end that keeps it within the limit; whole again when no sentence end allows that (the
+    first sentence alone is too long). Never cuts mid-sentence and never withholds."""
+    text = " ".join((paragraph or "").split())
+    if len(text.split()) <= limit:
+        return text
+    best = ""
+    for m in _SENTENCE_END.finditer(text):
+        head = text[:m.end()]
+        if len(head.split()) > limit:
+            break
+        best = head
+    return best or text
 
 
 def _material(result, report) -> str:
@@ -115,7 +135,7 @@ def write_panel_reading(result, report, pack=None, *, runner=None) -> PanelReadi
             paragraph = str(getattr(out, "paragraph", "") or "").strip()
             problems = check_reading(paragraph, allowed)
             if not problems:
-                return PanelReading(paragraph=" ".join(paragraph.split()), calls=calls)
+                return PanelReading(paragraph=fit_length(paragraph), calls=calls)
     except Exception as exc:                                # noqa: BLE001 - reported, never raised
         return PanelReading(note=f"The reading is unavailable: {type(exc).__name__}: {str(exc)[:160]}",
                             calls=calls)
