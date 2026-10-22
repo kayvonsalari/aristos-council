@@ -73,8 +73,11 @@ $m and $bn); singular/plural slips ("1 names", "3 company", "(s)"); unmatched `*
 names in reader text; truncated company names ("The Coca-Cola", "Johnson &", a trailing "..."); a repeated
 paragraph (the same paragraph under two headings, or the same sentence in two lens notes); a ticked lens
 absent from every table. Over the structured results: the same lens or check stated two ways, SELL votes
-missing from the agreement, BUY with no SELL at list sizes of 2 or more (under 5 names a lens has no SELL
-rule at all). Over the judge panel: a field that starts with a verdict token ("HOLD:"), and any error,
+missing from the agreement, and a BUY with no SELL in a lens that ranked 5 or more names (a lens under 5
+never votes; a tie group that straddles the SELL cut is HOLD by rule, so it is not flagged — a tie wholly
+inside the bottom band, or a BUY with no tie touching it, is). Text inside a news headline ("2026-10-19:
+…") or a quoted title is never checked for truncated names, and in a list's "— detail" sections the
+per-lens rule line, its italic explainer and the removed-names list are not "repeated paragraphs". Over the judge panel: a field that starts with a verdict token ("HOLD:"), and any error,
 invalid or incomplete judge row with its reason. The rules that already existed live in `report_sweep.py`
 and are called, not copied; the sweep adds location (entry, section, line).
 

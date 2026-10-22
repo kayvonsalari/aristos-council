@@ -696,7 +696,7 @@ strategy YAML, not code. Current registry (thresholds shown from the live strate
 | `min_price_momentum` | −0.10 (12m) | **Breakdowns, not flatness**: a defensive down >10% on the year is breaking (T at −26%); a quiet staple down 0–10% passes. The ranker handles the gradient among survivors. |
 | `min_dividend_streak` | 10 years | Cut history: T (cut 2022 → streak 0) and MMM (cut 2024) fail; PG/KO/JNJ/MCD pass. |
 | `max_dividend_cuts` | 5 years | **"Was it ever CUT?", which is not "did it RISE?"** A year is a cut only when its **year total AND its typical payment** both fell more than `cut_tolerance` (default **10%**) against the prior year. Neither measure is safe alone, and that is the whole rule: each ordinary artefact moves exactly ONE of them while a real cut moves BOTH. A year with one fewer payment drops the total and leaves the typical payment alone (Canadian Natural, 5 payments then 4: total −22.1%, median payment +15.6%); a special dividend does the same (EOG: regular +10%, total −34%); a **cadence change does the opposite**, halving the typical payment while the total rises (Eni, 2 payments a year then 4: total +14.4%, median −44.1%) — which is why the median alone is not an improvement on the total. Real cuts (BP, Shell, SLB, Suncor, Equinor in 2020) move both together. `observed` is the size of the largest qualifying fall in the TOTAL, as a fraction, rendered as a whole percentage. The threshold is the WINDOW (a count of complete years), not a cap on the observed value, so the rule states its own phrase rather than the generated "at most 5". **Single-payment years** are compared on the total alone: a median of one number is not a *typical* payment, it IS that payment, and judging it as typical would make every switch to annual payment read as a cut. A company that held its dividend flat passes; for a cyclical payer that flat dividend is the evidence of durability. Too little history (fewer than window+1 complete years) or no dividend history is **NOT-EVAL**, never a fail — a non-payer is failed by `min_dividend_yield`. See **§4.2** for the tolerance and the stated limitation. |
-| `max_debt_to_market_cap` | 1.0 | Balance-sheet risk: total debt ≤ market cap. VZ (~1.13×, $201B) fails. Uses debt/market-cap, **not** debt/equity — robust to negative-equity buyback names (MCD). |
+| `max_debt_to_market_cap` | 1.0 (FX-DEBT-MV-1: when the accounts and the quote are in different currencies, debt is converted to the quote's major currency at the latest dated yfinance month-end rate (the valuation band's FX path; the note names the pair, rate and month) — Shell 0.245, TotalEnergies 0.316; no rate, or accounts that fail the statements-currency check, abstain) | Balance-sheet risk: total debt ≤ market cap. VZ (~1.13×, $201B) fails. Uses debt/market-cap, **not** debt/equity — robust to negative-equity buyback names (MCD). |
 | `min_roic` | 0.12 (magic_value_screen) | The quality floor for value strategies. |
 | `min_f_score` | *none — enabled by no lens* | Accounting quality: nine binary checks on the annual statements (see **§4.1**). Registered and optional; no threshold is documented because no strategy adopts one yet. |
 | `revenue_cagr`, `peg_ratio` | growth_v1 | GARP criteria; **PEG** (the P/E ratio divided by the earnings-growth rate — a valuation-against-growth measure, where roughly ≤1 reads as "reasonably priced for the growth") uses in-house earnings-growth with a cyclical-base guard. |
@@ -1036,9 +1036,16 @@ says nothing about either. These two readings say something about one company on
 the factor registry, and nothing on any page is ranked by them (pinned by
 `tests/test_abs_readings.py`). They are facts about a set of accounts.
 
-**Net debt — the one definition (NET-DEBT-1).** Net debt is **total debt, including lease
-liabilities, minus cash, cash equivalents and short-term investments, from the latest balance
-sheet** the provider gives (its most recent quarter; yfinance `totalDebt` and `totalCash`). The
+**Net debt — the one definition (NET-DEBT-1, narrowed by NET-DEBT-2).** Net debt is **total debt —
+the balance sheet's own "Total Debt" row for the latest quarter (borrowings and finance leases) —
+minus cash, cash equivalents and short-term investments** (yfinance `totalCash`). The provider's
+headline `totalDebt` also carries operating-lease liabilities (Microsoft, Jun 2026: $128.8bn headline
+against a $56.8bn row), so that excess is **not counted as debt**: where it exists the page adds one
+line, "leases add $72.0bn (not counted as debt above)" (`Fundamentals.lease_liabilities`, the headline
+minus the row, shown only when it exceeds a rounding-size gap; Ford's two figures agree, so it shows
+none). With no statement row the headline is used and no lease figure is claimed. Microsoft's net
+position therefore reads "holds $20.0bn more cash than debt" ($56.8bn − $76.8bn), where under
+NET-DEBT-1 it read "owes $52.0bn". The
 same two figures feed this reading, the Quality lens's net debt ÷ EBIT, enterprise value, and the
 judge pack, which states total debt, cash and short-term investments, and net debt as three
 separate lines, each with the balance sheet's date. The page shows the two parts under the net-debt
@@ -1049,6 +1056,16 @@ lines (Total Debt, Cash And Cash Equivalents) are at each fiscal year-end, a dif
 their cash line excludes short-term investments (BYD, Dec 2025: CNY 119.1bn of debt and CNY 75.4bn
 of cash; Jun 2026 under this definition: CNY 125.9bn of debt against CNY 128.7bn of cash and
 short-term investments).
+
+**Statements in two currencies (STATEMENTS-CCY-1).** yfinance's headline money figures
+(`totalDebt`, `totalCash`, `totalRevenue`) are in `financialCurrency`, but some annual statements are
+in another currency under the same label (Vale: headline revenue BRL 218bn, annual statement 38.4bn,
+which is USD). The adapter compares the headline revenue with the latest annual statement revenue; a
+gap of 3x or more sets `Fundamentals.statements_currency_note`, and every figure that would divide or
+convert one by the other abstains with that note: enterprise value and EPV, the valuation band, both
+net-debt ratios, and the debt page's payback, interest-cover and operating-cash-flow lines. Nothing is
+rescaled; the check cannot say which currency the statements are in, and a mislabel under 3x is not
+caught.
 
 **Debt and cash.** Net debt is as defined above; a MISSING cash balance is disclosed
 ("cash not reported, so this is gross debt") rather than treated as zero, which is house
