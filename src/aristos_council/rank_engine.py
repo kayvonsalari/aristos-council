@@ -298,7 +298,15 @@ def _tie_group_verdict(q: int, start: int, end: int, n: int, cut: str, k: int,
 # never BUY. A cap, not a screen: it never excludes, never makes a SELL, and acts only on names the
 # cut would have bought. Each entry is the share of the ranked set that may buy.
 BUY_REQUIRES_SHARES = {"top_half": 2.0, "top_third": 3.0}      # divisor: n / d names qualify
-_BUY_CAP_PHRASE = {"revenue_growth": "growing slower than the industry median"}
+_BUY_CAP_PHRASE = {"revenue_growth": "growing slower than the median of {scope}"}
+# GROWTH-CAP-WORDING-1: the median is of the names this run ranked, not of "the industry". A list
+# run ranks the pasted list or cohort; the company page ranks the company's peer group. The rank
+# engine writes the list wording and the company page swaps the scope (``cap_reason_for_peers``).
+CAP_SCOPE_LIST = "this list"
+CAP_SCOPE_PEERS = "its peer group"
+# The rule itself, stated where a report lists a lens's rules (the factor's plain name).
+_BUY_RULE_SUBJECT = {"revenue_growth": "sales growth"}
+_BUY_RULE_SHARE = {"top_half": "the top half", "top_third": "the top third"}
 
 
 def _passes_buy_requirement(rank: float, n: int, rule: str) -> bool:
@@ -313,9 +321,26 @@ def _cap_reason(factor: str, rule: str, position: int) -> str:
     phrase = _BUY_CAP_PHRASE.get(factor) if rule == "top_half" else None
     if phrase is None:
         label = factor_column_label(factor).lower()
-        phrase = (f"{label} below the industry median" if rule == "top_half"
-                  else f"{label} outside the industry's top third")
-    return f"ranked {_ordinal(position)}, but {phrase}, so HOLD"
+        phrase = (f"{label} below the median of {{scope}}" if rule == "top_half"
+                  else f"{label} outside the top third of {{scope}}")
+    return f"ranked {_ordinal(position)}, but {phrase.format(scope=CAP_SCOPE_LIST)}, so HOLD"
+
+
+def cap_reason_for_peers(reason: str) -> str:
+    """The company page's wording of a cap reason: the median is of its peer group."""
+    return (reason or "").replace(f" of {CAP_SCOPE_LIST}, so HOLD",
+                                  f" of {CAP_SCOPE_PEERS}, so HOLD")
+
+
+def buy_requirement_lines(buy_requires) -> list[str]:
+    """``["a BUY needs sales growth in the top half of the ranked names"]`` - the BUY cap as a
+    rule a report lists beside the screen's (GROWTH-CAP-WORDING-1). Empty without a cap."""
+    out = []
+    for factor, rule in (buy_requires or {}).items():
+        subject = _BUY_RULE_SUBJECT.get(factor) or factor_column_label(factor).lower()
+        share = _BUY_RULE_SHARE.get(rule, rule)
+        out.append(f"a BUY needs {subject} in {share} of the ranked names")
+    return out
 
 
 def rank_universe(

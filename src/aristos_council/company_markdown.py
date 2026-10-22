@@ -115,5 +115,5 @@ def company_report_markdown(report) -> str:
         out.append("")
     out += ["### Sources", "", *[f"- **{s.topic}:** {s.text}" for s in company_sources(c)], ""]
     for n, r in notes:
-        out.append(f"[^{n}]: {r.lens} asks: {r.asks}")
+        out.append(f"[^{n}]: {r.lens} asks: {r.asks_note}")
     return "\n".join(out).rstrip() + "\n"

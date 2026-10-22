@@ -1678,7 +1678,7 @@ def _workings_html(report) -> str:
         items = []
         for r in notes:
             if r.asks:
-                items.append(f"<strong>{_esc(r.lens)}</strong> asks: {_esc(r.asks)}")
+                items.append(f"<strong>{_esc(r.lens)}</strong> asks: {_esc(r.asks_note)}")
             if r.full_reason:
                 items.append(f"<strong>{_esc(r.lens)}</strong> did not apply: {_esc(r.full_reason)}")
             if r.badge_detail:

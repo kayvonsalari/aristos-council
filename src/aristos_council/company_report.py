@@ -53,7 +53,8 @@ from .company_check import (CompanyCheckResult, absolute_reading_lines, analyst_
                             run_company_check)
 from .data.adapter import normalize_ticker
 from .peer_table import rank_columns
-from .rank_engine import MIN_RANKABLE_COHORT, small_group_text, too_few_to_rank_text
+from .rank_engine import (MIN_RANKABLE_COHORT, buy_requirement_lines, cap_reason_for_peers,
+                          small_group_text, too_few_to_rank_text)
 from .smallcap_band import SMALLCAP_CEILING_USD
 from .shadow_rank import WouldRank, would_rank
 from .tools.valuation_band import ordinal
@@ -128,6 +129,9 @@ class LensVote:
     # TIE-CHECK-1 - the number of OTHER companies sharing this one's combined rank-sum (0 = not tied)
     tied_with: int = 0
     cap_reason: str = ""        # BUY-CAP (27B-1): why a would-be BUY reads HOLD
+    # GROWTH-CAP-WORDING-1 - the lens's BUY cap as a rule ("a BUY needs sales growth in the top half
+    # of the ranked names"), stated beside what the lens asks. Empty for a lens without one.
+    buy_rule: str = ""
 
     @property
     def votes(self) -> bool:
@@ -897,7 +901,9 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
         strategy = getattr(result, "rank_strategy", None)
         base = dict(strategy_id=sid, label=multi.strategy_names.get(sid, "") or sid,
                     kind=getattr(strategy, "kind", "selector") or "selector",
-                    asks=(getattr(strategy, "asks", "") or "").strip())
+                    asks=(getattr(strategy, "asks", "") or "").strip(),
+                    buy_rule="; ".join(buy_requirement_lines(
+                        getattr(strategy, "buy_requires", None))))
         cell = row.cells.get(sid) if row is not None else None
         if cell is None or cell.status == "absent":
             votes.append(LensVote(**base, status="absent"))
@@ -920,7 +926,7 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
                                   position=cell.position, cohort_size=cell.cohort_size,
                                   factor_note=cell.factor_note,
                                   tied_with=getattr(cell, "tied_with", 0),
-                                  cap_reason=getattr(cell, "cap_reason", ""),
+                                  cap_reason=cap_reason_for_peers(getattr(cell, "cap_reason", "")),
                                   factors_measured=getattr(cell, "factors_measured", 0),
                                   factors_total=getattr(cell, "factors_total", 0),
                                   components=(_check_components(result, ticker)

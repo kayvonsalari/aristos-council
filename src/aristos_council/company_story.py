@@ -507,9 +507,18 @@ class TableRow:
     asks: str = ""
     badge_detail: str = ""
     full_reason: str = ""         # every sentence of the reason and the would-rank text (the notes)
+    buy_rule: str = ""            # GROWTH-CAP-WORDING-1: the lens's BUY cap, stated with what it asks
 
     def cells(self) -> list[str]:
         return [self.lens, self.outcome, self.badge, self.reason]
+
+    @property
+    def asks_note(self) -> str:
+        """What the lens asks, then its BUY cap: the company page's statement of the lens's rules
+        (it has no "Rules applied" section; the list report states the same cap there)."""
+        if not self.buy_rule:
+            return self.asks
+        return f"{self.asks} BUY cap: {self.buy_rule} (otherwise HOLD).".strip()
 
 
 def _outcome(v) -> str:
@@ -579,7 +588,8 @@ def table_rows(report) -> list[TableRow]:
         rows.append(TableRow(lens=v.label, outcome=_outcome(v),
                              badge=v.badge.label if v.badge is not None else "none",
                              reason=_row_reason(v), asks=v.asks, badge_detail=detail,
-                             full_reason=_full_reason(v)))
+                             full_reason=_full_reason(v),
+                             buy_rule=getattr(v, "buy_rule", "") if v.asks else ""))
     return rows
 
 

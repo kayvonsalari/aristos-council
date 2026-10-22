@@ -1819,6 +1819,10 @@ def _ranker_filter_lines(rank, covered_floor: Optional[float] = None) -> list[st
               for f in (getattr(rank, "factors", None) or [])]
     if labels:
         lines.append("Names ranked on: " + ", ".join(labels) + ".")
+    # GROWTH-CAP-WORDING-1: a BUY cap decides verdicts like any rule, so it is stated with them.
+    from .rank_engine import buy_requirement_lines
+    for rule in buy_requirement_lines(getattr(rank, "buy_requires", None)):
+        lines.append(f"BUY cap: {rule} (otherwise HOLD).")
     floor = getattr(rank, "min_market_cap", None)
     # DEFINC-FLOOR-1: the floor is stated ONCE. When the prefilter screen carries a floor at
     # least as high as the ranker's own, the screen's is the one that binds (a name between the
@@ -2485,7 +2489,7 @@ class MultiStrategyCell:
     # Display only: the sort, the cut and the verdicts do not read it.
     tied_with: int = 0
     # BUY-CAP (27B-1): why a would-be BUY reads HOLD ("ranked 2nd, but growing slower than the
-    # industry median, so HOLD"); "" for every other cell.
+    # median of this list, so HOLD"); "" for every other cell.
     cap_reason: str = ""
 
     @property
