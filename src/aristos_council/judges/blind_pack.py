@@ -258,23 +258,32 @@ def _analysts(report) -> list[str]:
 
 
 def _debt_cash(report, fundamentals=None) -> list[str]:
-    """The page's debt-and-cash readings. PACK-NETDEBT-1: the page's net-debt figure is the LATEST
-    balance sheet, while the balance-sheet statement carries a year-end "Net Debt" line for each fiscal
-    year; with both in one pack they read as two unlabelled disagreeing figures ($140.0bn and $141.2bn
-    on Ford). The reading therefore carries its balance-sheet date, and a note says the statement's
-    line is the year-end one."""
+    """The page's debt-and-cash readings. PACK-NETDEBT-1 dated the net-debt figure; NET-DEBT-1 states
+    total debt, cash and short-term investments, and net debt as separate lines, EACH with the balance
+    sheet's date, under the one definition the page uses (``abs_readings.NET_DEBT_DEFINITION``). Live:
+    NVCR's judges saw "cash and investments $447.7m" and "net cash $207.1m" with no debt figure and
+    could not reconcile them; MSFT's saw the provider's own "Net Debt" line ($19.4bn) beside the page's
+    $52.0bn. That provider line is dropped from the pack's balance sheet (``_statement``)."""
     debt = getattr(report.check, "debt_and_cash", None)
     if debt is None:
         return []
-    lines = [_clean(x) for x in list(debt.lines())]
-    if lines and getattr(debt.net_debt, "available", False) and "balance sheet" not in lines[0]:
-        from ..abs_readings import _balance_sheet_date
-        lines[0] = f"{lines[0]} ({_balance_sheet_date(fundamentals)})"
+    from ..abs_readings import NET_DEBT_DEFINITION, _balance_sheet_date
+    when = _balance_sheet_date(fundamentals)
+    dated = {r.text() for r in (debt.net_debt, debt.total_debt, debt.cash)
+             if getattr(r, "available", False)}
+    lines = [(f"{_clean(x)} ({when})" if x in dated and "balance sheet" not in x else _clean(x))
+             for x in list(debt.lines())]
     notes = [_clean(x) for x in list(debt.notes())]
-    if lines:
-        notes.append("The 'Net Debt' line in the balance sheet above is each fiscal year's year-end "
-                     "figure; the net-debt reading here is the latest balance sheet.")
+    if dated:
+        notes.append(f"Net debt here is {NET_DEBT_DEFINITION}. The balance sheet above is at each "
+                     f"fiscal year-end; the provider's own 'Net Debt' line, which leaves out leases and "
+                     f"short-term investments, is not shown.")
     return lines + notes
+
+
+# NET-DEBT-1 - balance-sheet lines left out of the pack because they define net debt differently from
+# the page (see ``_debt_cash``).
+_DROPPED_STATEMENT_LINES = {"balance": {"net debt"}}
 
 
 def _growth(report) -> list[str]:
@@ -357,6 +366,8 @@ def _statement(statements, key: str, ccy) -> list[str]:
     head = "fiscal years ending " + ", ".join(periods) + " (oldest first" + (f"; {ccy}" if ccy else "") + ")"
     out = [head]
     for line, vals in rows.items():
+        if line.strip().lower() in _DROPPED_STATEMENT_LINES.get(key, ()):
+            continue
         cells = [(_fmt_statement_value(line, v, ccy) if v is not None else "n/a") for v in vals]
         out.append(f"{line}: " + " | ".join(cells))
     return out

@@ -179,9 +179,22 @@ def _series(f, name: str) -> list[Optional[float]]:
 # --------------------------------------------------------------------------- #
 # A. debt and cash
 # --------------------------------------------------------------------------- #
+# NET-DEBT-1 - THE one definition every surface uses (the page, these readings, the Quality lens's
+# net debt / EBIT, enterprise value and the judge pack): total debt, INCLUDING lease liabilities (the
+# provider's "total debt"), minus cash, cash equivalents and short-term investments (its "total cash"),
+# both from the latest balance sheet the provider gives (its most recent quarter). The provider's own
+# statement line "Net Debt" leaves out leases and short-term investments, so it is a different number
+# (MSFT, Jun 2026: $52.0bn here, $19.4bn there) and is never shown beside this one.
+NET_DEBT_DEFINITION = ("total debt including lease liabilities, minus cash, cash equivalents and "
+                       "short-term investments, from the latest balance sheet")
+
+
 @dataclass(frozen=True)
 class DebtAndCash:
     net_debt: Reading = field(default_factory=Reading)
+    # NET-DEBT-1: the two figures the net debt is made of, so a reader (or a judge) can do the subtraction
+    total_debt: Reading = field(default_factory=Reading)
+    cash: Reading = field(default_factory=Reading)
     net_debt_to_ocf: Reading = field(default_factory=Reading)
     interest_cover: Reading = field(default_factory=Reading)
     years_to_repay: Reading = field(default_factory=Reading)
@@ -210,7 +223,9 @@ class DebtAndCash:
     def lines(self) -> list[str]:
         # ABS-READINGS-3 - NVIDIA printed "has no net debt to repay" twice, once for the
         # operating-cash-flow reading and once for the free-cash-flow one.
-        readings = [self.net_debt, self.net_debt_to_ocf, self.interest_cover, self.years_to_repay]
+        parts = [r for r in (self.total_debt, self.cash) if r.available]
+        readings = [self.net_debt, *parts, self.net_debt_to_ocf, self.interest_cover,
+                    self.years_to_repay]
         if self.cash_runway.available:
             readings.append(self.cash_runway)
         return dedupe_lines([r.text() for r in readings])
@@ -322,6 +337,14 @@ def debt_and_cash(f) -> DebtAndCash:
                 value=net, unit=currency,
                 label=f"owes {_money(net, currency)} net of cash{gross}")
 
+    # NET-DEBT-1: the components, stated as figures of their own
+    debt_reading = (Reading(value=debt, unit=currency,
+                            label=f"total debt {_money(debt, currency)}, including leases")
+                    if debt is not None else Reading())
+    cash_reading = (Reading(value=cash, unit=currency,
+                            label=f"cash and short-term investments {_money(cash, currency)}")
+                    if cash is not None and debt is not None else Reading())
+
     # -- net debt to operating cash flow ------------------------------------ #
     ocf = _num(getattr(f, "operating_cash_flow", None))
     if ocf is None:
@@ -414,7 +437,8 @@ def debt_and_cash(f) -> DebtAndCash:
     if runway.available and runway.value:
         span, basis = _runway_pieces(f, runway.value)
     from .finance_arms import finance_arm_note
-    return DebtAndCash(net_debt=net_reading, net_debt_to_ocf=ratio,
+    return DebtAndCash(net_debt=net_reading, total_debt=debt_reading, cash=cash_reading,
+                       net_debt_to_ocf=ratio,
                        interest_cover=cover, years_to_repay=repay, currency=currency,
                        cash_runway=runway,
                        finance_arm_note=finance_arm_note(getattr(f, "ticker", "")),

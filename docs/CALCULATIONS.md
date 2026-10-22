@@ -535,7 +535,7 @@ worst recent year, and little debt against its operating profit, for companies w
    invested capital is skipped; fewer than 3 usable years abstains. Years are paired by position in the
    newest-first statement lists (the convention the through-cycle ROIC already uses); yfinance
    typically serves 4 annual columns, so on live data this is usually "worst of 4".
-3. **Net debt ÷ EBIT** = (total debt − cash) ÷ latest-year EBIT (operating income when EBIT is absent).
+3. **Net debt ÷ EBIT** = (total debt − cash and short-term investments, the §4.6 definition) ÷ latest-year EBIT (operating income when EBIT is absent).
    Lower is better; net cash is negative and ranks best. Zero or negative EBIT abstains, ranks last
    and says why ("operating profit (EBIT) is zero or negative, so debt cannot be measured against it").
 
@@ -1027,7 +1027,21 @@ says nothing about either. These two readings say something about one company on
 the factor registry, and nothing on any page is ranked by them (pinned by
 `tests/test_abs_readings.py`). They are facts about a set of accounts.
 
-**Debt and cash.** Net debt is total debt minus cash; a MISSING cash balance is disclosed
+**Net debt — the one definition (NET-DEBT-1).** Net debt is **total debt, including lease
+liabilities, minus cash, cash equivalents and short-term investments, from the latest balance
+sheet** the provider gives (its most recent quarter; yfinance `totalDebt` and `totalCash`). The
+same two figures feed this reading, the Quality lens's net debt ÷ EBIT, enterprise value, and the
+judge pack, which states total debt, cash and short-term investments, and net debt as three
+separate lines, each with the balance sheet's date. The page shows the two parts under the net-debt
+line so the subtraction can be checked. The provider's own statement line "Net Debt" is a
+different measure (it leaves out leases and short-term investments) and is never shown beside it:
+on Microsoft, Jun 2026, it read $19.4bn against this definition's $52.0bn. The year-end statement
+lines (Total Debt, Cash And Cash Equivalents) are at each fiscal year-end, a different date, and
+their cash line excludes short-term investments (BYD, Dec 2025: CNY 119.1bn of debt and CNY 75.4bn
+of cash; Jun 2026 under this definition: CNY 125.9bn of debt against CNY 128.7bn of cash and
+short-term investments).
+
+**Debt and cash.** Net debt is as defined above; a MISSING cash balance is disclosed
 ("cash not reported, so this is gross debt") rather than treated as zero, which is house
 rule 3 applied to the balance sheet. Net debt over operating cash flow is stated in years
 ("would take 5.0 years of operating cash flow to repay its debt"), and abstains when cash
