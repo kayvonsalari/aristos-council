@@ -230,7 +230,7 @@ def test_summary_lists_every_finding_with_entry_section_line_and_rule(tmp_path):
                  say=lambda m: None)
     text = (tmp_path / "summary.md").read_text(encoding="utf-8")
     assert "| A | Lens table | report.md:5 | '$-' money formatting |" in text
-    assert "1 finding(s)" in text and "No findings**" not in text
+    assert "### A: 1 finding\n" in text and "No findings**" not in text
 
 
 def test_judge_rows_that_failed_are_reported_with_their_reason(tmp_path):

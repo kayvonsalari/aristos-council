@@ -18,6 +18,7 @@ import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+from ..plurals import plural
 from .runner import Products
 from .sets import ALL_STOCK, Entry
 
@@ -167,11 +168,16 @@ def produce_list(entry: Entry, flags: dict, say) -> Products:
     if ag is not None and getattr(ag, "available", False):
         rows = [{"name": r.display, "buy": len(r.buy_lenses), "sell": len(r.sell_lenses)}
                 for r in ag.rows]
-    p.facts = {"verdict": (f"{len(universe)} names in the list" + (f" ({display})" if display else "")
-                           + f"; {len(rows)} with at least one BUY"),
+    p.facts = {"verdict": list_verdict_fact(len(universe), display, len(rows)),
                "votes": f"{len(multi.strategy_ids)} lenses ticked",
                "judge_split": "company pages only", "council": "no", "rows": rows}
     return p
 
 
 PRODUCERS = {"company": produce_company, "list": produce_list}
+
+
+def list_verdict_fact(n_names: int, display: str, n_buy: int) -> str:
+    """"6 names in the list (Oil); 4 with at least one BUY" - and "1 name", never "1 names"."""
+    return (f"{plural(n_names, 'name')} in the list" + (f" ({display})" if display else "")
+            + f"; {n_buy} with at least one BUY")

@@ -216,7 +216,10 @@ def truncated_name_findings(lines: list[str], names: Iterable[str] = ()) -> list
         prefix = " ".join(words[:-1])
         if len(prefix.split()) < 2:
             continue
-        pat = re.compile(re.escape(prefix) + r"(?!\s+" + re.escape(words[-1]) + r")(?![\w-])")
+        # The last word may be printed with or without its trailing full stop: the market index
+        # spells it "JPMorgan Chase & Co", the provider "JPMorgan Chase & Co." - both are whole.
+        last = re.escape(words[-1].rstrip(".")) + r"\.?(?![\w-])"
+        pat = re.compile(re.escape(prefix) + r"(?!\s+" + last + r")(?![\w-])")
         for i, ln in enumerate(lines, 1):
             m = pat.search(ln)
             if m:
@@ -236,9 +239,31 @@ def _norm(s: str) -> str:
     return re.sub(r"[\s*_`>-]+", " ", s).strip().lower()
 
 
+# Per-lens boilerplate the list report prints under EVERY lens by design (the rules-applied note, the
+# detail legend and headline). A repeat of these is the layout, not a fault; a finding for each one
+# buried the real repeats (62 findings on one sweep, most of them these lines).
+_BOILERPLATE_RE = (
+    re.compile(r"^ranked [\d,]+ of [\d,]+ names?\.( excluded [\d,]+: by rule below, worst miss first\.)?$"),
+    re.compile(r"^[^.]{0,120}\. excluded [\d,]+: by rule below, worst miss first\.$"),
+)
+
+
+def _boilerplate() -> set:
+    from ..pipeline import (NO_SCREEN_NOTE, NON_PREFILTER_NOTE, PREFILTER_NOTE,
+                            detail_badge_line)
+    return {_norm(t) for t in (PREFILTER_NOTE, NON_PREFILTER_NOTE, NO_SCREEN_NOTE,
+                               detail_badge_line())}
+
+
+def _is_boilerplate(text: str, fixed: set) -> bool:
+    return text in fixed or any(rx.match(text) for rx in _BOILERPLATE_RE)
+
+
 def repeated_paragraph_findings(lines: list[str]) -> list[tuple[int, str]]:
     """The same paragraph under two different headings, or the same sentence in two different lens
-    notes ("Magic Formula RAW track record: ...", "Quality track record: ...")."""
+    notes ("Magic Formula RAW track record: ...", "Quality track record: ..."). The list report's
+    per-lens boilerplate (``_BOILERPLATE_RE`` / ``_boilerplate``) is not counted."""
+    fixed = _boilerplate()
     out: list[tuple[int, str]] = []
     # paragraphs under headings
     seen: dict[str, tuple[int, str]] = {}
@@ -247,7 +272,7 @@ def repeated_paragraph_findings(lines: list[str]) -> list[tuple[int, str]]:
     def flush():
         nonlocal para
         text = _norm(" ".join(para))
-        if len(text) >= 60:
+        if len(text) >= 60 and not _is_boilerplate(text, fixed):
             if text in seen and seen[text][1] != heading:
                 out.append((start, f"the same paragraph under '{seen[text][1]}' and '{heading}': "
                                    f"{text[:80]}"))
