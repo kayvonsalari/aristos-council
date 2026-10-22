@@ -1420,6 +1420,8 @@ def screen_unavailable_reason(outcomes: dict, fundamentals) -> Optional[str]:
     (above). First not-evaluated rule in screen order names the reason."""
     from .tools.criteria.registry import REGISTRY
     from .tools.screening import _non_usd_currency
+    from .operating_profit import (has_no_operating_profit, has_no_revenue,
+                                   no_operating_profit_reason, no_revenue_reason)
     for name, o in outcomes.items():
         if o.get("passed") is not None:
             continue
@@ -1427,6 +1429,12 @@ def screen_unavailable_reason(outcomes: dict, fundamentals) -> Optional[str]:
             continue
         if name == "min_market_cap" and _non_usd_currency(fundamentals) is not None:
             continue
+        # GROWTH-REASON-1: when the gap has a known cause, say it in the words the other
+        # lenses use (a loss-maker has no return on capital to read; no sales, no growth rate).
+        if name == "min_roic" and has_no_operating_profit(fundamentals):
+            return no_operating_profit_reason(fundamentals)
+        if name == "min_revenue_cagr" and has_no_revenue(fundamentals):
+            return no_revenue_reason(fundamentals)
         label = getattr(REGISTRY.get(name), "label", "") or name
         if label[1:2].islower():
             label = label[0].lower() + label[1:]
