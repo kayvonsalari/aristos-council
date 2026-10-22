@@ -324,12 +324,21 @@ def buy_without_sell_findings(label: str, ranked, *, min_names: int = 5,
     if len(live) < min_names:
         return []
     verdicts = [(getattr(r, "verdict", "") or "").lower() for r in live]
-    # B25-3: a tie at the bottom takes the verdict of its BEST position, so a lens whose lowest names are tied
-    # can honestly hold no SELL; that is the tie rule at work, not a broken cut.
-    scores = [getattr(r, "combined_rank", None) for r in live]
-    worst = max((x for x in scores if x is not None), default=None)
-    if worst is not None and sum(1 for x in scores if x == worst) > 1:
-        return []
+    # TIES-SELL-1: a tie group that straddles the SELL cut line is HOLD at both ends, so a lens whose
+    # bottom band is cut through by a tie can honestly hold no SELL; that is the tie rule at work, not a
+    # broken cut. A tie group wholly inside the bottom band is SELL, so an absent SELL there is real.
+    from .rank_engine import quintile_end_count
+    scores = sorted(x for x in (getattr(r, "combined_rank", None) for r in live) if x is not None)
+    if len(scores) == len(live):
+        band_start = len(live) - quintile_end_count(len(live))
+        pos = 0
+        while pos < len(scores):
+            end = pos
+            while end + 1 < len(scores) and scores[end + 1] == scores[pos]:
+                end += 1
+            if pos < band_start <= end:
+                return []
+            pos = end + 1
     if "buy" in verdicts and "sell" not in verdicts:
         return [Finding(BUY_WITHOUT_SELL, where or label,
                         f"{label}: {len(live)} names ranked, {verdicts.count('buy')} BUY, 0 SELL")]
