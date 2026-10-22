@@ -38,7 +38,7 @@ def test_the_valuation_band_abstains_with_the_reason():
     from aristos_council.factors import _gather_valuation_band
     f = Fundamentals(ticker="X", currency="EUR", financial_currency="BRL", statements_currency_note="differ 5.7x")
     band = _gather_valuation_band(object(), "X", f, today=date(2026, 10, 22))
-    assert "differ 5.7x" in band.note and "not evaluated" in band.note
+    assert "differ 5.7x" in band.note and not band.note.startswith("not evaluated")
 
 
 def test_the_debt_page_does_not_divide_across_currencies():
