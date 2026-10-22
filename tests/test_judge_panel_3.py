@@ -524,3 +524,9 @@ def test_scoring_changes_nothing_on_the_page():
         text = pathlib.Path(f"src/aristos_council/judges/{mod}.py").read_text(encoding="utf-8")
         assert "from .score" not in text and "import score" not in text
     ast.parse(src)
+
+
+def test_the_stray_text_is_quoted_in_the_reason():
+    """JPM-JUDGE-INVALID-1: a bare 'unlabelled' failed twice in a row on JPM; the reason now names the words."""
+    got, why = ans.parse_answer(_full(reasoning="Cash fell [pack]. Overall this is a hold."))
+    assert got is None and 'unlabelled: "Overall this is a hold."' in why

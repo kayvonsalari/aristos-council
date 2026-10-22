@@ -290,6 +290,7 @@ def _ask_once(spec: JudgeSpec, system: str, user: str, caller, call_no: int, *,
 
     call = JudgeCall(call_no=call_no, attempts=0)
     why = ""
+    raw = ""
     malformed = False                 # a bad reply has been seen: the next ask carries the retry note
     retried = ""                      # the transient failure already retried (raw detail), "" if none
     while True:
@@ -307,6 +308,7 @@ def _ask_once(spec: JudgeSpec, system: str, user: str, caller, call_no: int, *,
             call.status, call.error, call.error_detail = "error", "failed", f"{type(exc).__name__}: {exc}"
             return call
         answer, why = parse_answer(text)
+        raw = text
         if answer is not None:
             call.status = "ok"
             call.verdict, call.confidence = answer.verdict, answer.confidence
@@ -320,7 +322,8 @@ def _ask_once(spec: JudgeSpec, system: str, user: str, caller, call_no: int, *,
         if malformed:
             break
         malformed = True
-    call.status, call.error, call.error_detail = "invalid", "invalid output", why
+    # the log keeps the rejected reply itself (cut), so a format error can be diagnosed afterwards
+    call.status, call.error, call.error_detail = "invalid", "invalid output", f"{why} | raw: {(raw or '')[:1500]}"
     return call
 
 

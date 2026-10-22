@@ -98,7 +98,9 @@ def labelling_problem(text: str) -> str:
     if len(parts) == 1:
         return "no claim is labelled [pack] or [own knowledge]"
     if re.search(r"\w", trailing):
-        return "text after the last label is unlabelled"
+        # name the stray text: the retry note quotes this, so the model is told WHICH words to tag or
+        # drop (a generic "unlabelled" failed twice in a row on JPM, 2026-10-22)
+        return f'text after the last label is unlabelled: "{" ".join(trailing.split()).lstrip(".,;: ")[:90]}"'
     for claim in claims:
         if not re.search(r"\w", claim):
             return "a label has no claim before it"
