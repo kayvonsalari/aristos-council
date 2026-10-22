@@ -12,6 +12,16 @@ ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUT_ROOT = ROOT / "data" / "local" / "sweep"
 
 
+def load_env() -> None:
+    """Keys reach the process the way the app gives them (``app.main`` loads ``.env`` first). Never
+    overrides a variable already set; a missing python-dotenv or ``.env`` is simply no keys."""
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(ROOT / ".env")
+    except Exception:                                           # noqa: BLE001
+        pass
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="python -m aristos_council.sweep")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -32,6 +42,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv=None, *, producers=None) -> int:
     args = build_parser().parse_args(argv)
     from .runner import exit_code, run_sweep, status_line
+
+    load_env()
 
     try:
         sweep_set = get_set(args.set, args.sets_file)
