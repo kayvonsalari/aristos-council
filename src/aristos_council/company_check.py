@@ -357,7 +357,8 @@ def run_company_check(
     abstained: list[str] = []
     if not screen_less:
         ev = Evidence(fundamentals=f, last_close=fi.last_close,
-                      return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[])
+                      return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[],
+                      accounts_fx=getattr(fi, "quote_fx", None))
         screen_result = run_screen(screen_criteria, ev, ticker=ticker)
         for c in screen_result.criteria:
             basis = getattr(c, "basis", "") or ""

@@ -86,6 +86,10 @@ class Evidence:
     # doesn't compute it leaves it None and the criterion NOT-EVALs — the same honest
     # abstention every other criterion makes on a missing input, never a phantom fail.
     valuation_band: object | None = None
+    # FX-DEBT-MV-1: the accounts -> quote-MAJOR-currency rate (``abs_readings.AccountsFx``: rate, dated
+    # as_of, source) for the one criterion that sets an accounts-currency amount beside the market value.
+    # None when the two currencies are the same, or when no rate could be had (the criterion abstains).
+    accounts_fx: object | None = None
 
 
 @dataclass(frozen=True)
@@ -447,17 +451,29 @@ def _max_debt_to_market_cap(ev: Evidence, threshold: float) -> CriterionResult:
     # currency evaluates normally.
     quote, accounts = (f.currency or "").strip(), (f.financial_currency or "").strip()
     quote_major = _MINOR_TO_MAJOR.get(quote, quote)
+    converted = ""
     if quote and accounts and quote_major.upper() != accounts.upper():
-        return CriterionResult(
-            name="max_debt_to_market_cap", passed=None, observed=None, threshold=threshold,
-            note=(f"NOT EVALUATED: debt is in {accounts} and market value in {quote}; the two are "
-                  f"not compared without an exchange rate (house rule 8)"))
+        if getattr(f, "statements_currency_note", ""):
+            return CriterionResult(
+                name="max_debt_to_market_cap", passed=None, observed=None, threshold=threshold,
+                note=f"NOT EVALUATED: {f.statements_currency_note}")
+        fx = ev.accounts_fx
+        if (fx is None or not getattr(fx, "rate", 0) or fx.rate <= 0
+                or str(fx.from_ccy).upper() != accounts.upper()
+                or str(fx.to_ccy).upper() != quote_major.upper()):
+            return CriterionResult(
+                name="max_debt_to_market_cap", passed=None, observed=None, threshold=threshold,
+                note=(f"NOT EVALUATED: debt is in {accounts} and market value in {quote}, and no "
+                      f"exchange rate could be had to put them in one currency (house rule 8)"))
+        debt = debt * fx.rate
+        converted = (f"; debt converted {fx.from_ccy}->{fx.to_ccy} at {fx.rate:.4g} "
+                     f"({fx.as_of}, {fx.source})")
     ratio = debt / cap
     return CriterionResult(
         name="max_debt_to_market_cap", passed=ratio <= threshold, observed=ratio,
         threshold=threshold,
         note=f"total_debt/market_cap = {ratio:.2f} vs ceiling {threshold:.2f} "
-             f"(market-cap based — robust to negative-equity buyback names)")
+             f"(market-cap based — robust to negative-equity buyback names){converted}")
 
 
 def _max_peg_ratio(ev: Evidence, threshold: float) -> CriterionResult:

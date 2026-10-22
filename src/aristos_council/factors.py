@@ -93,6 +93,9 @@ class FactorInputs:
     # rate was fetched. ``fx_failed`` is True when the currencies differ but the rate
     # could NOT be fetched — the EV route then ABSTAINS (never mixes currencies).
     fx: Optional[CurrencyConversion] = None
+    # FX-DEBT-MV-1: accounts -> quote-MAJOR rate (abs_readings.AccountsFx) for the debt-to-market-value
+    # screen rule; None when the currencies match, a rate was not had, or the accounts are mixed.
+    quote_fx: object = None
     fx_failed: bool = False
     # ETF static layer (ETF-STATIC-1): the outcome of filling slow ETF fields from the
     # committed static CSV for THIS name. ``filled`` maps a Fundamentals field to its
@@ -1294,6 +1297,17 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
             else:
                 fx_failed = True
 
+    quote_fx = None
+    if (fundamentals is not None and not getattr(fundamentals, "statements_currency_note", "")
+            and fundamentals.currency and fundamentals.financial_currency):
+        from .abs_readings import latest_accounts_fx
+        from .tools.criteria.registry import _MINOR_TO_MAJOR
+        q = fundamentals.currency.strip()
+        q_major = _MINOR_TO_MAJOR.get(q, q)
+        a = fundamentals.financial_currency.strip()
+        if q_major.upper() != a.upper():
+            quote_fx = latest_accounts_fx(adapter, a, q_major, today)
+
     # Absolute valuation band (VALBAND-1) — display column + registered factor. Computed
     # AFTER the static/FX layers so it reads the same fundamentals every other leg does.
     # OPT-IN: skipped (and its extra 5-year fetch never made) unless the caller asks — off
@@ -1314,7 +1328,7 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
         return_6m=total_return(closes, _TD_6M) if closes else None,
         return_12m=total_return(closes, _TD_12M) if closes else None,
         annualized_volatility=snap.annualized_volatility if snap else None,
-        last_close=closes[-1] if closes else None, fx=fx, fx_failed=fx_failed,
+        last_close=closes[-1] if closes else None, fx=fx, fx_failed=fx_failed, quote_fx=quote_fx,
         static=static_fill, fund_size_fx=fund_size_fx,
         fund_size_fx_failed=fund_size_fx_failed,
         fund_size_currency_unverified=fund_size_currency_unverified,
@@ -1396,7 +1410,7 @@ def price_divergence_flag(fi: FactorInputs, screen_criteria) -> Optional[str]:
         Evidence, PRICE_MOMENTUM_CRITERION, run_screen)
     ev = Evidence(fundamentals=fi.fundamentals, last_close=fi.last_close,
                   return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[],
-                  valuation_band=fi.valuation_band)
+                  valuation_band=fi.valuation_band, accounts_fx=getattr(fi, "quote_fx", None))
     res = run_screen(screen_criteria, ev, ticker=fi.ticker)
     if not any(c.passed is False and c.name != PRICE_MOMENTUM_CRITERION
                for c in res.criteria):
@@ -1470,7 +1484,7 @@ def screen_evaluate(screen_criteria, fi: FactorInputs):
         return None, {}, {}, {}
     ev = Evidence(fundamentals=fi.fundamentals, last_close=fi.last_close,
                   return_6m=fi.return_6m, return_12m=fi.return_12m, dividends=[],
-                  valuation_band=fi.valuation_band)
+                  valuation_band=fi.valuation_band, accounts_fx=getattr(fi, "quote_fx", None))
     reason = None
     bases: dict[str, str] = {}
     abstentions: dict[str, str] = {}

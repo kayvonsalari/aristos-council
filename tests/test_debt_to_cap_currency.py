@@ -35,3 +35,32 @@ def test_same_currency_and_missing_currency_evaluate_as_before():
     assert _run(currency="USD", financial_currency="USD", market_cap=10e9, total_debt=12e9).passed is False
     assert _run(market_cap=10e9, total_debt=5e9).observed == 0.5
     assert _run(currency="EUR", market_cap=10e9, total_debt=5e9).observed == 0.5
+
+
+# FX-DEBT-MV-1 ---------------------------------------------------------------
+from aristos_council.abs_readings import AccountsFx  # noqa: E402
+
+
+def _run_fx(fx, **kw):
+    return _max_debt_to_market_cap(Evidence(fundamentals=Fundamentals(ticker="X", **kw), accounts_fx=fx), 1.0)
+
+
+def test_known_currencies_are_converted_with_a_dated_labelled_rate():
+    # Shell shape: London pence quote, dollar accounts. Debt $73bn at 0.75 GBP/USD against GBP 223bn.
+    fx = AccountsFx(from_ccy="USD", to_ccy="GBP", rate=0.75, as_of="2026-10", source="yfinance USDGBP=X")
+    r = _run_fx(fx, currency="GBp", financial_currency="USD", market_cap=223e9, total_debt=73e9)
+    assert r.passed is True and abs(r.observed - 73e9 * 0.75 / 223e9) < 1e-9
+    assert "USD->GBP at 0.75 (2026-10, yfinance USDGBP=X)" in r.note
+
+
+def test_no_rate_or_the_wrong_pair_still_abstains():
+    assert _run_fx(None, currency="EUR", financial_currency="USD", market_cap=1e11, total_debt=6e10).passed is None
+    wrong = AccountsFx(from_ccy="USD", to_ccy="EUR", rate=0.86, as_of="2026-10")
+    assert _run_fx(wrong, currency="GBp", financial_currency="USD", market_cap=1e11, total_debt=6e10).passed is None
+
+
+def test_the_vale_type_mismatch_abstains_even_with_a_rate():
+    fx = AccountsFx(from_ccy="BRL", to_ccy="EUR", rate=0.177, as_of="2026-10")
+    r = _run_fx(fx, currency="EUR", financial_currency="BRL", market_cap=49e9, total_debt=110e9,
+                statements_currency_note="differ 5.7x")
+    assert r.passed is None and "differ 5.7x" in r.note
