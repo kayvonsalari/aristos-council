@@ -347,8 +347,17 @@ def _dividends(fundamentals) -> list[str]:
         out.append(f"Payout ratio: {po * 100:.0f}% of earnings")
     streak = getattr(fundamentals, "dividend_streak_years", None)
     if streak:
-        out.append(f"Dividend raised in each of the last {streak} years on file (a floor: the "
-                   f"history on file is limited, so the true run may be longer)")
+        is_floor = getattr(fundamentals, "dividend_streak_is_floor", None)
+        start = getattr(fundamentals, "dividend_history_start_year", None)
+        if is_floor is False:                    # DIV-STREAK-1: the run ended at a flat or cut year
+            out.append(f"Dividend raised in each of the last {streak} years (regular dividend, "
+                       f"specials left out)")
+        elif is_floor and start:
+            out.append(f"Dividend raised in each of at least the last {streak} years (history on "
+                       f"file starts {start}); the true run may be longer")
+        else:
+            out.append(f"Dividend raised in each of the last {streak} years on file (a floor: the "
+                       f"history on file is limited, so the true run may be longer)")
     cut = getattr(fundamentals, "last_dividend_reduction_year", None)
     if cut:
         out.append(f"Most recent year the regular dividend was cut: {cut}")

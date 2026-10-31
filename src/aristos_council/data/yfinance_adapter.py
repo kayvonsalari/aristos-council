@@ -157,6 +157,7 @@ class YFinanceAdapter(MarketDataAdapter):
         # yield-trap separator that's free but yfinance never surfaces as a scalar).
         (streak_years, last_cut, year_totals, year_stats,
          pay_dates) = _dividend_streak_from_ticker(tk)
+        streak_is_floor, history_start = _dividend_streak_floor(tk)
         # Period-labelled series for the F-Score (PIOTROSKI-2): same statement
         # lines as the positional series above, but WITH period-end dates and
         # None holes kept in place, so cross-statement checks can period-match
@@ -259,6 +260,8 @@ class YFinanceAdapter(MarketDataAdapter):
             years_dividend_growth=None,
             # Defensive-risk signals (free-data yield-trap separators).
             dividend_streak_years=streak_years,
+            dividend_streak_is_floor=streak_is_floor,
+            dividend_history_start_year=history_start,
             last_dividend_reduction_year=last_cut,
             # CRIT-NOCUT-1 — the totals the two signals above came from, carried so a
             # criterion can ask its own question of them. No extra fetch.
@@ -439,7 +442,7 @@ def _dividend_streak_from_ticker(tk) -> tuple:
     and thrown away; carrying them lets a criterion ask its own question of the same
     history (how big was the cut, and was it inside MY window) without a second fetch
     and without the two ever disagreeing about what a year paid."""
-    from ..tools.screening import dividend_streak
+    from ..tools.screening import dividend_streak, dividend_streak_detail
     try:
         divs = tk.dividends
         if divs is None or len(divs) == 0:
@@ -459,6 +462,9 @@ def _dividend_streak_from_ticker(tk) -> tuple:
         return None, None, None, None, None
     year_stats = {y: (sum(a), statistics.median(a), len(a)) for y, a in per_year.items() if a}
     streak, last_cut = dividend_streak(annual, date.today().year, year_stats=year_stats)
+    if streak is not None:
+        # DIV-STREAK-1: the count itself runs on the regular rate, not on calendar totals
+        streak = dividend_streak_detail(per_year, date.today().year)[0]
     totals = [[float(y), float(annual[y])] for y in sorted(annual)]
     # CRIT-NOCUT-2: the per-year payments reduced to (total, median, count). Computed here
     # because this is where the individual payments already are; deriving them again
@@ -466,6 +472,20 @@ def _dividend_streak_from_ticker(tk) -> tuple:
     stats = [[float(y), float(sum(per_year[y])), float(statistics.median(per_year[y])),
               float(len(per_year[y]))] for y in sorted(per_year)]
     return streak, last_cut, totals, stats, sorted(pay_dates)
+
+
+def _dividend_streak_floor(tk) -> tuple:
+    """``(is_floor, history_start_year)`` for the streak ``_dividend_streak_from_ticker`` returned
+    (DIV-STREAK-1). Never raises; (None, None) when there is no history."""
+    from ..tools.screening import dividend_streak_detail
+    try:
+        per_year: dict = {}
+        for ts, amt in tk.dividends.items():
+            per_year.setdefault(ts.year, []).append(float(amt))
+        streak, floor, start = dividend_streak_detail(per_year, date.today().year)
+        return (floor if streak is not None else None), start
+    except Exception:
+        return None, None
 
 
 def _statement_total_debt(quarterly_balance, info_total_debt):

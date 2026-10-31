@@ -62,7 +62,8 @@ _CURRENT_SCALARS = ("market_cap", "dividend_yield", "dividend_per_share", "payou
                     "pe_ratio", "free_cash_flow", "dividends_paid", "operating_cash_flow",
                     "capital_expenditure", "years_dividend_growth", "dividend_streak_years",
                     "last_dividend_reduction_year", "dividend_year_totals", "dividend_year_stats",
-                    "dividend_payment_dates", "total_debt", "debt_to_equity", "total_cash",
+                    "dividend_payment_dates", "dividend_streak_is_floor",
+                    "dividend_history_start_year", "total_debt", "debt_to_equity", "total_cash",
                     "price_to_book", "return_on_equity", "net_expense_ratio", "total_assets")
 
 
@@ -300,10 +301,11 @@ class AsOfAdapter(MarketDataAdapter):
     def _dividend_signals(self, ticker: str) -> dict:
         """The dividend fields, recomputed from the dividend history CUT at ``as_of``. Any failure or
         an empty history abstains (None), exactly as the live adapters do."""
-        from ..tools.screening import dividend_streak
+        from ..tools.screening import dividend_streak, dividend_streak_detail
 
         empty = dict(dividend_per_share=None, dividend_streak_years=None,
                      last_dividend_reduction_year=None, dividend_year_totals=None,
+                     dividend_streak_is_floor=None, dividend_history_start_year=None,
                      dividend_year_stats=None, dividend_payment_dates=None)
         try:
             events = self.get_dividend_history(ticker, start=date(1970, 1, 1), end=self.as_of)
@@ -318,10 +320,15 @@ class AsOfAdapter(MarketDataAdapter):
             per_year.setdefault(e.ex_date.year, []).append(float(e.amount))
         stats = {y: (sum(a), statistics.median(a), len(a)) for y, a in per_year.items() if a}
         streak, last_cut = dividend_streak(annual, self.as_of.year, year_stats=stats)
+        if streak is not None:
+            streak, is_floor, start = dividend_streak_detail(per_year, self.as_of.year)
+        else:
+            is_floor, start = None, None
         trailing = sum(e.amount for e in events if e.ex_date > self.as_of - timedelta(days=365))
         return dict(
             dividend_per_share=float(trailing),
             dividend_streak_years=streak, last_dividend_reduction_year=last_cut,
+            dividend_streak_is_floor=is_floor, dividend_history_start_year=start,
             dividend_year_totals=[[float(y), float(annual[y])] for y in sorted(annual)],
             dividend_year_stats=[[float(y), float(sum(per_year[y])),
                                   float(statistics.median(per_year[y])), float(len(per_year[y]))]
