@@ -408,7 +408,7 @@ def test_rule_judge_error_or_incomplete_rows_carry_their_reason():
 
 
 def test_every_rule_has_a_name_and_the_list_is_complete():
-    assert len(set(checks.ALL_RULES)) == len(checks.ALL_RULES) == 14
+    assert len(set(checks.ALL_RULES)) == len(checks.ALL_RULES) == 16
 
 
 def test_the_cli_loads_dotenv_so_judge_and_council_keys_reach_the_run(tmp_path, monkeypatch):

@@ -40,10 +40,12 @@ R_REPEATED = "a repeated paragraph"
 R_LENS_ABSENT = "a ticked lens absent from the lens table"
 R_JUDGE_VERDICT = "a judge field starting with a verdict token"
 R_JUDGE_ROW = "a judge row that is an error or incomplete"
+R_STREAK_SHORT = "a dividend-streak count below 10 where the history on file is shorter than 10 years"
+R_RAW_DIGITS = "raw digits of 10+ characters in reader text"
 
 ALL_RULES = (R_INTERNAL_IDS, R_MONEY, R_UNIT_SCALE, R_PLURAL, R_MARKUP, R_LENS_TWO_WAYS,
              R_BUY_NO_SELL, R_SELL_MISSING, R_COLUMN_NAMES, R_TRUNCATED, R_REPEATED,
-             R_LENS_ABSENT, R_JUDGE_VERDICT, R_JUDGE_ROW)
+             R_LENS_ABSENT, R_JUDGE_VERDICT, R_JUDGE_ROW, R_STREAK_SHORT, R_RAW_DIGITS)
 
 _RS_RULE = {rs.INTERNAL_IDS: R_INTERNAL_IDS, rs.MONEY_MINUS: R_MONEY, rs.COUNT_GRAMMAR: R_PLURAL,
             rs.UNMATCHED_MARKUP: R_MARKUP, rs.LENS_TWO_WAYS: R_LENS_TWO_WAYS,
@@ -352,6 +354,38 @@ def lens_absent_findings(lines: list[str], ticked: Iterable[str]) -> list[tuple[
 # --------------------------------------------------------------------------- #
 # the Markdown entry point
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# 6. DIV-STREAK-1 and VALE-EPV-ABSTAIN-1 symptoms (2026-10-31)
+# --------------------------------------------------------------------------- #
+_STREAK_N = re.compile(r"(?<![\w.])(?:(\d+)y? consecutive (?:years of )?dividend increases?"
+                       r"|raised in each of (?:at least )?the last (\d+) years)", re.I)
+_HISTORY_STARTS = re.compile(r"history on file starts (\d{4})", re.I)
+_RAW_DIGITS = re.compile(r"(?<![\w.])\d[\d,]{8,}\d(?![\w])")
+
+
+def streak_short_findings(lines: list[str], *, this_year: Optional[int] = None) -> list[tuple[int, str]]:
+    """A streak count below 10 stated as a fact (no "at least") for a company whose history on file, named on
+    the same line, is shorter than 10 years: the old calendar-total count asserted CVX 9, XOM 4, CNQ.TO 2."""
+    from datetime import date
+    year = this_year or date.today().year
+    out = []
+    for i, ln in enumerate(lines, 1):
+        m, h = _STREAK_N.search(ln), _HISTORY_STARTS.search(ln)
+        if not (m and h):
+            continue
+        n = int(m.group(1) or m.group(2))
+        if n < 10 and year - int(h.group(1)) < 10 and "at least" not in ln[max(0, m.start() - 12):m.start()].lower()                 and "at least" not in m.group(0).lower():
+            out.append((i, f"{n} years stated flat, history on file starts {h.group(1)}: {ln.strip()[:100]}"))
+    return out
+
+
+def raw_digit_findings(lines: list[str]) -> list[tuple[int, str]]:
+    """Ten or more characters of raw digits ("215,830,003,712") where the short money format ($215.8bn) is the rule."""
+    return [(i, f"'{m.group(0)}' in: {ln.strip()[:100]}")
+            for i, ln in enumerate(lines, 1) for m in _RAW_DIGITS.finditer(ln)
+            if sum(ch.isdigit() for ch in m.group(0)) >= 10][:8]
+
+
 def check_markdown(text: str, *, entry: str, file: str = "report.md", ticked: Iterable[str] = (),
                    names: Iterable[str] = ()) -> list[SweepFinding]:
     lines = text.splitlines()
@@ -361,7 +395,9 @@ def check_markdown(text: str, *, entry: str, file: str = "report.md", ticked: It
                        (R_COLUMN_NAMES, column_name_findings(lines)),
                        (R_TRUNCATED, truncated_name_findings(lines, names)),
                        (R_REPEATED, repeated_paragraph_findings(lines)),
-                       (R_LENS_ABSENT, lens_absent_findings(lines, ticked))):
+                       (R_LENS_ABSENT, lens_absent_findings(lines, ticked)),
+                       (R_STREAK_SHORT, streak_short_findings(lines)),
+                       (R_RAW_DIGITS, raw_digit_findings(lines))):
         out += [_finding(entry, file, lines, n, rule, d) for n, d in hits]
     seen, unique = set(), []
     for f in out:                      # one finding per (rule, line, detail)

@@ -663,6 +663,20 @@ def small_company_tag(report) -> list[str]:
     return [report.tested_range_line, *detail]
 
 
+def index_age_line(report) -> str:
+    """INDEX-AGE-1: the one-line age notice for the peer sizes behind this page, or "". Aged against the
+    day the page was made (``run_at``), so a saved report reads the same when it is reopened."""
+    from datetime import date as _date
+    from .market_index import index_age_notice
+    snap = (getattr(report, "peer_snapshot", None) or {}).get("snapshot", "")
+    run_day = str(getattr(report, "run_at", "") or "")[:10]
+    try:
+        today = _date.fromisoformat(run_day)
+    except ValueError:
+        today = None
+    return index_age_notice(snap, today)
+
+
 def track_caption(report) -> str:
     """The track-record line under the table. A company no backtest covers gets no caption here:
     the Badge column already says "untested here" and the answer says why."""
@@ -718,7 +732,8 @@ def story_page(report) -> StoryPage:
     from .company_report import NO_LENS_REASON
     return StoryPage(
         answer=answer_lines(report), paragraphs=paragraphs, model_summary=model,
-        note=summary_note(report), tag=tuple(small_company_tag(report)),
+        note=summary_note(report),
+        tag=tuple(small_company_tag(report)) + ((index_age_line(report),) if index_age_line(report) else ()),
         headers=tuple(TABLE_HEADERS), rows=tuple(table_rows(report)), caption=track_caption(report),
         no_vote="" if report.votes else (report.no_vote_reason or NO_LENS_REASON),
         group_note=usable_figures_note(report),

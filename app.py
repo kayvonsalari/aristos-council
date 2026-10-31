@@ -2775,6 +2775,17 @@ def render_input() -> InputChoice:
 TOP_LINE = "Check one company against its rivals, or rank a list. Every lens is one equal vote."
 
 
+def _index_age_caption() -> None:
+    """INDEX-AGE-1: one line when the market index snapshot behind the peer groups is over 10 days old."""
+    try:
+        from aristos_council.market_index import index_age_notice, newest_snapshot
+        notice = index_age_notice(newest_snapshot())
+    except Exception:                                    # noqa: BLE001 - a notice never blocks the page
+        notice = ""
+    if notice:
+        st.caption(f"Market index: {notice}.")
+
+
 def render_run_tab() -> None:
     """TAB-MERGE-1 commit 3 — ONE tab, "Analyse": Company or Cohort / list, picked by an
     explicit switch (``render_input``). Options (lenses, summary, council) are shown
@@ -2784,6 +2795,7 @@ def render_run_tab() -> None:
     EXISTING page, in its EXISTING order (Part 2 reorders the company page)."""
     st.subheader("Analyse — one company, or a cohort")
     st.caption(TOP_LINE)
+    _index_age_caption()
 
     choice = render_input()
 

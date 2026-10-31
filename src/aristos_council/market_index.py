@@ -1403,6 +1403,34 @@ def contradicting_name_pairs(rows, secondary: Optional[dict] = None) -> list[tup
     return sorted(pairs, key=lambda p: (p[0].ticker, p[1].ticker))
 
 
+INDEX_STALE_DAYS = 10
+
+
+def index_age_notice(snapshot: str, today: Optional[date] = None, *,
+                     max_days: int = INDEX_STALE_DAYS) -> str:
+    """INDEX-AGE-1: "peer sizes from 2026-10-15; 16 days old" when the index snapshot is older than
+    ``max_days`` days, else "" (also "" for a missing or unreadable date - nothing is asserted about an
+    age that is not known). ``today`` is the date the page was made, so a saved report keeps the age it
+    had when it was run."""
+    try:
+        snap = date.fromisoformat(str(snapshot)[:10])
+    except ValueError:
+        return ""
+    days = ((today or date.today()) - snap).days
+    if days <= max_days:
+        return ""
+    return f"peer sizes from {snap.isoformat()}; {days} days old"
+
+
+def newest_snapshot(store: Optional[IndexStore] = None) -> str:
+    """The newest fetch date in the index (the snapshot a page's peers come from), or "" when empty."""
+    try:
+        stamps = sorted(r.fetched_at for r in (store or IndexStore()).load() if r.fetched_at)
+    except Exception:                                    # noqa: BLE001 - a notice must never break a page
+        return ""
+    return stamps[-1][:10] if stamps else ""
+
+
 def status(store: Optional[IndexStore] = None, *, today: Optional[date] = None,
            empty_retry_after: int = DEFAULT_EMPTY_RETRY_AFTER,
            empty_retry_days: int = DEFAULT_EMPTY_RETRY_DAYS,

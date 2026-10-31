@@ -122,12 +122,23 @@ def run_entry(entry: Entry, out_dir: Path, flags: dict, producer: Producer,
     return res
 
 
+def market_index_status() -> str:
+    """INDEX-AGE-1: ``python -m aristos_council.market_index status`` as text, so a sweep records how old the
+    peer sizes it used were. Never raises (a missing index is itself the finding)."""
+    try:
+        from ..market_index import status
+        return chr(10).join(status().lines())
+    except Exception as exc:                             # noqa: BLE001
+        return f"market index status unavailable: {type(exc).__name__}: {exc}"
+
+
 def manifest_dict(sweep_set: SweepSet, results: list, *, flags: dict, started: str,
                   ended: str, git: dict, workers: int, finished: bool) -> dict:
     return {
         "set": sweep_set.name, "git": git, "started": started, "ended": ended,
         "finished": finished, "workers": workers,
         "flags": {"judges": flags["judges"], "council": flags["council"]},
+        "market_index": market_index_status(),
         "totals": {"entries": len(sweep_set.entries), "ok": sum(r.status == OK for r in results),
                    "failed": sum(r.status == FAILED for r in results),
                    "model_calls": sum(r.calls for r in results),
