@@ -4826,8 +4826,8 @@ def _annotate_cross_lens(rep, verdicts: list[dict]) -> None:
     FORENSIC-NARR-1(c) — also runs ``check_rank_attribution`` over the same verdicts:
     a "Nth of M" citation must name the lens it came from (live: Forensic's own
     "12th of 21" called "the ranker's" rank)."""
-    from .narration_check import (check_cross_lens, check_epv_direction, check_rank_attribution,
-                                  check_would_rank)
+    from .narration_check import (check_cross_lens, check_epv_direction, check_mark_links,
+                                  check_rank_attribution, check_would_rank)
     d = getattr(rep, "decision", None)
     if d is None or not getattr(d, "rationale", ""):
         return
@@ -4835,7 +4835,8 @@ def _annotate_cross_lens(rep, verdicts: list[dict]) -> None:
     marks = (check_cross_lens(d.rationale, verdicts)
              + check_rank_attribution(d.rationale, verdicts)
              + check_would_rank(d.rationale, verdicts)
-             + check_epv_direction(d.rationale))                # B25-4
+             + check_epv_direction(d.rationale)                 # B25-4
+             + check_mark_links(d.rationale))                   # COUNCIL-INVENTED-LINK-1
     if marks:
         d.rationale = d.rationale.rstrip() + "\n\n" + "\n".join(marks)
 
