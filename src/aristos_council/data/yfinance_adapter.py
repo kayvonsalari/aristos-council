@@ -218,7 +218,8 @@ class YFinanceAdapter(MarketDataAdapter):
 
         return Fundamentals(
             statements_currency_note=_statements_currency_note(
-                _as_float(info.get("totalRevenue")), _annual_series(income, "Total Revenue")),
+                _as_float(info.get("totalRevenue")), _annual_series(income, "Total Revenue"),
+                (info.get("financialCurrency") or None)),
             ticker=ticker,
             name=info.get("longName") or info.get("shortName"),
             company_name=(info.get("longName") or None),   # display label (None-guarded)
@@ -516,15 +517,17 @@ def _statement_total_debt(quarterly_balance, info_total_debt):
 STATEMENTS_CCY_RATIO = 3.0
 
 
-def _statements_currency_note(headline_revenue, statement_revenue) -> str:
+def _statements_currency_note(headline_revenue, statement_revenue, currency=None) -> str:
     latest = next((v for v in (statement_revenue or []) if v), None)
     if not headline_revenue or not latest or headline_revenue <= 0 or latest <= 0:
         return ""
     ratio = max(headline_revenue / latest, latest / headline_revenue)
     if ratio < STATEMENTS_CCY_RATIO:
         return ""
-    return (f"the provider's headline revenue ({headline_revenue:,.0f}) and its latest annual statement "
-            f"({latest:,.0f}) differ {ratio:.1f}x, so they are not in one currency")
+    from ..tools.price_context import format_money
+    return (f"headline revenue {format_money(headline_revenue, currency, abbreviate=True)} vs latest "
+            f"statement {format_money(latest, currency, abbreviate=True)}, {ratio:.1f}x apart "
+            f"(not in one currency)")
 
 
 def _market_cap(info: dict) -> float | None:

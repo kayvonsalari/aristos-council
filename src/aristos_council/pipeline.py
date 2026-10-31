@@ -379,6 +379,14 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
                 continue
         outcomes = compute_factor_outcomes(
             fi, [fac.name for fac in rank_strategy.factors])
+        # VALE-EPV-ABSTAIN-1: when the accounts are not in one currency and EVERY factor of this lens
+        # abstained, the lens has nothing to rank the name on - "not evaluated" with the one reason,
+        # never a last place that reads as a SELL.
+        mixed = getattr(f, "statements_currency_note", "") if f is not None else ""
+        if mixed and all(v is None for v, _ in outcomes.values()):
+            _stash_shadow(shadow_pool, t, fi, rank_strategy)
+            excluded.append((t, f"not evaluated - {mixed}"))
+            continue
         rows.append((t, {n: v for n, (v, _) in outcomes.items()}))
         sources_by_ticker[t] = {n: s for n, (_, s) in outcomes.items()}
         # PRICE-1 (display only): the share price + 52-week position for EVERY rateable

@@ -1688,6 +1688,8 @@ def _cross_currency(fundamentals) -> bool:
     """
     price = (getattr(fundamentals, "currency", None) or "").strip().upper()
     acct = (getattr(fundamentals, "financial_currency", None) or "").strip().upper()
+    if getattr(fundamentals, "statements_currency_note", ""):   # VALE-EPV-ABSTAIN-1
+        return True
     return bool(price and acct and price != acct)
 
 
@@ -1772,8 +1774,8 @@ def altman_z_score(fundamentals) -> ForensicResult:
         return ForensicResult(note="Altman Z-Score unavailable: no fundamentals",
                               detail="no fundamentals")
     if _cross_currency(fundamentals):
-        return ForensicResult(note=f"Altman Z-Score unavailable: {CROSS_CURRENCY_NOTE}",
-                              detail=CROSS_CURRENCY_NOTE)
+        why = getattr(fundamentals, "statements_currency_note", "") or CROSS_CURRENCY_NOTE
+        return ForensicResult(note=f"Altman Z-Score unavailable: {why}", detail=why)
     (now,) = period_matched(fundamentals, _ALTMAN_KEYS, periods=1)
     market_cap = getattr(fundamentals, "market_cap", None)
     inputs = {
