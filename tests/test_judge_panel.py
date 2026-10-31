@@ -674,3 +674,13 @@ def test_an_invalid_call_keeps_the_rejected_reply_in_the_log_detail():
     spec = _config().judges[0]
     call = panel._ask_once(spec, "sys", "user", _scripted({"anthropic": ["garbage reply"]}), 1)
     assert call.status == "invalid" and "| raw: garbage reply" in call.error_detail
+
+
+def test_panel_reading_prompt_v2_demands_the_explaining_frame_and_keeps_length_as_guidance():
+    """PANEL-READING-2 (MSFT, 2026-10-31): the paragraph only restated who voted what."""
+    from aristos_council.judges import narrate
+    text = narrate.PROMPT_PATH.read_text(encoding="utf-8")
+    assert narrate.PROMPT_VERSION == "judge_reading_prompt_v2"
+    assert "ONE fact or frame that explains the split" in text
+    assert "own five-year history" in text and "never a reason to leave out" in text
+    assert "no BUY/HOLD/SELL word of your own" in text
