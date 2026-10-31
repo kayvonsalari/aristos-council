@@ -235,7 +235,7 @@ class YFinanceAdapter(MarketDataAdapter):
             payout_ratio=_payout_ratio(info, dps),
             eps=_as_float(info.get("trailingEps")),
             pe_ratio=_as_float(info.get("trailingPE")),
-            trailing_period_end=_epoch_to_iso(info.get("mostRecentQuarter")),
+            trailing_period_end=_quarter_end(_epoch_to_iso(info.get("mostRecentQuarter")), quarterly_balance),
             # ABS-READINGS-2 — the STATEMENT figure, not the info blob's.
             #
             # Netflix, 2026-09-20: info['freeCashflow'] = 25,387,552,768 against an
@@ -668,6 +668,25 @@ def _as_float(value: object) -> float | None:
         return None
     # yfinance uses NaN for missing cells; treat NaN as absent.
     return None if f != f else f
+
+
+def _quarter_end(info_date: str | None, quarterly_balance) -> str | None:
+    """SMALL-WORDING-1: the last reported quarter's END date. yfinance's ``mostRecentQuarter`` is the
+    company's own 52-week-calendar date (KO's third quarter: 2026-10-02) while the quarterly statement is
+    dated at the calendar month end (2026-09-30), and the page said "twelve months to Oct 2026" for a
+    quarter that ended in September. The statement's own column wins when it is within 15 days of the
+    headline date; otherwise the headline date stands."""
+    try:
+        from datetime import date as _d
+        col = quarterly_balance.columns[0]
+        stmt = _d.fromisoformat(str(col)[:10])
+        if info_date is None:
+            return stmt.isoformat()
+        if abs((_d.fromisoformat(info_date) - stmt).days) <= 15:
+            return stmt.isoformat()
+    except Exception:                                    # noqa: BLE001 - a display date only
+        pass
+    return info_date
 
 
 def _epoch_to_iso(value: object) -> str | None:

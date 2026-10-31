@@ -418,7 +418,12 @@ def _survived(report) -> str:
         bits.append(f"Analysts ({when}): {ratings.summary_line()}; "
                     f"{ratings.target_sentence[0].lower() + ratings.target_sentence[1:]}.")
     elif ratings is not None:
-        bits.append(f"No analyst ratings are shown ({when}).")
+        note = str(getattr(ratings, "note", "") or "").strip().rstrip(".")
+        if getattr(trend, "rows", None) and note:
+            # SMALL-WORDING-1: the page does use the analysts' forecasts, so "no ratings" must not read as "no analysts"
+            bits.append(f"{note[:1].upper()}{note[1:]}; forecasts are shown below ({when}).")
+        else:
+            bits.append(f"No analyst ratings are shown ({when}).")
     return " ".join(bits) if bits else "No debt, growth or analyst reading could be made."
 
 

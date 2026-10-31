@@ -1933,6 +1933,13 @@ VALUATION_BAND_INTRO = (
     "today's multiple sits in its OWN multi-year range, and what the price would be at "
     "that name's own MEDIAN past multiple. Rows follow the ranked table's order — they "
     "are deliberately not re-sorted by gap.")
+# SMALL-WORDING-1: in a LIST run the rows come from several lenses, in the order each name was first ranked,
+# which is not the order of any one table on the page - so the single-lens claim is not made there.
+VALUATION_BAND_INTRO_UNION = (
+    "What each name costs today, where that sits in its own 12-month range, where "
+    "today's multiple sits in its OWN multi-year range, and what the price would be at "
+    "that name's own MEDIAN past multiple. Rows are in the order the lenses first ranked "
+    "the names, not sorted by gap.")
 VALUATION_BAND_DOCTRINE = (
     "Arithmetic on each company's own history — not a forecast, not a target price and "
     "not a recommendation. A business that has permanently derated should trade below "
@@ -2176,7 +2183,10 @@ def union_valuation_band_table(multi_result) -> Optional[ValuationBandTable]:
             order.append(r.ticker)
     if not order:
         return None
-    return valuation_band_table(_UnionBandView([seen[t] for t in order], names))
+    table = valuation_band_table(_UnionBandView([seen[t] for t in order], names))
+    if table is not None and table.intro == VALUATION_BAND_INTRO:
+        table = replace(table, intro=VALUATION_BAND_INTRO_UNION)
+    return table
 
 
 def _band_footnotes(live, uniform: bool, coverage: set, *,

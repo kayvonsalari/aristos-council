@@ -265,6 +265,11 @@ def _valuation(report) -> list[str]:
     pct = getattr(report.check, "band_percentile", None)
     if pct is not None:
         out.append(f"Percentile of its own five-year range: {pct:.0f} (0 = cheapest it has been, 100 = dearest)")
+        if "latest annual net income" in band:
+            # SMALL-WORDING-1(d): JPM's judges set this band's P/E (15.7) against the trailing P/E (14.1) as if
+            # they were one measure. The pack says, beside the percentile, which earnings the band divides by.
+            out.append("That percentile is of a P/E on the latest ANNUAL net income, not the trailing twelve "
+                       "months, so it is a different figure from the trailing P/E stated elsewhere in this pack.")
     return out
 
 
