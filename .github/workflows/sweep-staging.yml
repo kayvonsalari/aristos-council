@@ -37,7 +37,7 @@ jobs:
     timeout-minutes: 10
     env:
       GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-      MASTER_SHEET_ID: 1wDYdPDI_XDBTvx_ttmFskNbVpVDPonSJy_-auPY_Hb4
+      MASTER_SHEET_ID: ${{ vars.MASTER_SHEET_ID }}
       STAGING_FOLDER_ID: 12h1wwTnAvMAnVzMIDGjPBy5BpRjc_Q-x
     steps:
       - uses: actions/checkout@v4
@@ -50,7 +50,7 @@ jobs:
         run: pip install --quiet google-auth google-api-python-client
 
       - name: Sweep staging sheets into the master
-        if: ${{ env.GOOGLE_SERVICE_ACCOUNT_JSON != '' }}
+        if: ${{ env.GOOGLE_SERVICE_ACCOUNT_JSON != '' && env.MASTER_SHEET_ID != '' }}
         run: |
           python scripts/sweep_staging.py \
             --folder "$STAGING_FOLDER_ID" \

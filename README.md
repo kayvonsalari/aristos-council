@@ -78,6 +78,7 @@ What costs money, and what does not:
 | [docs/MARKET_INDEX.md](docs/MARKET_INDEX.md) | The local company table: coverage, cost, peer rules, corrections |
 | [docs/COHORTS.md](docs/COHORTS.md) | The 57 cohorts: rules, floors, cleanup, quality checks, correction symbols |
 | [docs/CLASSIFICATION.md](docs/CLASSIFICATION.md) | How companies are classified (GICS and EODHD's own labels), how peer groups are chosen, and the dated correction files |
+| [docs/HOLDINGS_CHECK.md](docs/HOLDINGS_CHECK.md) | A private, on-demand check of your own holdings against their peer groups (`python -m aristos_council.holdings_check`); everything stays under `data/local/` |
 | [docs/SWEEP.md](docs/SWEEP.md) | One command that runs the awkward-company test round (`python -m aristos_council.sweep run`), writes every report and checks them |
 | [docs/GAP_LEDGER.md](docs/GAP_LEDGER.md) | The pre-market experiment: pipeline, schedule, freeze, verdict criteria |
 | [docs/TESTING.md](docs/TESTING.md) | How the suite is isolated from the network and from real providers |
