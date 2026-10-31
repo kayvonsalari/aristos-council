@@ -135,6 +135,8 @@ def cards(result: PanelResult) -> list[dict]:
             card["confidence"] = " / ".join(c.confidence for c in ok)
             for key, attr in attrs.items():
                 sides = [(c.verdict, _field(key, getattr(c, attr))) for c in ok]
+                if not any(t.strip() for _, t in sides):
+                    continue                                  # nothing said by either answer: no empty rows
                 card["sides"][key] = sides
                 card[key] = " | ".join(f"{v}: {t}" for v, t in sides)
         card["own_knowledge"] = sum(c.own_knowledge_claims for c in ok)
@@ -144,20 +146,46 @@ def cards(result: PanelResult) -> list[dict]:
     return out
 
 
-def field_markdown(card, key: str) -> str:
-    """One card field as Markdown. Side by side (an unstable judge) each side is marked on its own -
-    "HOLD: *claim* `own knowledge` | BUY: claim." - so no italic or tag runs across the " | "."""
+_ORDINALS = ("First", "Second", "Third", "Fourth")
+
+
+def answer_label(i: int, verdict: str) -> str:
+    """JUDGE-UNSTABLE-TRUNC-1: "First answer: HOLD" / "Second answer: BUY"."""
+    return f"{_ORDINALS[i] if i < len(_ORDINALS) else f'Answer {i + 1}'} answer: {verdict}"
+
+
+def field_markdown(card, key: str, *, nested: bool = True) -> str:
+    """One card field as Markdown. An unstable judge's answers are each shown IN FULL, one under the
+    other, labelled "First answer: HOLD" / "Second answer: BUY" (JUDGE-UNSTABLE-TRUNC-1: they were joined
+    with " | " on one long line, which readers took for a cut-off). Each side is marked on its own, so no
+    italic or tag runs across the two. ``nested`` indents the sub-list under a list item; the Streamlit
+    page, which writes the caption on its own line, passes False."""
     sides = card.get("sides", {}).get(key)
     if sides:
-        return " | ".join(f"{v}: {_mark_field_markdown(key, t)}" for v, t in sides)
+        pad = "  " if nested else ""
+        lead = "\n" if nested else "\n\n"
+        return lead + "\n".join(f"{pad}- *{answer_label(i, v)}:* {_mark_field_markdown(key, t)}"
+                               for i, (v, t) in enumerate(sides))
     return _mark_field_markdown(key, card[key])
 
 
 def field_html(card, key: str) -> str:
     sides = card.get("sides", {}).get(key)
     if sides:
-        return " | ".join(f"{_html.escape(v)}: {_mark_field_html(key, t)}" for v, t in sides)
+        return "<ul>" + "".join(
+            f"<li><em>{_html.escape(answer_label(i, v))}:</em> {_mark_field_html(key, t)}</li>"
+            for i, (v, t) in enumerate(sides)) + "</ul>"
     return _mark_field_html(key, card[key])
+
+
+def field_text_lines(card, key: str, caption: str) -> list[str]:
+    """The plain-text lines for one field: one line, or - for an unstable judge - the caption and each
+    answer in full on its own line."""
+    sides = card.get("sides", {}).get(key)
+    if sides:
+        return [f"      {caption.lower()}:"] + [
+            f"          {answer_label(i, v)}: {mark_text(t)}" for i, (v, t) in enumerate(sides)]
+    return [f"      {caption.lower()}: {mark_text(card[key])}"]
 
 
 def _mark_field_markdown(key: str, text: str) -> str:
@@ -247,7 +275,7 @@ def text_lines(result: PanelResult) -> list[str]:
             out.append(f"      {claims_line(card)}")
         for key, caption in FIELDS:
             if card[key]:
-                out.append(f"      {caption.lower()}: {mark_text(card[key])}")
+                out += field_text_lines(card, key, caption)
     out += ["  " + ln for ln in summary_lines(result)]
     paragraph, note = reading_text(result)
     if paragraph:
