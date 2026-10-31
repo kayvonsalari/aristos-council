@@ -554,6 +554,9 @@ def _row_reason(v) -> str:
         if getattr(v, "cap_reason", ""):
             return v.cap_reason
         note = v.factor_note.strip(" ·")
+        driver = getattr(v, "driver_note", "")                  # VOTE-REASON-1
+        if driver:
+            return f"{driver}; {note}" if note else driver
         return note or ("marks only, never votes" if not v.votes else "ranked among its peers")
     if v.status == "excluded":
         text = _first_reason(v.reason)
