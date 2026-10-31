@@ -16,7 +16,7 @@ Usage (inside the scout-verdicts GitHub Action, after the grader has committed):
 Optional direct-to-Sheets push (no model tokens, no manual Copy-to):
     export GOOGLE_SERVICE_ACCOUNT_JSON="$(cat sa.json)"
     python scripts/publish_verdicts.py --reports reports/scout --out dist \
-        --spreadsheet-id 1wDYdPDI_XDBTvx_ttmFskNbVpVDPonSJy_-auPY_Hb4 --append
+        --spreadsheet-id <sheet id> --append
 
 Exit codes: 0 ok · 2 no sources found · 3 stale (with --max-age-days)
 """

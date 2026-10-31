@@ -100,10 +100,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 # --- news sources ----------------------------------------------------------
 SHEET_SOURCES: dict[str, str] = {
-    "ft": os.environ.get(
-        "SCOUT_SHEET_FT",
-        "https://docs.google.com/spreadsheets/d/"
-        "1wDYdPDI_XDBTvx_ttmFskNbVpVDPonSJy_-auPY_Hb4/export?format=csv&gid=0"),
+    # HOLDINGS-CHECK-1: no sheet URL is committed (the repo is public) - set it in the environment.
+    "ft": os.environ.get("SCOUT_SHEET_FT", ""),
     "economist": os.environ.get("SCOUT_SHEET_ECONOMIST", ""),
 }
 
@@ -125,10 +123,9 @@ SCAN_NAME_RE = re.compile(r"growth_scan_(\d{4}-\d{2}-\d{2})(?:_(\d+))?\.csv")
 # watched CONTINUOUSLY, so the news lookback window applies to neither.
 HOLDINGS_SOURCE = "holdings"
 HOLDING_FLAG = "HOLDING"
-SHEET_HOLDINGS_URL = os.environ.get(
-    "SCOUT_SHEET_HOLDINGS",
-    "https://docs.google.com/spreadsheets/d/"
-    "1wDYdPDI_XDBTvx_ttmFskNbVpVDPonSJy_-auPY_Hb4/export?format=csv&gid=7542599")
+# HOLDINGS-CHECK-1: holdings are checked privately now (python -m aristos_council.holdings_check),
+# so no URL is committed here; set SCOUT_SHEET_HOLDINGS to re-enable the tab (this job is retired).
+SHEET_HOLDINGS_URL = os.environ.get("SCOUT_SHEET_HOLDINGS", "")
 HOLDINGS_TAB_SHEET = "holdings-tab"      # the "sheet" label on a tab-sourced row
 HOLDINGS_TAB_COLUMNS = ("name", "ticker", "type")
 # Types the STOCK lenses can be pointed at. "ETF" is included DELIBERATELY: the
@@ -684,6 +681,10 @@ def main() -> None:
                                 label=Path(args.holdings_csv).name)
     elif args.no_holdings_tab:
         print("NOTE: Holdings tab skipped (--no-holdings-tab).", file=sys.stderr)
+        tab = HoldingsTabRead([], [])
+    elif not SHEET_HOLDINGS_URL:
+        print("NOTE: no Holdings tab configured (SCOUT_SHEET_HOLDINGS unset) - skipped.",
+              file=sys.stderr)
         tab = HoldingsTabRead([], [])
     else:
         tab = load_holdings_tab(SHEET_HOLDINGS_URL)

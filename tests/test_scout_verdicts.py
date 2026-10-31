@@ -242,15 +242,11 @@ def test_also_found_by_records_the_overlap_in_both_directions():
 # --------------------------------------------------------------------------- #
 # SCOUT-3 — the dedicated Holdings TAB is the primary holdings input
 # --------------------------------------------------------------------------- #
-def test_the_holdings_tab_is_configured_by_default():
-    """The tab is the PRIMARY input, so it must be wired with NO env setup: SCOUT-2
-    shipped a path that needed none and still found nothing, because the list was
-    never on the news tabs."""
+def test_no_holdings_sheet_url_is_committed_by_default():
+    """HOLDINGS-CHECK-1: the repo is public, so the tab URL comes from the environment only."""
     if os.environ.get("SCOUT_SHEET_HOLDINGS"):
         return                                  # an override is the owner's call
-    assert sv.SHEET_HOLDINGS_URL.startswith("https://docs.google.com/spreadsheets/")
-    assert "format=csv" in sv.SHEET_HOLDINGS_URL
-    assert "gid=7542599" in sv.SHEET_HOLDINGS_URL
+    assert sv.SHEET_HOLDINGS_URL == ""
 
 
 def test_every_gradeable_tab_row_joins_with_no_date_window():

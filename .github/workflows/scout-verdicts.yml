@@ -12,10 +12,11 @@
 
 name: scout-verdicts
 
+# RETIRED (HOLDINGS-CHECK-1): the schedule is removed. Holdings are now checked privately and on
+# demand on the owner's PC (python -m aristos_council.holdings_check, docs/HOLDINGS_CHECK.md), and
+# every report this job committed embedded the owner's private sheet URL. Manual runs remain
+# possible but need SCOUT_SHEET_FT / SCOUT_SHEET_HOLDINGS / MASTER_SHEET_ID set as repo variables.
 on:
-  schedule:
-    - cron: "45 6 * * 6"        # Saturday 06:45 UTC (~07:45/08:45 UK) — before the
-                                # 09:30-UK Cowork publish task
   workflow_dispatch:
     inputs:
       window_days:
@@ -38,7 +39,7 @@ jobs:
       # `secrets` is NOT available in a step-level `if:` — lift it into env and
       # test env there instead, or the push step silently never runs.
       GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-      MASTER_SHEET_ID: 1wDYdPDI_XDBTvx_ttmFskNbVpVDPonSJy_-auPY_Hb4
+      MASTER_SHEET_ID: ${{ vars.MASTER_SHEET_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -63,6 +64,8 @@ jobs:
           # (Settings → Secrets and variables → Actions → Variables) once the
           # sheet exists. Leave unset until then — the script skips it cleanly.
           SCOUT_SHEET_ECONOMIST: ${{ vars.SCOUT_SHEET_ECONOMIST }}
+          SCOUT_SHEET_FT: ${{ vars.SCOUT_SHEET_FT }}
+          SCOUT_SHEET_HOLDINGS: ${{ vars.SCOUT_SHEET_HOLDINGS }}
           # SCOUT-HOLDINGS-401: posts the "Holdings tab fetch failed" alert task. Add this as
           # a repository secret (Settings → Secrets and variables → Actions → New repository
           # secret → TODOIST_API_TOKEN) to receive it; unset, the script still exits 1 and
