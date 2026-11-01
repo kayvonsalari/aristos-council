@@ -51,6 +51,20 @@ surfaces mismatches rather than correcting them silently); no arithmetic; no out
 knowledge; no reinterpretation of accounting; nothing beyond the evidence asserted as
 fact — open questions are phrased as open questions.
 
+The council on a company page is handed the **verdict of record** and nothing else to call "the verdict": the
+word that holds a strict majority of the voting lenses, or MIXED when none does, written "HOLD (1 BUY, 4 HOLD,
+0 SELL)" (COUNCIL-VERDICT-1). A single lens's BUY is that lens's vote, never "the verdict"; the structural check
+flags "the BUY verdict rests on..." over a HOLD record. The same check reads one clause at a time, so a HOLD
+said about the voting lenses is not a verdict "given to" Forensic in the same sentence (STRUCT-CHECK-FORENSIC-1),
+and it refuses a lens count the data contradicts ("the four voting lenses split" over five, FOUR-FIVE-1). The
+specialists write stance first, in the first person or with no subject, in the active voice, one figure per
+sentence, short paragraphs (SPECIALIST-VOICE-1), and never restate a quarter label from a headline - they say
+"the latest quarter" (NEWS-QUARTER-1). The narrator is told to say "peer group", never "cohort" (COHORT-WORD-1), and the
+code-written note under the council's tables says "group sizes". Its words are never rewritten, so a stray
+"cohort" is caught by the report sweep's banned-word rule, which reads the council section because it sits above
+the fold. The AI text check does not count the fixed stance-and-confidence opening, or two specialists restating the
+same reported series (free cash flow over its fiscal years), as convergent phrasing (TEXTCHECK-TEMPLATE-1).
+
 Why don't the models judge? Because we measured what happened when they did. The council
 originally held the verdict and flipped on identical inputs. Moved to a second-opinion
 role, it disagreed with 100% of verdicts in a pre-registered controlled experiment across

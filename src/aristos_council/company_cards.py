@@ -208,6 +208,13 @@ def price_card(report) -> str:
     return ui.stat_card(title, big, sub)
 
 
+def _fy_of(reading, default: str) -> str:
+    """The "FY to Jun 2027" a forward-P/E reading names in its own label, else ``default``."""
+    import re
+    m = re.search(r"forward P/E [(](FY to [A-Z][a-z]{2} [0-9]{4})[)]", str(getattr(reading, "label", "") or ""))
+    return m.group(1) if m else default
+
+
 def earnings_price_card(report) -> str:
     pac = _pac(report)
     title = "Earnings price"
@@ -217,10 +224,13 @@ def earnings_price_card(report) -> str:
     sub = []
     nxt, trailing = _val(pac.forward_pe_next_year), _val(pac.trailing_pe)
     if nxt is not None:
-        sub.append(f"next year {nxt:.1f}x")
+        # FY-NAME-1: the year is named when the forecast carries its year-end ("FY to Jun 2028 21.6x")
+        sub.append(f"{_fy_of(pac.forward_pe_next_year, 'next year')} {nxt:.1f}x")
     if trailing is not None:
         sub.append(f"trailing P/E {trailing:.1f}")
-    return ui.stat_card(title, f"forward P/E {fwd.value:.1f}x", [" · ".join(sub)] if sub else [])
+    this_year = _fy_of(fwd, "")
+    return ui.stat_card(title, f"forward P/E {fwd.value:.1f}x" + (f" ({this_year})" if this_year else ""),
+                        [" · ".join(sub)] if sub else [])
 
 
 def balance_sheet_card(report) -> str:

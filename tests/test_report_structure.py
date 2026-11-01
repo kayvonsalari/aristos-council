@@ -460,7 +460,7 @@ def test_each_narration_section_explains_why_cohort_sizes_differ():
 
     n = _sk_hynix()
     assert COHORT_SIZE_NOTE in narration_markdown(n)
-    assert "cohort sizes differ per lens" in narration_html(n)
+    assert "group sizes differ per lens" in narration_html(n)       # COHORT-WORD-1: the note says "group"
 
 
 def test_every_specialist_carries_its_role_line_including_an_abstaining_one():

@@ -19,11 +19,11 @@ The first line states the verdict of record in plain words. The second states th
 Examples, generated from the five test runs:
 
 - Ford: "No lens voted on Ford. Five lenses need an operating profit, and Ford lost money over the last twelve months; the two income lenses need a dividend record it does not have."
-- BYD: "One of three votes says BUY (Quality); the other two say HOLD. Five lenses did not apply, mostly because BYD's return on capital (9.3%) is below their 12% floor."
+- BYD: "HOLD by majority: one of three votes says BUY (Quality), two say HOLD. Five lenses did not apply, mostly because BYD's return on capital (9.3%) is below their 12% floor."
 - JPMorgan: "HOLD, on the one lens built for banks (Financials, 23rd of 29). The other seven lenses are not for banks. No track record exists for this industry yet."
 - Viking (under $5bn): "No lens voted on Viking. It has no profit, no revenue and no dividend, so nothing here can rank it. It is also outside the tested range: no track record applies."
 
-Template rules: name the count of votes and the split; name the reason that excluded the most lenses, with its figure; if the company is under $5bn or in an untested industry, say so in the second line; never use a lens id, a column name or the word "cohort".
+Template rules: open with the verdict of record (VERDICT-FIRST-1) - the word that holds a strict majority of the votes ("HOLD by majority: ..."), or "MIXED" when none does - then the count of votes and the split; name the reason that excluded the most lenses, with its figure; if the company is under $5bn or in an untested industry, say so in the second line; never use a lens id, a column name or the word "cohort".
 
 ### 2. The story (five short paragraphs, written by code)
 
@@ -36,6 +36,15 @@ The same five questions the model summary already answers, filled from templates
 5. What this cannot tell you: one fixed sentence, plus the untested-range sentence when it applies.
 
 When the plain-English summary box is ticked, the model's summary replaces this block; it never appears beside it. If the model's summary is withheld, the code-written story stays and a one-line note says why the model's was withheld.
+
+Wording rules added by Batch 31 (2026-11-01, from the Microsoft runs); each is a template, never a model sentence:
+
+- **Where the peers were found (STORY-SECTOR-1).** "What this run asked" says "in its broad sector" for ladder step 4, "in its industry" for step 3 and "among its closest rivals" for steps 1 and 2. The model summary already did; the code story now matches it.
+- **Two counts, not one (USABLE-FIGURES-1).** The note under the lens table keeps "names the lens could read" apart from "names that passed its rules": "7 of 14 passed Value + Momentum's rules" when the figures were all there, "had usable figures" only when the shortfall really was missing data, and both counts when it was a mixture. A vote that does not record the split says "were ranked on".
+- **A thin band is doubted on the first screen (BAND-MONTHS-1).** When the valuation band was read from fewer than 80% of the months in its window (under 48 of 60), "What to doubt" says "Its valuation band rests on 38 of 60 months".
+- **The priced-above-value note (EPV-LABEL-1).** A BUY whose own Earnings Power Value reading is negative reads "priced above its no-growth value, like every company in this group; it ranks 3rd of 13 on that gap", in the lens table, the story and the council's facts alike (one text, one function). It no longer reads "best of an expensive group".
+- **Years are named (FY-NAME-1).** A forward P/E carries its fiscal year: "forward P/E (FY to Jun 2027)", not "(this year)", which is ambiguous for a June year-end. The analysts' own forecast sentences still say "this year" and "next year".
+- **A net-cash company has no debt to cover (NET-DEBT-ZERO-1).** A net-debt-over-profit reading below zero prints "net cash (no debt to cover)"; the rank is unchanged. A proper name in a factor label keeps its capital ("Piotroski F-Score", PIOTROSKI-CAP-1).
 
 ### 3. One table
 

@@ -136,6 +136,50 @@ _NEGATED_VERDICTS = re.compile(
     rf"(?:\s*,?\s*(?:(?:or|and|nor)\s+)?{_VERDICT}\b)*(?:\s+(?:verdict|vote|rating|call))?", re.I)
 
 
+# STRUCT-CHECK-FORENSIC-1 - a verdict word belongs to the thing it sits beside. Check (f) used to read a whole
+# SENTENCE, and a sentence that named Forensic and, later, "four voting lenses issued HOLD verdicts" was
+# flagged as giving Forensic a HOLD (MSFT, 2026-11-01). Two cuts make it local: a full stop that closes a
+# quote ("... 'no concern.' The specialist ...") ends the sentence, and a sentence is read one CLAUSE at a
+# time - cut at a semicolon, colon, dash, or a "but / while / whereas / and that".
+_SENTENCE_END = re.compile(r"(?<=[.!?])[\"'’”)]*\s+")
+_CLAUSE_CUT = re.compile(r"[;:—–]|,?\s+(?:but|while|whereas|and that|and noted that|though)\s+", re.I)
+
+
+def _sentences(text: str) -> list[str]:
+    return [p for p in _SENTENCE_END.split(text or "") if p and p.strip()]
+
+
+def _clauses(sentence: str) -> list[str]:
+    return [c for c in _CLAUSE_CUT.split(sentence or "") if c and c.strip()]
+
+
+# FOUR-FIVE-1: "The four voting lenses split", "all 5 lenses disagree" - the number said right before the words
+# "voting lenses" / "lenses" and a split verb.
+_LENS_SPLIT_COUNT = re.compile(
+    r"\b(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+(?:voting\s+)?lenses\s+"
+    r"(?:split|are split|disagree|diverge|differ|were split|divided)\b", re.I)
+_RECORD_COUNTS = re.compile(r"\((\d+) BUY, (\d+) HOLD, (\d+) SELL\)")
+_COUNT_WORDS = {w: i for i, w in enumerate(
+    ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"))}
+
+
+def _voted_from_record(record: Optional[str]) -> int:
+    """How many lenses voted, read off the verdict-of-record line's own counts; 0 when it carries none."""
+    m = _RECORD_COUNTS.search(record or "")
+    return sum(int(g) for g in m.groups()) if m else 0
+
+
+def _count_word_value(token: str) -> Optional[int]:
+    token = (token or "").lower()
+    return int(token) if token.isdigit() else _COUNT_WORDS.get(token)
+
+
+# COUNCIL-VERDICT-1: "the BUY verdict rests on ..." - NOT "the BUY verdict of <lens>" / "from" / "under" /
+# "for": those name a lens's own vote.
+_THE_VERDICT = re.compile(
+    r"\b(?:the|this|that)\s+(BUY|HOLD|SELL)\s+verdict\b(?!\s+(?:of|from|under|for)\b)", re.I)
+
+
 def _asserted_verdict_words(sentence: str) -> set[str]:
     """The verdict words a sentence actually ASSERTS - those left once negated ones are removed."""
     return _verdict_words(_NEGATED_VERDICTS.sub(" ", sentence or ""))
@@ -279,22 +323,53 @@ def validate_narration(narration, *, ranker_verdict: Optional[str] = None,
                     f"{v.verdict.strip().upper()}."))
         seen_sentences: set[tuple[str, str]] = set()
         for text in _text_fields(narration):
-            for sentence in re.split(r"(?<=[.!?])\s+", text):
-                said = _asserted_verdict_words(sentence)
-                if not said:
-                    continue
-                for core in cores:
-                    if re.search(rf"\b{re.escape(core)}\b", sentence, re.I):
-                        key = (core, sentence.strip())
-                        if key in seen_sentences:
-                            continue
-                        seen_sentences.add(key)
+            for sentence in _sentences(text):
+                for clause in _clauses(sentence):
+                    said = _asserted_verdict_words(clause)
+                    if not said:
+                        continue
+                    for core in cores:
+                        if re.search(rf"\b{re.escape(core)}\b", clause, re.I):
+                            key = (core, sentence.strip())
+                            if key in seen_sentences:
+                                continue
+                            seen_sentences.add(key)
+                            issues.append(StructuralIssue(
+                                "check_lens_anchors_a_verdict",
+                                f"{core} is a check, not a vote, but this sentence gives "
+                                f"it a verdict word "
+                                f"({'/'.join(sorted(said)).upper()}): "
+                                f"\"{sentence.strip()}\"."))
+
+    # (g) COUNCIL-VERDICT-1 - "The BUY verdict rests on ..." when the verdict of record is HOLD: one lens's BUY
+    # called THE verdict. A lens's own vote is that lens's; only the record is "the verdict". Runs only when a
+    # single-word record is supplied (a MIXED or empty record has no word to compare with).
+    if ranker_verdict and str(ranker_verdict).strip().lower() in _VERDICTS:
+        record_word = str(ranker_verdict).strip().lower()
+        for text in _text_fields(narration):
+            for sentence in _sentences(text):
+                for m in _THE_VERDICT.finditer(sentence):
+                    if m.group(1).lower() != record_word:
                         issues.append(StructuralIssue(
-                            "check_lens_anchors_a_verdict",
-                            f"{core} is a check, not a vote, but this sentence gives "
-                            f"it a verdict word "
-                            f"({'/'.join(sorted(said)).upper()}): "
+                            "verdict_word_is_not_the_record",
+                            f"This sentence calls {m.group(1).upper()} the verdict, but the verdict of "
+                            f"record{f' for {ticker}' if ticker else ''} is {record_word.upper()}: "
                             f"\"{sentence.strip()}\"."))
+    # (h) FOUR-FIVE-1 - "The four voting lenses split" followed by five lenses. The count of lenses that voted
+    # is DATA (the verdict-of-record line carries it: "HOLD (1 BUY, 4 HOLD, 0 SELL)"), never the narrator's own
+    # tally. A split sentence that states a different number of voting lenses is flagged. Runs only when the
+    # record line carries its counts.
+    voted = _voted_from_record(verdict_of_record)
+    if voted:
+        for text in _text_fields(narration):
+            for sentence in _sentences(text):
+                for m in _LENS_SPLIT_COUNT.finditer(sentence):
+                    said = _count_word_value(m.group(1))
+                    if said is not None and said != voted:
+                        issues.append(StructuralIssue(
+                            "lens_count_is_not_the_data",
+                            f"This sentence says {m.group(1)} voting lenses split, but {voted} lenses "
+                            f"voted: \"{sentence.strip()}\"."))
     # each distinct finding is listed ONCE (the same sentence can sit in two text fields)
     unique, seen_issues = [], set()
     for issue in issues:

@@ -655,7 +655,9 @@ def test_the_council_facts_pack_carries_the_exact_headline_and_check_labels():
     assert ag.headline == "SELL on 1 of 1 vote; no BUY; 1 lens did not apply to this company"
 
     row = _council_agreement_row(ag)
-    assert row["headline"] == ag.headline
+    # COUNCIL-VERDICT-1: the council is handed the verdict of record with its votes ("SELL (0 BUY, 0 HOLD, 1
+    # SELL)"), not the page's count sentence; the page's own headline above is unchanged
+    assert row["headline"] == ag.record_line == "SELL (0 BUY, 0 HOLD, 1 SELL); 1 lens did not apply to this company"
 
     cross = _council_cross_lens_verdicts(votes)
     raw = next(c for c in cross if c["lens"] == "Magic Formula RAW")
@@ -695,7 +697,8 @@ def test_run_council_opinion_feeds_the_headline_and_check_labels_to_the_outcome(
     monkeypatch.setattr(pipeline_mod, "CouncilOutcome", _spy)
     cr.run_council_opinion(report, adapter=_Adapter(), runners=_opinion_runners(),
                            today=TODAY)
-    assert captured.get("verdict_of_record") == report.agreement.headline
+    assert captured.get("verdict_of_record") == report.agreement.record_line
+    assert captured.get("verdict_of_record").startswith("HOLD (0 BUY, 1 HOLD, 0 SELL)")
     assert captured.get("check_lens_labels") == frozenset({"Forensic"})
 
 

@@ -39,7 +39,11 @@ def test_the_agreement_line_without_a_lens_vote(report):
     report.agreement = None
     caller = _scripted({"anthropic": [_reply("SELL")], "openai": [_reply("SELL")], "google": [_reply("HOLD")]})
     result = _run_panel(report, caller)
-    assert render.summary_lines(result) == ["Verdict of record: none (no lens voted). Panel: 1 HOLD, 2 SELL."]
+    # JUDGE-FIGURE-CHECK-1: the scripted answers quote figures the test pack does not hold, so the header also
+    # counts the sentences that were marked
+    assert render.summary_lines(result) == [
+        "Verdict of record: none (no lens voted). Panel: 1 HOLD, 2 SELL.",
+        "3 sentences quoted a figure that is not in the facts the judges were given; each is marked where it stands."]
     one = _run_panel(report, _scripted({"anthropic": [_reply("SELL")], "openai": [RuntimeError("x")],
                                         "google": [RuntimeError("x")]}))
     assert render.summary_lines(one)[0].endswith("No panel reading: fewer than two judges answered.")

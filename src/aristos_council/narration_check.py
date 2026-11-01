@@ -1370,11 +1370,36 @@ def _mask_table_facts(words: list[str], label_runs: list[list[str]], tag: str) -
 _FIGURE = re.compile(r"\d[\d,]*(?:\.\d+)?%?")
 
 
+# TEXTCHECK-TEMPLATE-1 (2026-11-01 MSFT) - two things the repeat check must not call "convergent phrasing":
+#  (a) the fixed opening sentence every specialist view used to start with - "The technical specialist is neutral
+#      at moderate confidence." It is a template, not analysis, and the heading above it already says it.
+#  (b) two specialists restating the same REPORTED SERIES - "free cash flow, after peaking in FY2024, ..." - a
+#      series line item with its fiscal years is a table fact like a price target (the 2026-10-05 ruling).
+_TEMPLATE_OPENING = re.compile(
+    r"^(?:the\s+)?(?:\w+\s+)?specialist\s+is\s+\w+(?:\s+\w+)?\s+at\s+\w+(?:\s+\w+)?\s+confidence\.?$"
+    r"|^\w+,?\s+at\s+\w+(?:\s+\w+)?\s+confidence\.?$", re.I)
+_SERIES_ITEMS = ("free cash flow", "revenue", "net income", "operating income", "operating profit",
+                 "capital expenditure", "capex", "earnings per share", "ebit")
+_FISCAL_YEAR = re.compile(r"(?<![\w.])FY\s?(?:19|20)\d\d(?![\w%]|\.\d)")
+
+
+def _series_facts(sentence: str) -> set[str]:
+    """The reported series a sentence restates: a line item (free cash flow, revenue ...) in a sentence that also
+    names a FISCAL year ("FY2024"). Two sentences naming the same item over fiscal years describe the same table
+    series. A bare calendar year does not count - the 2026-10-05 ruling still holds that a year alone exempts
+    nothing."""
+    if not _FISCAL_YEAR.search(sentence or ""):
+        return set()
+    low = (sentence or "").lower()
+    return {f"series:{item}" for item in _SERIES_ITEMS if item in low}
+
+
 def _table_facts(sentence: str, label_runs: list[list[str]]) -> set[str]:
     """The table facts a sentence states: every READING figure (whole, so "-67.0%" is "67.0%", not "67" and
     "0") and every lens name. A reading carries a decimal point or a percent sign; a bare whole number (a
     year, "5 lenses") is not a table fact, so two sentences sharing only "2025" can still be flagged."""
     facts = {m for m in _FIGURE.findall(sentence) if "." in m or m.endswith("%")}
+    facts |= _series_facts(sentence)
     words = _words(sentence)
     for run in label_runs:
         n = len(run)
@@ -1401,7 +1426,9 @@ def check_printed_repetition(printed: dict, *, lens_labels=()) -> list[str]:
     names = [n for n, t in (printed or {}).items() if (t or "").strip()]
     labels = [_words(label) for label in lens_labels if label]
     labels = [r for r in labels if r]
-    sentences = {n: [(s, _words(s)) for s in _printed_sentences(printed[n])] for n in names}
+    sentences = {n: [(s, _words(s)) for s in _printed_sentences(printed[n])
+                     if not _TEMPLATE_OPENING.match(s.strip())]
+                 for n in names}
     # (specialist, sentence) -> [(other specialist, other sentence)] it repeats
     matches: dict[tuple[str, str], list[tuple[str, str]]] = {}
     for i, a in enumerate(names):

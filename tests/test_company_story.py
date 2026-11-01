@@ -132,7 +132,7 @@ def test_story_votes_with_a_buy_state_the_split_and_name_the_lenses():
     rep = _report([_rank("Quality", "buy", 3), _rank("Growth", "hold", 8), _rank("Value", "sell", 14),
                    _skip("Magic Formula RAW")])
     first, second = answer_lines(rep)
-    assert first == "One of three votes says BUY (Quality); one says HOLD (Growth); one says SELL (Value)."
+    assert first == "MIXED: one of three votes says BUY (Quality), one says HOLD (Growth), one says SELL (Value)."   # VERDICT-FIRST-1: no strict majority
     assert second.startswith("One lens did not apply: " + NO_PROFIT)        # B22-U10
     assert "all for one reason" not in second
 
@@ -140,7 +140,7 @@ def test_story_votes_with_a_buy_state_the_split_and_name_the_lenses():
 def test_story_votes_without_a_buy_say_so_by_leading_with_what_voted():
     rep = _report([_rank("Quality", "hold", 5), _rank("Growth", "hold", 6), _rank("Value", "sell", 14)])
     first, _second = answer_lines(rep)
-    assert first == "Two of three votes say HOLD (Quality and Growth); the other one says SELL (Value)."
+    assert first == "HOLD by majority: two of three votes say HOLD (Quality and Growth), one says SELL (Value)."   # VERDICT-FIRST-1
     assert "BUY" not in first
 
 
@@ -511,8 +511,10 @@ def _byd_like():
 def test_b22_b3_the_usable_figures_note_says_n_of_total_once_per_group():
     from aristos_council.company_story import usable_figures_note
     rep = _byd_like()
-    assert usable_figures_note(rep) == ("14 of 20 had usable figures for Earnings Power Value and Quality; "
-                                        "20 of 20 for Forensic.")
+    # USABLE-FIGURES-1: these hand-built votes do not record WHY names fell out, so the note says only how many
+    # were ranked - it must not call a rule-out "missing data"
+    assert usable_figures_note(rep) == ("14 of 20 were ranked on Earnings Power Value and Quality; "
+                                        "all 20 were ranked on Forensic.")
     assert story_page(rep).group_note == usable_figures_note(rep)
 
 
@@ -531,7 +533,7 @@ def test_b22_b3_the_story_and_every_export_use_the_same_words(tmp_path):
                  for i, v in enumerate(rep.votes)]
     from aristos_council.company_story import usable_figures_note
     note = usable_figures_note(rep)
-    assert note.startswith(f"{total - 3} of {total} had usable figures for ")
+    assert note.startswith(f"{total - 3} of {total} passed ")           # the run's lens recorded no missing data
     happened = dict(story_paragraphs(rep))["What happened."]
     assert "had usable figures" not in happened                     # B23-N5: under the table only
     text, html, md = format_company_report(rep), company_report_html(rep), company_report_markdown(rep)
@@ -558,7 +560,7 @@ def test_b22_b4_the_company_story_calls_its_facts_paragraph_other_facts(tmp_path
 def test_b22_b5_the_story_has_no_peer_search_jargon_but_the_workings_keep_it(tmp_path):
     rep = _byd_like()
     asked = dict(story_paragraphs(rep))["What this run asked."]
-    assert asked == ("BYD was ranked against 19 similar-sized companies in its industry, under "
+    assert asked == ("BYD was ranked against 19 similar-sized companies among its closest rivals, under "
                      "four lenses (Earnings Power Value, Quality, Forensic and Growth).")
     for bad in ("step", "of 4", "peer search", "market index"):
         assert bad not in asked
@@ -569,7 +571,7 @@ def test_b22_b5_the_story_has_no_peer_search_jargon_but_the_workings_keep_it(tmp
     assert "index snapshot" in text[text.index("How this peer group was built"):]
     one = _report([_rank("Quality", "hold", 5)])
     one.check.peer_group = SimpleNamespace(members=[1], step=1, snapshot="", thin=True, broad=False)
-    assert "against 1 similar-sized company in its industry" in dict(story_paragraphs(one))["What this run asked."]
+    assert "against 1 similar-sized company among its closest rivals" in dict(story_paragraphs(one))["What this run asked."]
 
 
 def test_b22_b7a_a_sentence_after_a_full_stop_starts_with_a_capital():
