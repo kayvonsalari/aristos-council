@@ -19,12 +19,13 @@ from __future__ import annotations
 
 import re
 
-from ..reader_check import _numbers, _pack_numbers
+from ..reader_check import _NUMBER, _pack_numbers
 
 FIGURE_MARK = "[figure not in the pack]"
 
-# the labelled/free text fields of an answer that can carry a figure
-FIELDS = ("driving_fact", "reason", "key_risk", "unexplained", "would_change_my_mind")
+# JUDGE-FIGURE-TOLERANCE-1: the fields that STATE FACTS. "key risk" and "would change its mind if" state
+# thresholds and hypotheticals ("if the price fell to $17.00"), which no pack can hold, so they are exempt.
+FIELDS = ("driving_fact", "reason", "unexplained")
 
 _TAG = re.compile(r"\[(?:pack|own knowledge)\]", re.I)
 _OWN = re.compile(r"\[own knowledge\]", re.I)
@@ -46,7 +47,41 @@ def _with_mark(sentence: str) -> str:
     return f"{sentence.rstrip()} {FIGURE_MARK}"
 
 
-def mark_text(text: str, known: set) -> tuple[str, int]:
+class Known:
+    """The figures a pack holds: the normalised tokens (exact match) and every value as a float (so a figure
+    rounded at the judge's own precision still matches: "$631" for 631.09, "67.0bn" for 66.97bn)."""
+
+    def __init__(self, pack_text: str):
+        self.tokens = _pack_numbers(pack_text)
+        self.values: list[float] = []
+        for raw in _NUMBER.findall(pack_text or ""):
+            try:
+                v = float(raw.replace(",", ""))
+            except ValueError:
+                continue
+            self.values.append(v)
+            if 0 < v < 1:                           # a fraction is quotable as a percentage
+                self.values.append(v * 100)
+
+    def holds(self, raw: str) -> bool:
+        """True when ``raw`` (a figure as the judge wrote it, "67.0") is in the pack exactly or rounds to it."""
+        token = raw.replace(",", "")
+        norm = token.rstrip("0").rstrip(".") if "." in token else token
+        if (norm or "0") in self.tokens:
+            return True
+        decimals = len(token.split(".")[1]) if "." in token else 0
+        try:
+            target = round(float(token), decimals)
+        except ValueError:
+            return True
+        return any(abs(round(v, decimals) - target) < 1e-9 for v in self.values)
+
+
+def _strays(bare: str, known: "Known") -> list[str]:
+    return [raw for raw in _NUMBER.findall(bare) if not known.holds(raw)]
+
+
+def mark_text(text: str, known: "Known") -> tuple[str, int]:
     """``(text with unsupported sentences marked, how many were)``. Idempotent: a sentence already marked is
     left alone."""
     if not text or not text.strip():
@@ -58,8 +93,7 @@ def mark_text(text: str, known: set) -> tuple[str, int]:
             out.append(sentence)
             continue
         bare = _TAG.sub(" ", sentence)
-        stray = [n for n in _numbers(bare) if n not in known]
-        if stray:
+        if _strays(bare, known):
             out.append(_with_mark(sentence))
             count += 1
         else:
@@ -72,12 +106,12 @@ def count_marks(call) -> int:
     return sum((getattr(call, field, "") or "").count(FIGURE_MARK) for field in FIELDS)
 
 
-def check_call(call, pack_text: str, known: set | None = None) -> int:
+def check_call(call, pack_text: str, known: "Known | None" = None) -> int:
     """Mark every unsupported sentence of ``call`` (an ok ``JudgeCall``) in place and return how many. A call
     that did not answer is left alone."""
     if getattr(call, "status", "") != "ok":
         return 0
-    known = known if known is not None else _pack_numbers(pack_text)
+    known = known if known is not None else Known(pack_text)
     total = 0
     for field in FIELDS:
         text, n = mark_text(getattr(call, field, "") or "", known)
@@ -89,5 +123,5 @@ def check_call(call, pack_text: str, known: set | None = None) -> int:
 
 def check_judges(judges, pack_text: str) -> int:
     """Run the check on every ok call of every judge; the total number of marked sentences."""
-    known = _pack_numbers(pack_text)
+    known = Known(pack_text)
     return sum(check_call(c, pack_text, known) for j in judges for c in j.calls)

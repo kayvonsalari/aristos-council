@@ -1802,6 +1802,34 @@ BADGE_MEANINGS = {
                        "so it has no track record and borrows none from an earlier version."),
 }
 BADGE_LABELS = tuple(BADGE_MEANINGS)  # display order
+
+# BADGE-EXPLAIN-1: the one-line meaning of each label for a READER of the company page - the legend that opens
+# "Lens notes" and the tooltip on each badge value. Keyed by the label constants above, so a label that is added
+# or renamed cannot be left without its line (tests/test_batch32.py pins every label in BADGE_LABELS). Plain
+# words: "industry group", never "cohort". "here" always means this company's industry.
+BADGE_LEGEND = {
+    LABEL_PASSED: (f"in this industry the lens {_TEST_BAR_WORDS}, and fewer than 1 in 20 random pickers matched it."),
+    LABEL_BAR: (f"in this industry the lens {_TEST_BAR_WORDS}, but more than 1 in 20 random pickers matched it, "
+                "so luck is not ruled out."),
+    LABEL_BEHIND: "in this industry at least 9 in 10 random pickers did as well or better than the lens.",
+    LABEL_NO_EDGE: ("in this industry the lens did not clear the bar, and was not clearly behind random picks "
+                    "either."),
+    LABEL_UNTESTED: "there is not enough measured history in this industry to say anything either way.",
+    LABEL_UNDER_TEST: "the lens's definition is frozen but its ten-year test has not been run yet.",
+}
+BADGE_NONE = "none"
+BADGE_NONE_MEANING = "the lens did not vote on this company, so there is no track record to show."
+
+
+def badge_legend_lines() -> list[str]:
+    """One line per badge, in display order, then "none": ``"no edge shown here: in this industry ..."``."""
+    return [f"{label}: {BADGE_LEGEND[label]}" for label in BADGE_LABELS] + [f"{BADGE_NONE}: {BADGE_NONE_MEANING}"]
+
+
+def badge_meaning(label: str) -> str:
+    """The one-line meaning of a badge value (or of "none"), "" for anything else."""
+    label = canonical_label(label)
+    return BADGE_NONE_MEANING if label == BADGE_NONE else BADGE_LEGEND.get(label, "")
 # the short form used in the "Track record: 2 passed the test, ..." count line
 _BADGE_SHORT = {LABEL_PASSED: "passed the test", LABEL_BAR: "passed the bar, luck not ruled out",
                 LABEL_BEHIND: "behind random picks", LABEL_NO_EDGE: "no edge shown",

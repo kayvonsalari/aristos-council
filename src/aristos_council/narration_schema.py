@@ -163,6 +163,25 @@ _COUNT_WORDS = {w: i for i, w in enumerate(
     ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"))}
 
 
+# SPLIT-WORDING-1: "No lens split", "no split among the lenses", "the lenses agree" (false when votes differ) and
+# "the lenses split" / "the voting lenses disagree" (false when every vote is the same).
+_NO_SPLIT = re.compile(
+    r"\bno\s+(?:real\s+)?(?:voting\s+)?lens(?:es)?\s+split\b|\bno\s+(?:real\s+)?split\s+(?:among|between|in)\s+the\s+"
+    r"(?:voting\s+)?lenses\b|\bthe\s+(?:voting\s+)?lenses\s+(?:all\s+)?agree\b|\blenses\s+(?:do\s+not|don't)\s+split\b",
+    re.I)
+_SAYS_SPLIT = re.compile(r"\b(?:the\s+)?(?:voting\s+)?lenses\s+(?:split|disagree|diverge)\b", re.I)
+
+
+def _votes_from_record(record: Optional[str]) -> tuple:
+    """(BUY, HOLD, SELL) vote counts read off the verdict-of-record line, or () when it carries none."""
+    m = _RECORD_COUNTS.search(record or "")
+    return tuple(int(g) for g in m.groups()) if m else ()
+
+
+def _split_words(votes: tuple) -> str:
+    return " / ".join(f"{c} {w}" for w, c in zip(("BUY", "HOLD", "SELL"), votes) if c)
+
+
 def _voted_from_record(record: Optional[str]) -> int:
     """How many lenses voted, read off the verdict-of-record line's own counts; 0 when it carries none."""
     m = _RECORD_COUNTS.search(record or "")
@@ -370,6 +389,25 @@ def validate_narration(narration, *, ranker_verdict: Optional[str] = None,
                             "lens_count_is_not_the_data",
                             f"This sentence says {m.group(1)} voting lenses split, but {voted} lenses "
                             f"voted: \"{sentence.strip()}\"."))
+    # (i) SPLIT-WORDING-1 - "No lens split: every voting lens issued HOLD except Earnings Power Value, which
+    # issued BUY" says there is no split and then describes one. Whether the voting lenses split is DATA (the
+    # verdict-of-record line carries the votes): differing votes make "no split" / "the lenses agree" false, and
+    # identical votes make "the lenses split" false. Runs only when the record carries its counts.
+    votes = _votes_from_record(verdict_of_record)
+    if votes and sum(votes) > 1:
+        differ = sum(1 for v in votes if v) > 1
+        for text in _text_fields(narration):
+            for sentence in _sentences(text):
+                if differ and _NO_SPLIT.search(sentence):
+                    issues.append(StructuralIssue(
+                        "split_wording_contradicts_the_votes",
+                        f"This sentence says the lenses do not split, but the votes differ "
+                        f"({_split_words(votes)}): \"{sentence.strip()}\"."))
+                elif not differ and _SAYS_SPLIT.search(sentence):
+                    issues.append(StructuralIssue(
+                        "split_wording_contradicts_the_votes",
+                        f"This sentence says the lenses split, but every vote is the same "
+                        f"({_split_words(votes)}): \"{sentence.strip()}\"."))
     # each distinct finding is listed ONCE (the same sentence can sit in two text fields)
     unique, seen_issues = [], set()
     for issue in issues:

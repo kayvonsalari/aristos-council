@@ -168,7 +168,7 @@ The company page now opens on the answer: two lines, a five-paragraph story, one
 | **T20-9** | Tick the summary with no key (or a summary that fails its checks). | The code-written story stays and ONE line says why the model's summary was withheld. |
 | **T20-10** | Tick the council opinion (needs a key). Then untick it and run again. | Ticked: it sits directly under the lens table, above "Show the workings"; the narration-check line is inside the workings. Unticked: no council section, and no model is called. |
 | **T20-11** | Download the text, the HTML and the Markdown. | All three keep the same order. The text keeps every section; the HTML folds the workings; the Markdown puts them in sub-headings at the end, with "what each lens asks" as footnotes (HTML: a tooltip on the lens name). |
-| **T20-12** | `python -m pytest tests/test_report_sweep.py tests/test_company_story.py -rfxX` | Passes. The sweep checks sections 1-3 of every company report in all three renderings, and that the plain-text first screen is at most 25 lines. |
+| **T20-12** | `python -m pytest tests/test_report_sweep.py tests/test_company_story.py -rfxX` | Passes. The sweep checks sections 1-3 of every company report in all three renderings, and that the plain-text first screen is at most 26 lines. |
 
 
 ## Batch 21 (UI-POLISH-1)

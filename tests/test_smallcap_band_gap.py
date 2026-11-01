@@ -53,7 +53,11 @@ def test_no_badge_and_no_track_record_for_the_size_matched_run(tmp_path):
     report = _vkt_run(tmp_path)
     assert all(v.badge is None for v in report.votes)
     assert report.cohort_slug is None and report.track_record_caption == ""
-    assert "Track record" not in company_report_html(report)
+    html = company_report_html(report)
+    # BADGE-EXPLAIN-1: the column header is "Track record" on every page now; what a page with NO track record
+    # must not carry is the explanation, the legend and the caption
+    assert "whether this lens beat its industry group" not in html
+    assert "Track record from tests" not in html and "passed the test here: in this industry" not in html
 
 
 def test_the_label_is_the_owners_sentence_on_the_header_and_every_vote(tmp_path):

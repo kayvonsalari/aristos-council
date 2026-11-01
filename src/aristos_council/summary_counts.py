@@ -69,6 +69,28 @@ def _excluded(pack: dict) -> list:
     return out
 
 
+def _quote(sentence: str) -> str:
+    """The WHOLE sentence, whitespace tidied, in quotes - never a cut-off fragment."""
+    return '"' + " ".join((sentence or "").split()) + '"'
+
+
+def _miscount(claimed_n: int, actual: int, claimed_topics: set, sentence: str) -> str:
+    """One plain sentence for a count the table contradicts, quoting the whole sentence it sits in."""
+    why = " / ".join(sorted(claimed_topics))
+    return (f"its count of lenses that did not apply because of {why} ({claimed_n}) did not match the "
+            f"table ({actual}); the sentence was: {_quote(sentence)}")
+
+
+def _total_with_reasons(n: int, claimed: set, excluded: list) -> bool:
+    """SUMMARY-COUNT-1 (2026-11-01, MSFT): "Three voting tests did not apply ... because Microsoft is in the
+    technology sector" states the TOTAL that did not apply (three) and then names a reason the table does hold,
+    without claiming that reason covers all three. A total followed by a because-clause is not a count of that
+    reason, so it passes when N is the number of lenses that did not apply and every reason named is one the
+    table gives for some lens. (A reason the table does not hold, or a wrong total, still fails.)"""
+    held = set().union(*(ts for _l, ts in excluded)) if excluded else set()
+    return n == len(excluded) and bool(claimed) and claimed <= held
+
+
 def _legit_counts(pack: dict) -> set:
     ag = (pack or {}).get("agreement") or {}
     lenses = (pack or {}).get("lenses") or []
@@ -110,21 +132,20 @@ def count_problems(text: str, pack: dict) -> list[str]:
             n = _n(m.group(1))
             actual = sum(1 for _l, ts in excluded if claimed & ts)
             if n != actual:
-                problems.append(f'count mismatch: "{m.group(0)} {part[m.end():].strip()[:60]}" '
-                                f"but the table shows {actual}")
+                problems.append(_miscount(n, actual, claimed, sentence))
         # "N lenses/tests": a count the run holds
         for m in _COUNT_LENS.finditer(sentence):
             n = _n(m.group(1))
             if n not in legit:
-                problems.append(f'count mismatch: "{m.group(0)}" is not a count the table holds')
+                problems.append(f"its count of lenses ({n}) is not a number the table holds; "
+                                f"the sentence was: {_quote(sentence)}")
             tail = sentence[m.end():]
             bm = re.search(r"\b(?:because|failed on|failing on)\b(.*)$", tail, re.I)
             if bm and not _COUNT_BECAUSE.search(sentence):
                 claimed = topics(bm.group(1))
                 actual = sum(1 for _l, ts in excluded if claimed & ts)
-                if claimed and n != actual:
-                    problems.append(f'count mismatch: "{m.group(0)} ... {bm.group(0)[:40]}" '
-                                    f"but the table shows {actual}")
+                if claimed and n != actual and not _total_with_reasons(n, claimed, excluded):
+                    problems.append(_miscount(n, actual, claimed, sentence))
 
     problems += _named_reason_problems(text, excluded)
     seen, out = set(), []

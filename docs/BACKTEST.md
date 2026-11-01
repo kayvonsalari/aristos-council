@@ -224,6 +224,8 @@ distribution by hand.
 
 ## Track-record badges (BACKTEST-2, shipped 2026-09-30)
 
+*On the company page the column is called **Track record** (BADGE-EXPLAIN-1, 2026-11-01): one line under the lens table explains it, and "Lens notes" opens with a legend of every value, taken from `BADGE_LEGEND` in `backtest.py` (a test pins that every label in `BADGE_LABELS` has a line). "Badge" below is the code's and this document's word for the value.*
+
 Every lens's VOTE, in the Analyse tab's list side and in its Company mode, carries a
 plain-English **badge** naming its own track record in the relevant cohort — read straight off
 the committed `backtests/` files above. TAB-MERGE-1 part 2: a badge is attached only to a lens

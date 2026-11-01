@@ -1612,7 +1612,7 @@ def _story_html(report) -> str:
     """COMPANY-STORY-1 sections 1-3 from the ONE ``StoryPage`` every renderer reads: the two-line
     answer, the story (or the model's summary in its place), one lens table whose "what it asks"
     captions are tooltips."""
-    from ..company_story import SECTION_ANSWER, SECTION_STORY, SECTION_TABLE, story_page
+    from ..company_story import SECTION_ANSWER, SECTION_STORY, SECTION_TABLE, badge_tip, story_page
     from ..reader import READER_SECTION_NOTE, READER_SECTION_TITLE
 
     page = story_page(report)
@@ -1638,8 +1638,13 @@ def _story_html(report) -> str:
         for r in page.rows:
             tip = html.escape(r.asks, quote=True)
             lens = f'<span title="{tip}">{_esc(r.lens)}</span>' if r.asks else _esc(r.lens)
-            rows.append([lens, _esc(r.outcome), _esc(r.badge), _esc(r.reason)])
+            tip_b = badge_tip(r.badge)                      # BADGE-EXPLAIN-1: the badge's one-line meaning
+            badge = (f'<span title="{html.escape(tip_b, quote=True)}">{_esc(r.badge)}</span>'
+                     if tip_b else _esc(r.badge))
+            rows.append([lens, _esc(r.outcome), badge, _esc(r.reason)])
         table.append(_table(list(page.headers), rows))
+    if page.track_intro:
+        table.append(f'<p class="note">{_esc(page.track_intro)}</p>')
     if page.caption:
         table.append(f'<p class="note">{_esc(page.caption)}</p>')
     if page.group_note:
@@ -1654,8 +1659,8 @@ def _workings_html(report) -> str:
     """COMPANY-STORY-1 section 4: everything that supports the answer, folded (open on click; print
     opens it), in the design's order."""
     from ..company_check import company_sources
-    from ..company_story import (SECTION_WORKINGS, lens_notes_chance, narration_check_line,
-                                  table_rows)
+    from ..company_story import (SECTION_WORKINGS, badge_legend, lens_notes_chance,
+                                  narration_check_line, shows_track_record, table_rows)
     from ..peer_table import rank_columns
 
     c = report.check
@@ -1676,7 +1681,8 @@ def _workings_html(report) -> str:
                      f'<p class="note">{_esc(line)}</p></details>')
     notes = [r for r in table_rows(report) if r.asks or r.badge_detail or r.full_reason]
     if notes:
-        items = []
+        # BADGE-EXPLAIN-1: the legend opens Lens notes (only where a track-record value is on the page)
+        items = [_esc(line) for line in badge_legend()] if shows_track_record(report) else []
         for r in notes:
             if r.asks:
                 items.append(f"<strong>{_esc(r.lens)}</strong> asks: {_esc(r.asks_note)}")

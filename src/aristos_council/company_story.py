@@ -479,7 +479,7 @@ def _doubt(report) -> str:
     weak = [v for v in _voting(report) if v.ranked and v.badge is not None
             and v.badge.label != LABEL_PASSED]
     if weak:
-        bits.append("No badge shows a passed test for " + _join(
+        bits.append("No track record shows a passed test for " + _join(
             [f"{v.label} ({v.badge.label})" for v in weak]) + ".")
     group = report.peer_group
     if group is not None and getattr(group, "members", None):
@@ -522,7 +522,15 @@ def summary_note(report) -> str:
     s = report.summary
     if s is None or getattr(s, "available", False):
         return ""
-    why = _plain_reason(getattr(s, "note", "")) or "it did not pass its checks"
+    raw = str(getattr(s, "note", "") or "")
+    # SUMMARY-COUNT-1: the note used to read "...was withheld: Summary withheld: count mismatch: ..." (the
+    # internal prefix said twice) and cut the offending sentence off at 60 characters. A count problem is now a
+    # sentence of its own - "its count of lenses ... did not match the table (1); the sentence was: "..."" - and
+    # it reads as the reason; every other reason keeps its colon form.
+    raw = re.sub(r"^Summary withheld:\s*", "", raw)
+    if raw.startswith("its count of lenses"):
+        return f"The model's summary was withheld because {' '.join(raw.split())}"
+    why = _plain_reason(raw) or "it did not pass its checks"
     return f"{SUMMARY_WITHHELD_PREFIX}: {why}."
 
 
@@ -564,7 +572,31 @@ def usable_figures_note(report) -> str:
 # --------------------------------------------------------------------------- #
 # Section 3 - one table
 # --------------------------------------------------------------------------- #
-TABLE_HEADERS = ["Lens", "Vote or mark", "Badge", "Reason"]
+# BADGE-EXPLAIN-1: the column is "Track record" (it was "Badge", a word nothing on the page explained), and one line
+# under the table says what it is. "here" in a badge value means this company's industry.
+TRACK_RECORD_HEADER = "Track record"
+TABLE_HEADERS = ["Lens", "Vote or mark", TRACK_RECORD_HEADER, "Reason"]
+TRACK_RECORD_INTRO = ("Track record: whether this lens beat its industry group in a ten-year test. It describes "
+                      "the lens, not the company, and changes no vote. Full definitions under Lens notes.")
+
+
+def shows_track_record(report) -> bool:
+    """True when at least one lens on the page carries a track-record value, so the column, its one-line
+    explanation and its legend mean something. A page where every lens reads "none" (a company under $5bn, an
+    industry with no test history at all) shows no track-record wording: nothing there to explain."""
+    return bool(report.votes) and any(getattr(v, "badge", None) is not None for v in report.votes)
+
+
+def badge_legend() -> list[str]:
+    """The legend that opens "Lens notes": one line per badge, built from the badge code's own strings."""
+    from .backtest import badge_legend_lines
+    return badge_legend_lines()
+
+
+def badge_tip(label: str) -> str:
+    """The tooltip for one badge value: its one-line meaning, "" when there is none to give."""
+    from .backtest import badge_meaning
+    return badge_meaning(label)
 
 
 @dataclass(frozen=True)
@@ -737,7 +769,7 @@ def index_age_line(report) -> str:
 
 def track_caption(report) -> str:
     """The track-record line under the table. A company no backtest covers gets no caption here:
-    the Badge column already says "untested here" and the answer says why."""
+    the Track record column already says "untested here" and the answer says why."""
     from .company_report import NO_COHORT_TRACK_RECORD_LINE
     if report.track_record_caption == NO_COHORT_TRACK_RECORD_LINE:
         return ""
@@ -756,7 +788,7 @@ def badge_group_note(report) -> str:
     if not m:
         return ""
     return (f"Track record is from tests on {m.group(1)} companies; this run compared it with a wider "
-            "sector group, so the badges are a weaker guide.")
+            "sector group, so the track record is a weaker guide.")
 
 
 # --------------------------------------------------------------------------- #
@@ -776,6 +808,7 @@ class StoryPage:
     group_note: str = ""          # "14 of 20 had usable figures for ..." (B22-B3), muted, under the table
     summary_check: str = ""       # "AI text check: no issues found" above a model summary (B24-E9)
     badge_note: str = ""          # "Track record is from tests on X companies; ... a wider sector group" (B25-7)
+    track_intro: str = ""         # BADGE-EXPLAIN-1: what the Track record column is, once, under the table
 
 
 def story_page(report) -> StoryPage:
@@ -795,7 +828,8 @@ def story_page(report) -> StoryPage:
         headers=tuple(TABLE_HEADERS), rows=tuple(table_rows(report)), caption=track_caption(report),
         no_vote="" if report.votes else (report.no_vote_reason or NO_LENS_REASON),
         group_note=usable_figures_note(report),
-        summary_check=_summary_check_line(model), badge_note=badge_group_note(report))
+        summary_check=_summary_check_line(model), badge_note=badge_group_note(report),
+        track_intro=TRACK_RECORD_INTRO if shows_track_record(report) else "")
 
 
 def _summary_check_line(model_summary: bool) -> str:

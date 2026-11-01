@@ -31,7 +31,9 @@ STRATEGY_WORD = "'strategy' in reader text (the reader's word is 'lens')"
 BADGE_PARAGRAPH = "the price-badge paragraph pasted into a heading"
 STORY_WORDS = "an id, a column name or the word 'cohort' in the answer, the story or the lens table"
 STORY_FIRST_SCREEN = "the first screen runs past the fold"
-FIRST_SCREEN_MAX_LINES = 25
+# 26: the design's 25 plus the ONE line BADGE-EXPLAIN-1 added under the lens table (what the Track record column
+# is). Nothing else on the first screen grew; the busiest report (BYD, nine lenses and a wider peer group) sits at 26.
+FIRST_SCREEN_MAX_LINES = 26
 WORDING = "a wording slip the owner already found (Batch 22 patterns)"
 
 
