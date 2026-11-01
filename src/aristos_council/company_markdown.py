@@ -6,7 +6,8 @@ footnotes. One ``StoryPage`` feeds every renderer, so this cannot drift from the
 from __future__ import annotations
 
 from .company_story import (SECTION_ANSWER, SECTION_STORY, SECTION_TABLE, SECTION_WORKINGS,
-                            lens_notes_chance, narration_check_line, story_page, table_rows)
+                            badge_legend, lens_notes_chance, narration_check_line, story_page,
+                            table_rows)
 
 
 def _cell(text: str) -> str:
@@ -72,6 +73,8 @@ def company_report_markdown(report) -> str:
             out.append("| " + " | ".join([lens, _cell(r.outcome), _cell(r.badge),
                                           _cell(r.reason)]) + " |")
         out.append("")
+    if page.track_intro:
+        out += [f"*{page.track_intro}*", ""]
     if page.caption:
         out += [f"*{page.caption}*", ""]
     if page.group_note:
@@ -105,8 +108,10 @@ def company_report_markdown(report) -> str:
     if line:
         out += ["### AI text check", "", line, ""]
     extra = [r for r in table_rows(report) if r.full_reason or r.badge_detail]
-    if extra:
+    if extra or page.track_intro:
         out += ["### Lens notes", ""]
+        if page.track_intro:                                          # BADGE-EXPLAIN-1: legend first
+            out += [f"- {line}" for line in badge_legend()] + [""]
         chance = lens_notes_chance(extra)
         if chance:
             out += [chance, ""]

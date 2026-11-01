@@ -174,7 +174,7 @@ def test_story_a_bank_says_which_lens_is_built_for_it_and_that_the_rest_are_not(
                       "industry yet.")
     survived = dict(story_paragraphs(rep))["Other facts."]
     assert survived.startswith("Debt and cash do not describe a bank or insurer")
-    assert story_page(rep).caption == ""          # the Badge column and the answer already say it
+    assert story_page(rep).caption == ""          # the Track record column and the answer already say it
 
 
 # --------------------------------------------------------------------------- #
@@ -237,7 +237,8 @@ def test_story_model_summary_withheld_keeps_the_story_and_says_why_in_one_line(t
     rep = _run([RAW], tmp_path=tmp_path, with_summary=True, reader_runner=writer, save=False)
     page = story_page(rep)
     assert not page.model_summary and not rep.summary.available
-    assert page.note == f"{SUMMARY_WITHHELD_PREFIX}: {rep.summary.note.rstrip('. ')}."
+    # SUMMARY-COUNT-1: the internal "Summary withheld: " prefix is not said twice on the page
+    assert page.note == f"{SUMMARY_WITHHELD_PREFIX}: {rep.summary.note.removeprefix('Summary withheld: ').rstrip('. ')}."
     assert "number not in the facts: 777" in page.note
     assert [lead for lead, _t in page.paragraphs][0] == "What this run asked."
     text = format_company_report(rep)
@@ -365,7 +366,7 @@ def test_story_the_three_renderers_carry_the_same_answer_table_and_order(tmp_pat
         assert row.outcome in text and row.outcome in md and row.outcome in html
     # the table, then the fold, in every rendering
     assert text.index("Vote or mark") < text.index("SHOW THE WORKINGS")
-    assert md.index("| Lens | Vote or mark | Badge | Reason |") < md.index("## Show the workings")
+    assert md.index("| Lens | Vote or mark | Track record | Reason |") < md.index("## Show the workings")
     assert html.index("<h2>Lens by lens</h2>") < html.index('id="workings"')
     # "what it asks" is a tooltip in the HTML and a footnote in the Markdown
     first = next(r for r in page.rows if r.asks)

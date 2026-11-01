@@ -584,7 +584,7 @@ def test_the_page_renders_the_whole_report_in_order_and_offers_both_downloads(tm
     from tests._html_table import table_rows
     votes = table_rows([m.value for m in at.markdown])
     assert votes                                                            # the one lens table
-    assert list(votes[0]) == ["Lens", "Vote or mark", "Badge", "Reason"]
+    assert list(votes[0]) == ["Lens", "Vote or mark", "Track record", "Reason"]
     assert any(str(r["Vote or mark"]).startswith("does not apply") for r in votes)
     assert any("Market cap (USD)" in list(f.columns) for f in frames)     # the numeric peers table
     # the page carries no Streamlit-side model call: the summary came from the injected writer
@@ -966,7 +966,7 @@ def test_exports_carry_the_badge_text_and_the_cohort_used(tmp_path):
 
     text = format_company_report(report)
     # COMPANY-STORY-1: the reader-facing caption never says "cohort"; the workings still carry the
-    # badge's own detail line, and the table has a Badge column.
+    # badge's own detail line, and the table has a Track record column.
     assert "Track record from tests on Semiconductors companies" in text
     assert badge.label in text
     assert report.track_record_summary in text
@@ -1468,7 +1468,10 @@ def test_zero_badge_strings_in_the_html_for_a_smallcap_run(tmp_path):
     html = company_report_html(report)
     for label in BADGE_LABELS:
         assert label not in html
-    assert "Track record" not in html
+    # BADGE-EXPLAIN-1: the column header is now "Track record", so the test asks for what must be ABSENT - the
+    # explanation, the legend and the caption that only a page with a real track-record value carries
+    assert "whether this lens beat its industry group" not in html
+    assert "Track record from tests" not in html and "Track record is from tests" not in html
 
 
 def test_too_few_band_members_shows_too_few_to_rank(tmp_path):

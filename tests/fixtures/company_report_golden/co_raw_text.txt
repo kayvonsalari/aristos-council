@@ -7,11 +7,12 @@ Track record: 1 behind random picks.
 What this run asked. CO was ranked against 13 similar-sized companies among its closest rivals, under one lens (Magic Formula RAW).
 What happened. Voting: Magic Formula RAW HOLD - 10th of 14. Its valuation band could not be read: no monthly price history in the 5-year window.
 Other facts. Debt and cash: it owes $600 net of cash (latest balance sheet). Growth record (latest annual accounts): revenue compounded +6.3% a year over 3 years; only 0 years of earnings per share reported; a compound rate needs at least 3. No analyst ratings are shown (2026-06-30).
-What to doubt. No badge shows a passed test for Magic Formula RAW (behind random picks here). Its valuation band abstained.
+What to doubt. No track record shows a passed test for Magic Formula RAW (behind random picks here). Its valuation band abstained.
 What this cannot tell you. This is a ranking against peers by fixed rules. It does not know the company's plans, its management, its legal risks or today's news, it is not a price target, and it is not advice.
 
-Lens               Vote or mark       Badge                     Reason
+Lens               Vote or mark       Track record              Reason
 Magic Formula RAW  HOLD - 10th of 14  behind random picks here  return on invested capital 14th of 14 against 12-month price momentum 1st of 14
+Track record: whether this lens beat its industry group in a ten-year test. It describes the lens, not the company, and changes no vote. Full definitions under Lens notes.
 Track record from tests on Semiconductors companies, 10 years to Oct 2026
 
 SHOW THE WORKINGS
@@ -75,6 +76,13 @@ PEERS (who this company would be measured against):
     · matched on: GICS only 0, EODHD label only 0, both 13
 
 LENS NOTES (what each lens asks, its full reason, its track record)
+  passed the test here: in this industry the lens beat the group average by at least 2 points a year in at least 6 of 10 years, and fewer than 1 in 20 random pickers matched it.
+  passed the bar here, luck not ruled out: in this industry the lens beat the group average by at least 2 points a year in at least 6 of 10 years, but more than 1 in 20 random pickers matched it, so luck is not ruled out.
+  behind random picks here: in this industry at least 9 in 10 random pickers did as well or better than the lens.
+  no edge shown here: in this industry the lens did not clear the bar, and was not clearly behind random picks either.
+  untested here: there is not enough measured history in this industry to say anything either way.
+  under test here: the lens's definition is frozen but its ten-year test has not been run yet.
+  none: the lens did not vote on this company, so there is no track record to show.
   Across all tested industries, 15 of 72 cleared the bar (about 9 to 10 would by chance) and 6 also passed the luck test (about 3 to 4 would by chance; the luck test itself still runs somewhat hot, so treat these as approximate). These results are exploratory, not proof of a repeatable edge.
   Magic Formula RAW: Cheap and good: high profit on the money invested, a low price for that profit, and a rising share, for companies worth at least $5bn (not banks, insurers or utilities).
   Magic Formula RAW track record: trailed its group by 7.6% a year on average · 3 of 10 years positive · a random pick did as well 95% of the time · 108 monthly test rounds · without its best pick each year it trailed the group by 19.3 points; random baskets without theirs trailed by 15.2, so it does not hold up - In this cohort at least 9 in 10 random pickers of the same basket size did as well or better than this lens. That describes this one historical test, not what comes next.

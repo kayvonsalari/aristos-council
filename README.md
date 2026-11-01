@@ -73,7 +73,7 @@ What costs money, and what does not:
 | [docs/CALCULATIONS.md](docs/CALCULATIONS.md) | Every factor, criterion and guard, with the formula and known limitations |
 | [docs/REPORT_MARKS.md](docs/REPORT_MARKS.md) | Every flag or annotation that can appear on a report, and what it does *not* mean |
 | [docs/SCOREBOARD.md](docs/SCOREBOARD.md) | The prospective test of whether the verdicts were also *good* |
-| [docs/BACKTEST.md](docs/BACKTEST.md) | Did a lens's own picks beat its cohort? Ten years, skill-versus-luck, and how to read a lens's track-record badge |
+| [docs/BACKTEST.md](docs/BACKTEST.md) | Did a lens's own picks beat its cohort? Ten years, skill-versus-luck, and how to read a lens's track record on the company page |
 | [docs/BACKTEST_RECORD.md](docs/BACKTEST_RECORD.md) | The backtest results in short, for a reviewer: verdicts per lens, what they mean, caveats, proposed changes |
 | [docs/MARKET_INDEX.md](docs/MARKET_INDEX.md) | The local company table: coverage, cost, peer rules, corrections |
 | [docs/COHORTS.md](docs/COHORTS.md) | The 57 cohorts: rules, floors, cleanup, quality checks, correction symbols |
@@ -439,11 +439,11 @@ analyse them."* — so the exclusion is a next step rather than a dead end.
 5. **Model judgement is tested forward, blind, and without a vote.** Whether a language model
    adds anything to the lenses is a question the controlled experiment could not close, so the
    company page can ask a *judge panel* (one model each from Anthropic, OpenAI and Google). Each
-   judge sees the company's full facts (statements, readings, news) but no lens, rank, badge or
+   judge sees the company's full facts (statements, readings, news) but no lens, rank, track record or
    verdict, may add what it knows if it labels it, is asked twice, and may abstain. Every answer is
    logged beside the verdict of record at that moment, and `judges score` marks each against the
    company's cohort at 3, 6 and 12 months. The panel never votes and changes no
-   verdict, rank or badge: it is the forward test, not a new decision-maker. See
+   verdict, rank or track record: it is the forward test, not a new decision-maker. See
    [docs/JUDGE_PANEL.md](docs/JUDGE_PANEL.md).
 
 ## Company Report (the Analyse tab's Company mode)
@@ -456,7 +456,7 @@ exactly as it would over a list — the company's vote is its verdict in that on
 it — and every ticked lens is an equal vote (SHORTLIST-3); a **check** lens (Forensic)
 marks and never votes. The agreement rule the Run side uses decides the verdict of record;
 the page then shows, in order: the plain-English summary (if ticked), the agreement
-headline and each lens's vote (with its backtested track-record badge, attached ONLY to a
+headline and each lens's vote (with its backtested track record, shown in the "Track record" column and attached ONLY to a
 lens that actually voted — a "does not apply" row never carries one), the valuation band,
 price and cash, debt and growth, what analysts say, the Council opinion (if ticked), the
 full peers table (the company's own row visibly highlighted), and Sources.
@@ -471,7 +471,7 @@ When the company's industry has no small-company band to rank it in (the industr
 range starts at or above $5bn, or the band holds no names), it is ranked against the
 **similar-sized companies in its own industry** instead, and says so: *"Compared with
 similar-sized companies in its industry; outside the tested range, no track record applies."*
-There is **no band line and no track-record badge** in that case, because nothing about it was
+There is **no band line and no track record** in that case, because nothing about it was
 ever backtested.
 
 **How votes are counted.** A lens that kept **fewer than 3 names** (reported as "2 passed its

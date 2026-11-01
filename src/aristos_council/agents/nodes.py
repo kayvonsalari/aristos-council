@@ -927,6 +927,10 @@ def _agreement_block(state) -> str:
     if row.get("sell_lenses"):
         lines.append(f"  - SELL votes: {len(row['sell_lenses'])} of {n} "
                      f"({', '.join(row['sell_lenses'])})")
+    if row.get("lens_split"):
+        # SPLIT-WORDING-1: counted from the votes in code; the narrator copies it, never counts or negates it
+        lines.append(f"  - LENS SPLIT SENTENCE (use it as written when you say whether the lenses agree): "
+                     f"\"{row['lens_split']}\"")
     for check in row.get("checks") or []:
         lines.append(f"  - {check.get('lens', '')}: {check.get('reading', '')} "
                      "(a CHECK — it marks, it never votes, and never gets a "

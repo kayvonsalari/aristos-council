@@ -7,7 +7,7 @@ from aristos_council.company_story import badge_group_note
 
 CAPTION = "Track record from the Systems Software cohort, 10 years to Sep 2026"
 LINE = ("Track record is from tests on Systems Software companies; this run compared it with a wider sector "
-        "group, so the badges are a weaker guide.")
+        "group, so the track record is a weaker guide.")      # BADGE-EXPLAIN-1: "badges" -> "track record"
 
 
 def _report(broad, caption=CAPTION):

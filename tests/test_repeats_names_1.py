@@ -47,7 +47,11 @@ def test_the_chance_sentence_is_said_once_under_lens_notes_in_markdown(tmp_path)
     md = company_report_markdown(rep)
     notes = md.split("### Lens notes", 1)[1].split("### Sources", 1)[0]
     assert notes.count(chance) == 1
-    assert notes.lstrip().startswith(chance)                     # directly under the heading
+    # BADGE-EXPLAIN-1: the notes open with the badge legend; the chance sentence follows it, before any lens line
+    from aristos_council.company_story import badge_legend
+    assert notes.lstrip().startswith("- " + badge_legend()[0])
+    legend_end = notes.index("- " + badge_legend()[-1]) + len("- " + badge_legend()[-1])
+    assert notes[legend_end:].lstrip().startswith(chance)
     for line in notes.splitlines():
         if line.startswith("- ") and "track record:" in line:
             assert chance not in line and "beat its group" in line

@@ -231,9 +231,12 @@ def chip(word: str, kind: Optional[str] = None) -> str:
     return f'<span class="ar-chip ar-chip-{kind or chip_kind(word)}">{esc(word)}</span>'
 
 
-def badge(label: str) -> str:
-    """A small outlined label (a track-record badge)."""
-    return f'<span class="ar-badge">{esc(label)}</span>' if label else ""
+def badge(label: str, title: str = "") -> str:
+    """A small outlined label (a track-record badge); ``title`` is its hover text (BADGE-EXPLAIN-1)."""
+    if not label:
+        return ""
+    tip = f' title="{esc(title)}"' if title else ""
+    return f'<span class="ar-badge"{tip}>{esc(label)}</span>'
 
 
 def chip_row(chips: Iterable[str]) -> str:

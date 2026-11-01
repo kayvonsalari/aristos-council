@@ -173,9 +173,12 @@ def lens_table(report) -> str:
     for r in rows:
         vote = ui.chip(r["word"], r["kind"]) + (f'<span class="ar-detail ar-num">{ui.esc(r["detail"])}</span>'
                                                    if r["detail"] else "")
-        badge = ui.badge(r["badge"]) or '<span class="ar-muted">—</span>'
+        from .company_story import TABLE_HEADERS, badge_tip
+        # BADGE-EXPLAIN-1: each badge value carries its one-line meaning as a tooltip
+        badge = ui.badge(r["badge"], title=badge_tip(r["badge"])) or '<span class="ar-muted">—</span>'
         cells.append([r["lens"], vote, badge, r["reason"]])
-    return ui.table(["Lens", "Vote or mark", "Badge", "Reason"], cells, raw_cols=(1, 2), reason_col=3)
+    from .company_story import TABLE_HEADERS
+    return ui.table(list(TABLE_HEADERS), cells, raw_cols=(1, 2), reason_col=3)
 
 
 # --------------------------------------------------------------------------- #

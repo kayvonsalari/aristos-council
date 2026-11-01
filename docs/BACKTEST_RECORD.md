@@ -18,7 +18,7 @@ Luck-test calibration: 10 pairs in the 0-5% tail and 6 in the 95-100% tail, abou
   companies of the size they were at the time. The question asked of each pair is whether it beat the
   group average by at least 2 points a year in at least 6 of 10 years, and whether fewer than 1 in 20
   random pickers of the same basket size and turnover did as well.
-- The badge on a lens in the app states that one result for that industry group, in plain words, and
+- The track record on a lens in the app (the "Track record" column; the code calls its value a badge) states that one result for that industry group, in plain words, and
   never removes a vote.
 
 <!-- GEN:COUNTS -->
@@ -125,7 +125,7 @@ names for that check). One more window of data in a group would change this; rea
 
 ## Lenses under test (GROWTH-V3-RESULTS-1)
 
-A lens whose definition is frozen but whose result has not earned a badge (`status: under_test`) is run in
+A lens whose definition is frozen but whose result has not earned a track record (`status: under_test`) is run in
 the same grid and reported here, in two separate tables: coverage first, then performance. It is left out
 of the matrix, the pooled chance line and the overlap check above, and nothing earned or failed by an
 earlier version carries over. Whether it is offered in the picker is decided by the promotion rule in
@@ -154,12 +154,12 @@ overlapped, month by month.
 - Grid & Electrical Machinery: Earnings Power Value and Growth (v3) - mean overlap 30%, identical baskets in 0 of 67 months
 <!-- /GEN:OVERLAP -->
 
-Badges remain informational and never gate a vote (ruling of 2026-09-30).
+The track record remains informational and never gates a vote (ruling of 2026-09-30).
 
 ## Caveats a reviewer should know
 
 - Companies under $5bn were not tested; the app analyses them on request against companies of similar
-  size, labelled as untested, with no badge.
+  size, labelled as untested, with no track record.
 - Small groups: several groups had only 10 to 20 companies early in the window, so a BUY basket is
   three to four names and one winner can carry the whole result.
 - A lens counts a month as a held position from three BUY names; the app gives a verdict from five

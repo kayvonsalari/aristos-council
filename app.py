@@ -3450,6 +3450,8 @@ def _render_company_report(report) -> None:
             with st.expander("What each lens asks"):
                 for r in asked:
                     st.markdown(f"**{r.lens}** — {r.asks}")
+    if page.track_intro:                                   # BADGE-EXPLAIN-1
+        st.caption(page.track_intro)
     if page.caption:
         st.caption(page.caption)
     if page.group_note:                                    # B22-B3
@@ -3511,8 +3513,11 @@ def _render_company_report(report) -> None:
             for _claim_text, _why in ai_flag_list(report):    # the full list, each flag quoting its sentence
                 st.markdown(f"- \"{_claim_text}\" - {_why}")
         _notes = [r for r in table_rows(report) if r.full_reason or r.badge_detail]
-        if _notes:
+        if _notes or page.track_intro:
             st.markdown("**Lens notes**")
+            from aristos_council.company_story import badge_legend
+            for _legend in (badge_legend() if page.track_intro else []):   # BADGE-EXPLAIN-1: legend first
+                st.caption(_legend)
             for r in _notes:
                 if r.full_reason:
                     st.caption(f"{r.lens} did not apply: {r.full_reason}")

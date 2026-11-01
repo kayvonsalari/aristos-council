@@ -32,7 +32,7 @@ The same five questions the model summary already answers, filled from templates
 1. What this run asked: company, peer group size and how it was found, lenses run.
 2. What happened: votes, exclusions with their figures, Forensic's mark, the band's reading.
 3. What survived: debt and cash, growth record, analysts, in that order, each one sentence, each with its as-of date.
-4. What to doubt: anything abstained, any badge that is not "proven", the peer-group caveat, the small-company caveat.
+4. What to doubt: anything abstained, any track record that is not "passed the test here", the peer-group caveat, the small-company caveat.
 5. What this cannot tell you: one fixed sentence, plus the untested-range sentence when it applies.
 
 When the plain-English summary box is ticked, the model's summary replaces this block; it never appears beside it. If the model's summary is withheld, the code-written story stays and a one-line note says why the model's was withheld.
@@ -48,7 +48,7 @@ Wording rules added by Batch 31 (2026-11-01, from the Microsoft runs); each is a
 
 ### 3. One table
 
-Lens, vote or mark, badge, one-line reason. Nine rows. The "what it asks" captions move to a tooltip (HTML) or a footnote (Markdown). The repeated small-company tag appears once, above the table.
+Lens, vote or mark, track record, one-line reason. The column was called "Badge" until Batch 32 (BADGE-EXPLAIN-1): nothing on the page explained the word, or that "here" means this company's industry, that the value comes from a ten-year test, or that it changes no vote. The column is now "Track record"; one line under the table says what it is ("Track record: whether this lens beat its industry group in a ten-year test. It describes the lens, not the company, and changes no vote. Full definitions under Lens notes."); "Lens notes" opens with a legend of every value, built from the badge code's own strings (including "none", for a lens that did not vote); and in the HTML and Streamlit pages each value carries its one-line meaning as a tooltip. A page where no lens has a track record shows none of this. The sentence about a wider sector group now ends "so the track record is a weaker guide". Nine rows. The "what it asks" captions move to a tooltip (HTML) or a footnote (Markdown). The repeated small-company tag appears once, above the table.
 
 ### 4. Show the workings (folded, open on click)
 
@@ -56,11 +56,11 @@ In this order: valuation band, price and cash, absolute readings, what analysts 
 
 ## What does not change
 
-Votes, ranks, badges, the agreement rule, the peer ladder, the council, the sweep, the CLI, the list (cohort) report. The results JSON of every evidence run must be byte-identical before and after.
+Votes, ranks, track records, the agreement rule, the peer ladder, the council, the sweep, the CLI, the list (cohort) report. The results JSON of every evidence run must be byte-identical before and after.
 
 ## Acceptance
 
-- The five evidence runs re-rendered: the first screen of each is at most 25 lines before the fold; paste each "answer" block.
+- The five evidence runs re-rendered: the first screen of each is at most 26 lines before the fold (25, plus the one Track record line under the table); paste each "answer" block.
 - A fixture test per template branch: no votes; votes with a BUY; votes without a BUY; bank; under $5bn; untested industry; summary withheld.
 - The sweep gains a rule: no lens id, column name or the word "cohort" in sections 1 to 3.
 - Results JSON byte-identical to main for the evidence runs.

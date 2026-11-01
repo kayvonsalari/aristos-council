@@ -285,6 +285,19 @@ class CompanyAgreement:
         return "MIXED" if n else ""
 
     @property
+    def split_sentence(self) -> str:
+        """SPLIT-WORDING-1: the one sentence about whether the voting lenses agree, counted from the votes -
+        "The lenses split 1 BUY / 4 HOLD" when they differ, "The lenses agree: all 5 say HOLD" only when every
+        vote is the same, "" when fewer than two lenses voted (one vote has nothing to split)."""
+        counts = (("BUY", len(self.buy)), ("HOLD", len(self.hold)), ("SELL", len(self.sell)))
+        shown = [(w, c) for w, c in counts if c]
+        if self.n_voted < 2:
+            return ""
+        if len(shown) == 1:
+            return f"The lenses agree: all {self.n_voted} say {shown[0][0]}"
+        return "The lenses split " + " / ".join(f"{c} {w}" for w, c in shown)
+
+    @property
     def record_line(self) -> str:
         """"HOLD (1 BUY, 4 HOLD, 0 SELL)" - the verdict of record, then the votes that made it. What the
         council is told to open on (COUNCIL-VERDICT-1); ``headline`` stays the page's own count sentence."""
@@ -540,7 +553,8 @@ def _council_agreement_row(agreement: Optional[CompanyAgreement]) -> dict:
            "buy_lenses": list(agreement.buy), "sell_lenses": list(agreement.sell),
            "checks": [{"lens": label, "reading": word}
                       for label, word in agreement.checks.items()],       # (readings carry B24-D4's note)
-           "marks": list(agreement.marks), "headline": agreement.record_line}
+           "marks": list(agreement.marks), "headline": agreement.record_line,
+           "lens_split": agreement.split_sentence}
 
 
 def _council_cross_lens_verdicts(votes: list[LensVote]) -> list[dict]:
@@ -1599,6 +1613,8 @@ def story_text_lines(report: CompanyReport) -> list[str]:
         lines.append(page.no_vote)
     else:
         lines += _text_table(page.headers, [r.cells() for r in page.rows])
+    if page.track_intro:
+        lines.append(page.track_intro)
     if page.caption:
         lines.append(page.caption)
     if page.group_note:
@@ -1611,7 +1627,8 @@ def story_text_lines(report: CompanyReport) -> list[str]:
 def workings_text_lines(report: CompanyReport) -> list[str]:
     """Section 4 - everything that supports the answer, in the design's order. The text download
     keeps every section; the fold is a display choice of the other renderers."""
-    from .company_story import lens_notes_chance, narration_check_line, table_rows
+    from .company_story import (badge_legend, lens_notes_chance, narration_check_line, shows_track_record,
+                                table_rows)
 
     c = report.check
     lines = ["SHOW THE WORKINGS", ""]
@@ -1649,6 +1666,8 @@ def workings_text_lines(report: CompanyReport) -> list[str]:
     notes = [r for r in table_rows(report) if r.asks or r.badge_detail or r.full_reason]
     if notes:
         lines.append("LENS NOTES (what each lens asks, its full reason, its track record)")
+        if shows_track_record(report):                                # BADGE-EXPLAIN-1: the legend opens the notes
+            lines += [f"  {line}" for line in badge_legend()]
         chance = lens_notes_chance(notes)
         if chance:
             lines.append(f"  {chance}")

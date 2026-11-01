@@ -56,7 +56,7 @@ word that holds a strict majority of the voting lenses, or MIXED when none does,
 0 SELL)" (COUNCIL-VERDICT-1). A single lens's BUY is that lens's vote, never "the verdict"; the structural check
 flags "the BUY verdict rests on..." over a HOLD record. The same check reads one clause at a time, so a HOLD
 said about the voting lenses is not a verdict "given to" Forensic in the same sentence (STRUCT-CHECK-FORENSIC-1),
-and it refuses a lens count the data contradicts ("the four voting lenses split" over five, FOUR-FIVE-1). The
+and it refuses a lens count the data contradicts, and a "no lens split" over differing votes (or "the lenses split" over identical ones): the narrator is handed the sentence counted from the votes, "The lenses split 1 BUY / 4 HOLD" or "The lenses agree: all 5 say HOLD" (SPLIT-WORDING-1) ("the four voting lenses split" over five, FOUR-FIVE-1). The
 specialists write stance first, in the first person or with no subject, in the active voice, one figure per
 sentence, short paragraphs (SPECIALIST-VOICE-1), and never restate a quarter label from a headline - they say
 "the latest quarter" (NEWS-QUARTER-1). The narrator is told to say "peer group", never "cohort" (COHORT-WORD-1), and the

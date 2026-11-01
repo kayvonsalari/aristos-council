@@ -31,7 +31,7 @@ FORD_SENTENCE = ("All eight voting tests excluded Ford on their own rules: six b
 
 def test_the_ford_sentence_is_a_count_mismatch():
     problems = count_problems(FORD_SENTENCE, FORD_PACK)
-    assert any("six because" in p and "shows 5" in p for p in problems)
+    assert any("(6) did not match the table (5)" in p and FORD_SENTENCE in p for p in problems)
 
 
 def test_the_corrected_sentence_passes():
@@ -71,4 +71,4 @@ def test_check_summary_withholds_with_the_reason():
               "survived": "x", "doubt": "x", "cannot_say": "x"}
     check = check_summary(fields, FORD_PACK)
     assert not check.ok
-    assert "count mismatch" in check.withheld_line
+    assert "its count of lenses" in check.withheld_line and "did not match the table" in check.withheld_line
