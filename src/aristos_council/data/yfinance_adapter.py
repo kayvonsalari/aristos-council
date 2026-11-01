@@ -129,6 +129,10 @@ class YFinanceAdapter(MarketDataAdapter):
             quarterly_balance = tk.quarterly_balance_sheet
         except Exception:
             quarterly_balance = None
+        try:
+            quarterly_income = tk.quarterly_income_stmt        # SMALL-WORDING-1: dates the last quarter
+        except Exception:
+            quarterly_income = None
         # Cash-flow statement for the FCF-basis payout criterion (best-effort, like the
         # others): absence -> None fields -> the criterion falls back to the EPS basis.
         try:
@@ -235,7 +239,7 @@ class YFinanceAdapter(MarketDataAdapter):
             payout_ratio=_payout_ratio(info, dps),
             eps=_as_float(info.get("trailingEps")),
             pe_ratio=_as_float(info.get("trailingPE")),
-            trailing_period_end=_quarter_end(_epoch_to_iso(info.get("mostRecentQuarter")), quarterly_balance),
+            trailing_period_end=_quarter_end(_epoch_to_iso(info.get("mostRecentQuarter")), quarterly_income),
             # ABS-READINGS-2 — the STATEMENT figure, not the info blob's.
             #
             # Netflix, 2026-09-20: info['freeCashflow'] = 25,387,552,768 against an

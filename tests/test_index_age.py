@@ -1,9 +1,12 @@
 """INDEX-AGE-1 (2026-10-31 sweep): peer market caps were stale (1211.HK still $93.4bn after a 35% fall) with no
 sign on the page. A one-line notice appears when the market index snapshot is more than 10 days old."""
+import pytest
 from datetime import date
 from types import SimpleNamespace
 
 from aristos_council.market_index import index_age_notice
+
+pytestmark = pytest.mark.index_age
 
 
 def test_sixteen_days_old_says_so():

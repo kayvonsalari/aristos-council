@@ -666,9 +666,14 @@ def small_company_tag(report) -> list[str]:
 def index_age_line(report) -> str:
     """INDEX-AGE-1: the one-line age notice for the peer sizes behind this page, or "". Aged against the
     day the page was made (``run_at``), so a saved report reads the same when it is reopened."""
+    import os
     from datetime import date as _date
     from .market_index import index_age_notice
-    snap = (getattr(report, "peer_snapshot", None) or {}).get("snapshot", "")
+    if os.environ.get("ARISTOS_NO_INDEX_AGE"):          # the test suite: a notice aged against today's date
+        return ""                                       # would change every golden file with the calendar
+    group = getattr(report, "peer_group", None)
+    snap = (getattr(group, "snapshot", "") or
+            (getattr(report, "peer_snapshot", None) or {}).get("snapshot", ""))
     run_day = str(getattr(report, "run_at", "") or "")[:10]
     try:
         today = _date.fromisoformat(run_day)
