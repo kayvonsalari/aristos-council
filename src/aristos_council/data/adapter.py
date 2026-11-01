@@ -284,6 +284,11 @@ class Fundamentals:
     # cut rule needs amounts; the yield needs to know whether the record still reaches the
     # present. Same source, same fetch -- the adapter already had the dates in hand.
     dividend_payment_dates: list[str] | None = None
+    # DIV-STREAK-1: True when the streak ran back to the first year on file without a flat or cut year -
+    # the true run is then AT LEAST dividend_streak_years (say "at least N years, history on file starts
+    # YEAR"), and a short count is not a verdict on a 10-year rule. None when no streak was derived.
+    dividend_streak_is_floor: bool | None = None
+    dividend_history_start_year: int | None = None
     total_debt: float | None = None
     debt_to_equity: float | None = None          # yfinance percent-ish; may be None
     # Cash & short-term investments (yfinance info 'totalCash'). With total_debt +

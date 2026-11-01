@@ -129,6 +129,10 @@ class YFinanceAdapter(MarketDataAdapter):
             quarterly_balance = tk.quarterly_balance_sheet
         except Exception:
             quarterly_balance = None
+        try:
+            quarterly_income = tk.quarterly_income_stmt        # SMALL-WORDING-1: dates the last quarter
+        except Exception:
+            quarterly_income = None
         # Cash-flow statement for the FCF-basis payout criterion (best-effort, like the
         # others): absence -> None fields -> the criterion falls back to the EPS basis.
         try:
@@ -157,6 +161,7 @@ class YFinanceAdapter(MarketDataAdapter):
         # yield-trap separator that's free but yfinance never surfaces as a scalar).
         (streak_years, last_cut, year_totals, year_stats,
          pay_dates) = _dividend_streak_from_ticker(tk)
+        streak_is_floor, history_start = _dividend_streak_floor(tk)
         # Period-labelled series for the F-Score (PIOTROSKI-2): same statement
         # lines as the positional series above, but WITH period-end dates and
         # None holes kept in place, so cross-statement checks can period-match
@@ -217,7 +222,8 @@ class YFinanceAdapter(MarketDataAdapter):
 
         return Fundamentals(
             statements_currency_note=_statements_currency_note(
-                _as_float(info.get("totalRevenue")), _annual_series(income, "Total Revenue")),
+                _as_float(info.get("totalRevenue")), _annual_series(income, "Total Revenue"),
+                (info.get("financialCurrency") or None)),
             ticker=ticker,
             name=info.get("longName") or info.get("shortName"),
             company_name=(info.get("longName") or None),   # display label (None-guarded)
@@ -233,7 +239,7 @@ class YFinanceAdapter(MarketDataAdapter):
             payout_ratio=_payout_ratio(info, dps),
             eps=_as_float(info.get("trailingEps")),
             pe_ratio=_as_float(info.get("trailingPE")),
-            trailing_period_end=_epoch_to_iso(info.get("mostRecentQuarter")),
+            trailing_period_end=_quarter_end(_epoch_to_iso(info.get("mostRecentQuarter")), quarterly_income),
             # ABS-READINGS-2 — the STATEMENT figure, not the info blob's.
             #
             # Netflix, 2026-09-20: info['freeCashflow'] = 25,387,552,768 against an
@@ -259,6 +265,8 @@ class YFinanceAdapter(MarketDataAdapter):
             years_dividend_growth=None,
             # Defensive-risk signals (free-data yield-trap separators).
             dividend_streak_years=streak_years,
+            dividend_streak_is_floor=streak_is_floor,
+            dividend_history_start_year=history_start,
             last_dividend_reduction_year=last_cut,
             # CRIT-NOCUT-1 — the totals the two signals above came from, carried so a
             # criterion can ask its own question of them. No extra fetch.
@@ -439,7 +447,7 @@ def _dividend_streak_from_ticker(tk) -> tuple:
     and thrown away; carrying them lets a criterion ask its own question of the same
     history (how big was the cut, and was it inside MY window) without a second fetch
     and without the two ever disagreeing about what a year paid."""
-    from ..tools.screening import dividend_streak
+    from ..tools.screening import dividend_streak, dividend_streak_detail
     try:
         divs = tk.dividends
         if divs is None or len(divs) == 0:
@@ -459,6 +467,9 @@ def _dividend_streak_from_ticker(tk) -> tuple:
         return None, None, None, None, None
     year_stats = {y: (sum(a), statistics.median(a), len(a)) for y, a in per_year.items() if a}
     streak, last_cut = dividend_streak(annual, date.today().year, year_stats=year_stats)
+    if streak is not None:
+        # DIV-STREAK-1: the count itself runs on the regular rate, not on calendar totals
+        streak = dividend_streak_detail(per_year, date.today().year)[0]
     totals = [[float(y), float(annual[y])] for y in sorted(annual)]
     # CRIT-NOCUT-2: the per-year payments reduced to (total, median, count). Computed here
     # because this is where the individual payments already are; deriving them again
@@ -466,6 +477,20 @@ def _dividend_streak_from_ticker(tk) -> tuple:
     stats = [[float(y), float(sum(per_year[y])), float(statistics.median(per_year[y])),
               float(len(per_year[y]))] for y in sorted(per_year)]
     return streak, last_cut, totals, stats, sorted(pay_dates)
+
+
+def _dividend_streak_floor(tk) -> tuple:
+    """``(is_floor, history_start_year)`` for the streak ``_dividend_streak_from_ticker`` returned
+    (DIV-STREAK-1). Never raises; (None, None) when there is no history."""
+    from ..tools.screening import dividend_streak_detail
+    try:
+        per_year: dict = {}
+        for ts, amt in tk.dividends.items():
+            per_year.setdefault(ts.year, []).append(float(amt))
+        streak, floor, start = dividend_streak_detail(per_year, date.today().year)
+        return (floor if streak is not None else None), start
+    except Exception:
+        return None, None
 
 
 def _statement_total_debt(quarterly_balance, info_total_debt):
@@ -496,15 +521,17 @@ def _statement_total_debt(quarterly_balance, info_total_debt):
 STATEMENTS_CCY_RATIO = 3.0
 
 
-def _statements_currency_note(headline_revenue, statement_revenue) -> str:
+def _statements_currency_note(headline_revenue, statement_revenue, currency=None) -> str:
     latest = next((v for v in (statement_revenue or []) if v), None)
     if not headline_revenue or not latest or headline_revenue <= 0 or latest <= 0:
         return ""
     ratio = max(headline_revenue / latest, latest / headline_revenue)
     if ratio < STATEMENTS_CCY_RATIO:
         return ""
-    return (f"the provider's headline revenue ({headline_revenue:,.0f}) and its latest annual statement "
-            f"({latest:,.0f}) differ {ratio:.1f}x, so they are not in one currency")
+    from ..tools.price_context import format_money
+    return (f"headline revenue {format_money(headline_revenue, currency, abbreviate=True)} vs latest "
+            f"statement {format_money(latest, currency, abbreviate=True)}, {ratio:.1f}x apart "
+            f"(not in one currency)")
 
 
 def _market_cap(info: dict) -> float | None:
@@ -645,6 +672,25 @@ def _as_float(value: object) -> float | None:
         return None
     # yfinance uses NaN for missing cells; treat NaN as absent.
     return None if f != f else f
+
+
+def _quarter_end(info_date: str | None, quarterly_balance) -> str | None:
+    """SMALL-WORDING-1: the last reported quarter's END date. yfinance's ``mostRecentQuarter`` is the
+    company's own 52-week-calendar date (KO's third quarter: 2026-10-02) while the quarterly statement is
+    dated at the calendar month end (2026-09-30), and the page said "twelve months to Oct 2026" for a
+    quarter that ended in September. The statement's own column wins when it is within 15 days of the
+    headline date; otherwise the headline date stands."""
+    try:
+        from datetime import date as _d
+        col = quarterly_balance.columns[0]
+        stmt = _d.fromisoformat(str(col)[:10])
+        if info_date is None:
+            return stmt.isoformat()
+        if abs((_d.fromisoformat(info_date) - stmt).days) <= 15:
+            return stmt.isoformat()
+    except Exception:                                    # noqa: BLE001 - a display date only
+        pass
+    return info_date
 
 
 def _epoch_to_iso(value: object) -> str | None:

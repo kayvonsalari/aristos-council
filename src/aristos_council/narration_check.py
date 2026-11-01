@@ -1137,6 +1137,48 @@ def check_epv_direction(narrative: str) -> list[str]:
     return flags
 
 
+# --------------------------------------------------------------------------- #
+# COUNCIL-INVENTED-LINK-1 - the valuation band and the lens factors are independent
+# --------------------------------------------------------------------------- #
+# KO 2026-10-31: the council wrote that the accrual ratio "is the component behind the MARK flagging the name
+# as 'priced high' at the 97th percentile". False: the priced-high mark comes ONLY from the valuation band (the
+# share price against the company's own five-year range). A Forensic mark likewise comes only from its own
+# factors, never from the price. The prose may place the two side by side; it may not link them causally.
+_BAND_MARK = re.compile(r"priced high|priced low|\d+(?:st|nd|rd|th) percentile|valuation[- ]band|"
+                        r"own (?:five|5)[- ]year (?:range|history)", re.I)
+_FACTOR_TERM = re.compile(r"accrual|altman|piotroski|f-score|forensic|earnings yield|return on capital|"
+                          r"momentum|low[- ]vol\w*|quality|net debt|payout", re.I)
+_PRICE_TERM = re.compile(r"\bshare price\b|\bthe price\b|\bpriced\b|percentile|valuation[- ]band|\bstretched\b", re.I)
+_CAUSAL = re.compile(r"\bbehind\b|\bdriv(?:e|es|en|ing)\b|\bcaus\w+|\bbecause\b|\bdue to\b|\bexplains?\b|"
+                     r"\bresponsible\b|\bcomponent\b|\bleads? to\b|\bresult(?:s|ed)? (?:in|from)\b|"
+                     r"\bunderlying\b|\bsource of\b|\bflagg?ing\b|\bthe reason\b|\bhence\b|\btherefore\b", re.I)
+_FORENSIC_MARK = re.compile(r"doubted by|forensic (?:mark|flag|concern|doubt)|forensic (?:marks?|flags?|doubts?)", re.I)
+
+
+def _mark_link_annotation(claim: str) -> str:
+    return (f'[⚠ AI text check: "{claim}" links a Forensic or other lens factor to the "priced high" valuation-band '
+            "mark (or a Forensic mark to the price) - they are independent: the band mark comes only from the share "
+            "price against its own five-year range, a Forensic mark only from its own factors]")
+
+
+def check_mark_links(narrative: str) -> list[str]:
+    """Flag a sentence that attributes the valuation-band mark to a lens factor, or a Forensic mark to the price."""
+    flags: list[str] = []
+    seen: set[str] = set()
+    for sentence in _sentences(narrative or ""):
+        if not _CAUSAL.search(sentence):
+            continue
+        band_to_factor = _BAND_MARK.search(sentence) and _FACTOR_TERM.search(sentence)
+        forensic_to_price = _FORENSIC_MARK.search(sentence) and _PRICE_TERM.search(sentence)
+        if not (band_to_factor or forensic_to_price):
+            continue
+        claim = _claim(sentence)
+        if claim not in seen:
+            seen.add(claim)
+            flags.append(_mark_link_annotation(claim))
+    return flags
+
+
 def check_narration_by_lens(narrative: str, tables_by_lens: dict,
                             default_table: dict) -> list[str]:
     """Rank-semantics checking for a CROSS-LENS narration (NARR-UNION-1).

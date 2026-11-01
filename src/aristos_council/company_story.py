@@ -418,7 +418,12 @@ def _survived(report) -> str:
         bits.append(f"Analysts ({when}): {ratings.summary_line()}; "
                     f"{ratings.target_sentence[0].lower() + ratings.target_sentence[1:]}.")
     elif ratings is not None:
-        bits.append(f"No analyst ratings are shown ({when}).")
+        note = str(getattr(ratings, "note", "") or "").strip().rstrip(".")
+        if getattr(trend, "rows", None) and note:
+            # SMALL-WORDING-1: the page does use the analysts' forecasts, so "no ratings" must not read as "no analysts"
+            bits.append(f"{note[:1].upper()}{note[1:]}; forecasts are shown below ({when}).")
+        else:
+            bits.append(f"No analyst ratings are shown ({when}).")
     return " ".join(bits) if bits else "No debt, growth or analyst reading could be made."
 
 
@@ -554,6 +559,9 @@ def _row_reason(v) -> str:
         if getattr(v, "cap_reason", ""):
             return v.cap_reason
         note = v.factor_note.strip(" ·")
+        driver = getattr(v, "driver_note", "")                  # VOTE-REASON-1
+        if driver:
+            return f"{driver}; {note}" if note else driver
         return note or ("marks only, never votes" if not v.votes else "ranked among its peers")
     if v.status == "excluded":
         text = _first_reason(v.reason)
@@ -655,6 +663,25 @@ def small_company_tag(report) -> list[str]:
     return [report.tested_range_line, *detail]
 
 
+def index_age_line(report) -> str:
+    """INDEX-AGE-1: the one-line age notice for the peer sizes behind this page, or "". Aged against the
+    day the page was made (``run_at``), so a saved report reads the same when it is reopened."""
+    import os
+    from datetime import date as _date
+    from .market_index import index_age_notice
+    if os.environ.get("ARISTOS_NO_INDEX_AGE"):          # the test suite: a notice aged against today's date
+        return ""                                       # would change every golden file with the calendar
+    group = getattr(report, "peer_group", None)
+    snap = (getattr(group, "snapshot", "") or
+            (getattr(report, "peer_snapshot", None) or {}).get("snapshot", ""))
+    run_day = str(getattr(report, "run_at", "") or "")[:10]
+    try:
+        today = _date.fromisoformat(run_day)
+    except ValueError:
+        today = None
+    return index_age_notice(snap, today)
+
+
 def track_caption(report) -> str:
     """The track-record line under the table. A company no backtest covers gets no caption here:
     the Badge column already says "untested here" and the answer says why."""
@@ -710,7 +737,8 @@ def story_page(report) -> StoryPage:
     from .company_report import NO_LENS_REASON
     return StoryPage(
         answer=answer_lines(report), paragraphs=paragraphs, model_summary=model,
-        note=summary_note(report), tag=tuple(small_company_tag(report)),
+        note=summary_note(report),
+        tag=tuple(small_company_tag(report)) + ((index_age_line(report),) if index_age_line(report) else ()),
         headers=tuple(TABLE_HEADERS), rows=tuple(table_rows(report)), caption=track_caption(report),
         no_vote="" if report.votes else (report.no_vote_reason or NO_LENS_REASON),
         group_note=usable_figures_note(report),

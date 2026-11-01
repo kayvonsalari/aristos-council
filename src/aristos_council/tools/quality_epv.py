@@ -146,6 +146,8 @@ def earnings_power_value(f, ev: Optional[float], fx_rate: float = 1.0) -> EPVRea
     profit into that currency."""
     if f is None:
         return EPVReading(None, note="no fundamentals")
+    if getattr(f, "statements_currency_note", ""):       # VALE-EPV-ABSTAIN-1
+        return EPVReading(None, note=f.statements_currency_note)
     rev = _clean(f.total_revenue)
     ebit_series = _clean(f.ebit) or _clean(f.operating_income)
     # Pair revenue and EBIT by position (newest-first), as the other through-cycle

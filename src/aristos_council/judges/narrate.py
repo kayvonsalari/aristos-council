@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from .panel import PanelReading, STABLE, UNSTABLE, needs_reading
 
-PROMPT_VERSION = "judge_reading_prompt_v1"
+PROMPT_VERSION = "judge_reading_prompt_v2"   # PANEL-READING-2: names the one explaining frame
 PROMPT_PATH = Path(__file__).resolve().parent / f"{PROMPT_VERSION}.md"
 MAX_WORDS = 80
 NO_KEY_NOTE = "The reading is unavailable: no ANTHROPIC_API_KEY set"
@@ -82,7 +82,12 @@ def _material(result, report) -> str:
     rec = result.record
     lines = [f"Company: {report.display} ({report.ticker})",
              f"Verdict of record (the lenses): {rec.verdict} - {rec.headline}; split {rec.split}",
-             f"Panel against the record: {result.agreement}", "", "The judges:"]
+             f"Panel against the record: {result.agreement}",
+             # PANEL-READING-2: the two frames, stated as facts so the paragraph can name the difference
+             "How the two sides look: the lenses rank the company against its PEER GROUP on fixed factors. "
+             "The judges were shown only this company's own statements, history and news - no peers, no "
+             "ranks - so a judge measures it against its own record or against its own sense of a fair price.",
+             "", "The judges:"]
     for j in result.judges:
         if j.status == STABLE:
             c = j.first_ok

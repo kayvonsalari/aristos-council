@@ -497,6 +497,17 @@ CROSS_LENS_CONSTRAINT = (
     "resolve, not yours. Verdicts remain the ranker's.\n")
 
 
+# COUNCIL-INVENTED-LINK-1 — the marks are independent facts. KO 2026-10-31: the council wrote that the accrual
+# ratio was "the component behind" the priced-high mark. It is not: that mark comes only from the valuation band.
+MARKS_INDEPENDENT_CONSTRAINT = (
+    "MARKS ARE INDEPENDENT — the valuation band (the share price against the company's own five-year range; "
+    "it produces the 'priced high' mark) and the lens factors, including every Forensic factor (accruals, "
+    "Altman Z, Piotroski), are separate measurements that share no inputs. NEVER say or imply that a lens "
+    "factor, a Forensic reading or a lens verdict causes, drives, explains or sits behind the 'priced high' "
+    "mark, and never that the price or the band causes a Forensic mark. You may state both facts side by side; "
+    "you may not link them.\n")
+
+
 # REPORT-4 — the narration arrives as FIELDS. Layout is the report's job, formatting is
 # the unit rules' job; left to invent its own the narrator invented a different one every
 # run ("---", ALL-CAPS pseudo-headings, once a markdown h2 that broke the document's
@@ -578,6 +589,7 @@ def decision_system(strategy: Strategy,
             "reported numbers as an explicit OPEN QUESTION ('worth checking: ...'), "
             "never as a finding.\n"
             + CROSS_LENS_CONSTRAINT
+            + MARKS_INDEPENDENT_CONSTRAINT
             + STRUCTURED_NARRATION + "\n")
     else:
         # Option B (default): an INDEPENDENT SECOND OPINION that may disagree.

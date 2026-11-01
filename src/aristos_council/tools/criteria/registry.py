@@ -323,6 +323,22 @@ def _min_dividend_streak(ev: Evidence, threshold: float) -> CriterionResult:
             name="min_dividend_streak", passed=None, observed=None,
             threshold=threshold,
             note="dividend-growth streak unavailable (insufficient payment history)")
+    # DIV-STREAK-1: a run that reaches the first year on file is a FLOOR. Short of the rule it cannot
+    # fail the company - the record is too short to test it (null is not false, rule 3).
+    floor = bool(getattr(f, "dividend_streak_is_floor", False))
+    start = getattr(f, "dividend_history_start_year", None)
+    where = f" (history on file starts {start})" if start else ""
+    if floor and s < threshold:
+        return CriterionResult(
+            name="min_dividend_streak", passed=None, observed=None,
+            threshold=threshold,
+            note=(f"not evaluated: at least {s} years of dividend increases{where}, "
+                  f"which is too short a record to test a {int(threshold)}-year rule"))
+    if floor:
+        return CriterionResult(
+            name="min_dividend_streak", passed=True, observed=float(s),
+            threshold=threshold,
+            note=f"at least {s}y consecutive dividend increases{where} vs floor {int(threshold)}y")
     return CriterionResult(
         name="min_dividend_streak", passed=s >= threshold, observed=float(s),
         threshold=threshold,

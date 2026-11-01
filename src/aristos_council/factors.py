@@ -164,6 +164,8 @@ def enterprise_value(f, fx: "Optional[CurrencyConversion]" = None) -> Optional[f
         return None
     if f.market_cap is None or f.total_debt is None or f.total_cash is None:
         return None
+    if getattr(f, "statements_currency_note", ""):     # VALE-EPV-ABSTAIN-1: statements not in one currency
+        return None
     # market_cap is in the PRICE currency; total_debt/total_cash are in the ACCOUNTS
     # currency. On a mismatch, convert debt & cash into the price currency (VERIFY-2
     # ITEM 1) — never mix. rate == 1.0 when there is no conversion (same currency).
@@ -298,7 +300,8 @@ def epv_reading_for(fi: FactorInputs):
         return None
     if fi.fx_failed:
         from .tools.quality_epv import EPVReading
-        return EPVReading(None, note="currency conversion unavailable")
+        return EPVReading(None, note=(getattr(f, "statements_currency_note", "")
+                                      or "currency conversion unavailable"))
     return earnings_power_value(f, enterprise_value(f, fi.fx),
                                 fi.fx.rate if fi.fx is not None else 1.0)
 
@@ -506,7 +509,8 @@ def _price_to_book(fi: FactorInputs) -> Optional[float]:
         return None
     if f.price_to_book is not None and f.price_to_book > 0:
         return f.price_to_book
-    if f.market_cap is not None and f.shareholders_equity:
+    if (f.market_cap is not None and f.shareholders_equity
+            and not getattr(f, "statements_currency_note", "")):
         eq = f.shareholders_equity[0]                  # closing (latest) book equity
         if eq is not None and eq > 0:
             return f.market_cap / eq

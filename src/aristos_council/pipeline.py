@@ -379,6 +379,14 @@ def _rank_stage(universe, rank_strategy, adapter, *, today, prefilter_criteria=N
                 continue
         outcomes = compute_factor_outcomes(
             fi, [fac.name for fac in rank_strategy.factors])
+        # VALE-EPV-ABSTAIN-1: when the accounts are not in one currency and EVERY factor of this lens
+        # abstained, the lens has nothing to rank the name on - "not evaluated" with the one reason,
+        # never a last place that reads as a SELL.
+        mixed = getattr(f, "statements_currency_note", "") if f is not None else ""
+        if mixed and all(v is None for v, _ in outcomes.values()):
+            _stash_shadow(shadow_pool, t, fi, rank_strategy)
+            excluded.append((t, f"not evaluated - {mixed}"))
+            continue
         rows.append((t, {n: v for n, (v, _) in outcomes.items()}))
         sources_by_ticker[t] = {n: s for n, (_, s) in outcomes.items()}
         # PRICE-1 (display only): the share price + 52-week position for EVERY rateable
@@ -1925,6 +1933,13 @@ VALUATION_BAND_INTRO = (
     "today's multiple sits in its OWN multi-year range, and what the price would be at "
     "that name's own MEDIAN past multiple. Rows follow the ranked table's order — they "
     "are deliberately not re-sorted by gap.")
+# SMALL-WORDING-1: in a LIST run the rows come from several lenses, in the order each name was first ranked,
+# which is not the order of any one table on the page - so the single-lens claim is not made there.
+VALUATION_BAND_INTRO_UNION = (
+    "What each name costs today, where that sits in its own 12-month range, where "
+    "today's multiple sits in its OWN multi-year range, and what the price would be at "
+    "that name's own MEDIAN past multiple. Rows are in the order the lenses first ranked "
+    "the names, not sorted by gap.")
 VALUATION_BAND_DOCTRINE = (
     "Arithmetic on each company's own history — not a forecast, not a target price and "
     "not a recommendation. A business that has permanently derated should trade below "
@@ -2168,7 +2183,10 @@ def union_valuation_band_table(multi_result) -> Optional[ValuationBandTable]:
             order.append(r.ticker)
     if not order:
         return None
-    return valuation_band_table(_UnionBandView([seen[t] for t in order], names))
+    table = valuation_band_table(_UnionBandView([seen[t] for t in order], names))
+    if table is not None and table.intro == VALUATION_BAND_INTRO:
+        table = replace(table, intro=VALUATION_BAND_INTRO_UNION)
+    return table
 
 
 def _band_footnotes(live, uniform: bool, coverage: set, *,
@@ -4818,8 +4836,8 @@ def _annotate_cross_lens(rep, verdicts: list[dict]) -> None:
     FORENSIC-NARR-1(c) — also runs ``check_rank_attribution`` over the same verdicts:
     a "Nth of M" citation must name the lens it came from (live: Forensic's own
     "12th of 21" called "the ranker's" rank)."""
-    from .narration_check import (check_cross_lens, check_epv_direction, check_rank_attribution,
-                                  check_would_rank)
+    from .narration_check import (check_cross_lens, check_epv_direction, check_mark_links,
+                                  check_rank_attribution, check_would_rank)
     d = getattr(rep, "decision", None)
     if d is None or not getattr(d, "rationale", ""):
         return
@@ -4827,7 +4845,8 @@ def _annotate_cross_lens(rep, verdicts: list[dict]) -> None:
     marks = (check_cross_lens(d.rationale, verdicts)
              + check_rank_attribution(d.rationale, verdicts)
              + check_would_rank(d.rationale, verdicts)
-             + check_epv_direction(d.rationale))                # B25-4
+             + check_epv_direction(d.rationale)                 # B25-4
+             + check_mark_links(d.rationale))                   # COUNCIL-INVENTED-LINK-1
     if marks:
         d.rationale = d.rationale.rstrip() + "\n\n" + "\n".join(marks)
 

@@ -674,3 +674,34 @@ def test_an_invalid_call_keeps_the_rejected_reply_in_the_log_detail():
     spec = _config().judges[0]
     call = panel._ask_once(spec, "sys", "user", _scripted({"anthropic": ["garbage reply"]}), 1)
     assert call.status == "invalid" and "| raw: garbage reply" in call.error_detail
+
+
+def test_panel_reading_prompt_v2_demands_the_explaining_frame_and_keeps_length_as_guidance():
+    """PANEL-READING-2 (MSFT, 2026-10-31): the paragraph only restated who voted what."""
+    from aristos_council.judges import narrate
+    text = narrate.PROMPT_PATH.read_text(encoding="utf-8")
+    assert narrate.PROMPT_VERSION == "judge_reading_prompt_v2"
+    assert "ONE fact or frame that explains the split" in text
+    assert "own five-year history" in text and "never a reason to leave out" in text
+    assert "no BUY/HOLD/SELL word of your own" in text
+
+
+def test_an_unstable_judges_long_answers_are_shown_whole_one_under_the_other():
+    """JUDGE-UNSTABLE-TRUNC-1 (VKTX Gemini, NVCR OpenAI, 2026-10-31): two long answers were joined on one
+    " | " line and read as cut mid-word ("Managem", "today's pri"). Each is now complete, labelled, on its own
+    line, in the Markdown, HTML and text exports."""
+    long1 = "Cash lasts about 2.5 years. " * 30 + "Management estimates launch in 2029 at today's price."
+    long2 = "Revenue was zero in every year. " * 30 + "Management advanced four Phase III trials."
+    ok = [panel.JudgeCall(1, "ok", "HOLD", "medium", long1, "w1", key_risk=long1),
+          panel.JudgeCall(2, "ok", "BUY", "medium", long2, "w2", key_risk=long2)]
+    j = panel.JudgeResult("google", "Gemini", "m", status=panel.UNSTABLE, calls=ok)
+    res = panel.PanelResult(ticker="CO", available=True, record=_record("HOLD"), judges=[j])
+    md = "\n".join(render.markdown_lines(res))
+    assert "- *Why:* \n  - *First answer: HOLD:* " in md and "\n  - *Second answer: BUY:* " in md
+    assert md.count("today's price.") == 2 or long1 in md
+    assert long1 in md and long2 in md and " | HOLD" not in md and " | BUY:" not in md
+    html = render.html_section(res)
+    assert "First answer: HOLD" in html and "Second answer: BUY" in html
+    assert "Management estimates launch in 2029 at today&#x27;s price." in html or "at today's price." in html
+    txt = "\n".join(render.text_lines(res))
+    assert "First answer: HOLD: " + long1 in txt and "Second answer: BUY: " + long2 in txt

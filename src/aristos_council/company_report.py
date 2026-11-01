@@ -129,6 +129,9 @@ class LensVote:
     # TIE-CHECK-1 - the number of OTHER companies sharing this one's combined rank-sum (0 = not tied)
     tied_with: int = 0
     cap_reason: str = ""        # BUY-CAP (27B-1): why a would-be BUY reads HOLD
+    # VOTE-REASON-1: the factors that drove the vote, one clause - the worst and the best factor rank
+    # ("price-to-book 24th of 27 against return on equity 14th of 27"). "" when no factor rank is on file.
+    driver_note: str = ""
     # GROWTH-CAP-WORDING-1 - the lens's BUY cap as a rule ("a BUY needs sales growth in the top half
     # of the ranked names"), stated beside what the lens asks. Empty for a lens without one.
     buy_rule: str = ""
@@ -891,6 +894,41 @@ def _check_components(result, ticker: str, *, with_direction: bool = False) -> t
         return ()
 
 
+def _plain_factor_label(label: str) -> str:
+    """"Earnings yield (EBIT/EV)" -> "earnings yield": no bracket, lower-cased unless it opens on an acronym."""
+    label = re.sub(r"\s*\(.*?\)", "", label or "").strip()
+    label = label[:1].lower() + label[1:] if label[1:2].islower() else label
+    return label.replace("price / book", "price-to-book")
+
+
+def driver_clause(result, ticker: str) -> str:
+    """VOTE-REASON-1 - the lens's worst and best factor rank for this company as one short clause:
+    "price-to-book 24th of 27 against return on equity 14th of 27" (worst first). One factor reads alone.
+    A factor the company was not measured on (imputed) is not a driver. "" when nothing is on file."""
+    from .factors import FACTOR_REGISTRY as FACTORS
+    try:
+        row = next((r for r in (getattr(result, "ranked", None) or [])
+                    if r.ticker.upper() == ticker.upper() and not r.excluded), None)
+        if row is None:
+            return ""
+        imputed = set(row.imputed_factors or [])
+        items = [(name, rank) for name, rank in row.factor_ranks.items() if name not in imputed]
+        if not items:
+            return ""
+
+        def said(item):
+            name, rank = item
+            fd = FACTORS.get(name)
+            label = _plain_factor_label(fd.label if fd is not None else name.replace("_", " "))
+            return f"{label} {ordinal(int(round(rank)))} of {row.universe_size}"
+        worst, best = max(items, key=lambda i: i[1]), min(items, key=lambda i: i[1])
+        if len(items) == 1 or worst[1] == best[1]:
+            return said(worst)
+        return f"{said(worst)} against {said(best)}"
+    except Exception:                                    # noqa: BLE001 - display only
+        return ""
+
+
 def votes_from_multi(multi, ticker: str) -> list[LensVote]:
     """The company's outcome under every lens of a ``MultiStrategyResult``."""
     target = ticker.upper()
@@ -927,6 +965,7 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
                                   factor_note=cell.factor_note,
                                   tied_with=getattr(cell, "tied_with", 0),
                                   cap_reason=cap_reason_for_peers(getattr(cell, "cap_reason", "")),
+                                  driver_note=driver_clause(result, ticker),
                                   factors_measured=getattr(cell, "factors_measured", 0),
                                   factors_total=getattr(cell, "factors_total", 0),
                                   components=(_check_components(result, ticker)

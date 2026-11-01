@@ -354,3 +354,16 @@ def _pinned_tie_rule(request):
         yield
     finally:
         rank_engine.TIE_VERDICT_RULE = saved
+
+
+# INDEX-AGE-1 prints "peer sizes from <date>; N days old" aged against the day a report was MADE, which for a
+# fixture-built report is today - so every golden and line-count test would change with the calendar. Switched
+# off for the whole session (module-scoped fixtures build reports before any function-scoped fixture runs);
+# tests marked ``index_age`` get the real thing.
+os.environ["ARISTOS_NO_INDEX_AGE"] = "1"
+
+
+@pytest.fixture(autouse=True)
+def _index_age_for_marked_tests(request, monkeypatch):
+    if request.node.get_closest_marker("index_age"):
+        monkeypatch.delenv("ARISTOS_NO_INDEX_AGE", raising=False)

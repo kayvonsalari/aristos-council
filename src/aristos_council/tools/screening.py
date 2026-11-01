@@ -989,6 +989,67 @@ def dividend_streak(
     return streak, last_cut
 
 
+def _regular_payments(payments: list[float], typical_count: int) -> list[float]:
+    """The year's payments with specials taken out (DIV-STREAK-1, reusing the DIV-CUT-SPECIAL-1 idea
+    that a special moves the year's total and not the typical payment): when a year holds more payments
+    than the company's usual number, the surplus ones that sit furthest from the year's median payment
+    are dropped (KO 2001: a doubled 0.18 beside three 0.09s; CNQ 2022: a 0.75 beside 0.37-0.43). Order is
+    kept, so the last entry is still the year's closing regular payment."""
+    extra = len(payments) - typical_count
+    if extra <= 0 or len(payments) < 2:
+        return list(payments)
+    med = statistics.median(payments)
+    order = sorted(range(len(payments)), key=lambda i: (-abs(payments[i] - med), i))
+    drop = set(order[:extra])
+    return [p for i, p in enumerate(payments) if i not in drop]
+
+
+def _typical_count(counts: dict[int, int], year: int) -> int:
+    """The company's usual payments a year around ``year`` (the commonest count over year-2..year+2), so
+    a year with one ex-date shifted across New Year (3 or 5 payments) is not read as a different rate."""
+    window = [counts[y] for y in range(year - 2, year + 3) if y in counts]
+    return max(set(window), key=lambda c: (window.count(c), -c))
+
+
+def dividend_streak_detail(
+    year_payments: dict[int, list[float]], as_of_year: int, *, rise_tol: float = 0.001,
+) -> tuple[int | None, bool, int | None]:
+    """DIV-STREAK-1. Consecutive years the REGULAR dividend rate rose, ending at the latest complete year.
+
+    Returns ``(streak_years, is_floor, history_start_year)``. The old count compared calendar-year TOTALS
+    with a half-percent flat band, so a one-cent raise paid in November (XOM 2021: 3.48 -> 3.49 in total)
+    read as flat and a shifted ex-date or a special read as a cut: CVX counted 9 years, XOM 4, CNQ.TO 2,
+    KO 23, each really 25-60+. This compares each year's ANNUALISED REGULAR rate instead: the average
+    regular payment (specials dropped) times the company's usual payments a year, so a missing or doubled
+    ex-date in a year no longer moves it. A year counts when
+    that rate is higher than the prior year's by more than ``rise_tol`` (rounding noise); flat or lower ends
+    the run. The current (partial) year is excluded.
+
+    ``is_floor`` is True when the run reached the first year on file without meeting a flat or cut year -
+    the true streak is then AT LEAST ``streak_years`` (rule 5), and a caller must say "at least N years
+    (history on file starts YEAR)". ``(None, False, start)`` on fewer than 3 complete years."""
+    years = sorted(y for y in year_payments if y < as_of_year and year_payments[y])
+    start = min(year_payments) if year_payments else None
+    if len(years) < 3:
+        return None, False, start
+    counts = {y: len(year_payments[y]) for y in year_payments}
+    rate: dict[int, float] = {}
+    for y in years:
+        typ = _typical_count(counts, y)
+        reg = _regular_payments(year_payments[y], typ)
+        rate[y] = sum(reg) / len(reg) * typ
+    streak = 0
+    broke = False
+    for i in range(len(years) - 1, 0, -1):
+        prev, cur = rate[years[i - 1]], rate[years[i]]
+        if prev > 0 and (cur - prev) / prev > rise_tol:
+            streak += 1
+        else:
+            broke = True
+            break
+    return streak, (not broke), start
+
+
 def streak_by_method(
     method: str, dividends: list[DividendEvent], *, min_years: int
 ) -> tuple[int | None, str]:
@@ -1627,6 +1688,8 @@ def _cross_currency(fundamentals) -> bool:
     """
     price = (getattr(fundamentals, "currency", None) or "").strip().upper()
     acct = (getattr(fundamentals, "financial_currency", None) or "").strip().upper()
+    if getattr(fundamentals, "statements_currency_note", ""):   # VALE-EPV-ABSTAIN-1
+        return True
     return bool(price and acct and price != acct)
 
 
@@ -1711,8 +1774,8 @@ def altman_z_score(fundamentals) -> ForensicResult:
         return ForensicResult(note="Altman Z-Score unavailable: no fundamentals",
                               detail="no fundamentals")
     if _cross_currency(fundamentals):
-        return ForensicResult(note=f"Altman Z-Score unavailable: {CROSS_CURRENCY_NOTE}",
-                              detail=CROSS_CURRENCY_NOTE)
+        why = getattr(fundamentals, "statements_currency_note", "") or CROSS_CURRENCY_NOTE
+        return ForensicResult(note=f"Altman Z-Score unavailable: {why}", detail=why)
     (now,) = period_matched(fundamentals, _ALTMAN_KEYS, periods=1)
     market_cap = getattr(fundamentals, "market_cap", None)
     inputs = {

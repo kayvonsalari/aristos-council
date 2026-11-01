@@ -265,6 +265,11 @@ def _valuation(report) -> list[str]:
     pct = getattr(report.check, "band_percentile", None)
     if pct is not None:
         out.append(f"Percentile of its own five-year range: {pct:.0f} (0 = cheapest it has been, 100 = dearest)")
+        if "latest annual net income" in band:
+            # SMALL-WORDING-1(d): JPM's judges set this band's P/E (15.7) against the trailing P/E (14.1) as if
+            # they were one measure. The pack says, beside the percentile, which earnings the band divides by.
+            out.append("That percentile is of a P/E on the latest ANNUAL net income, not the trailing twelve "
+                       "months, so it is a different figure from the trailing P/E stated elsewhere in this pack.")
     return out
 
 
@@ -347,8 +352,17 @@ def _dividends(fundamentals) -> list[str]:
         out.append(f"Payout ratio: {po * 100:.0f}% of earnings")
     streak = getattr(fundamentals, "dividend_streak_years", None)
     if streak:
-        out.append(f"Dividend raised in each of the last {streak} years on file (a floor: the "
-                   f"history on file is limited, so the true run may be longer)")
+        is_floor = getattr(fundamentals, "dividend_streak_is_floor", None)
+        start = getattr(fundamentals, "dividend_history_start_year", None)
+        if is_floor is False:                    # DIV-STREAK-1: the run ended at a flat or cut year
+            out.append(f"Dividend raised in each of the last {streak} years (regular dividend, "
+                       f"specials left out)")
+        elif is_floor and start:
+            out.append(f"Dividend raised in each of at least the last {streak} years (history on "
+                       f"file starts {start}); the true run may be longer")
+        else:
+            out.append(f"Dividend raised in each of the last {streak} years on file (a floor: the "
+                       f"history on file is limited, so the true run may be longer)")
     cut = getattr(fundamentals, "last_dividend_reduction_year", None)
     if cut:
         out.append(f"Most recent year the regular dividend was cut: {cut}")
