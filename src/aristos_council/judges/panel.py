@@ -93,6 +93,22 @@ class JudgeResult:
     def first_ok(self) -> Optional[JudgeCall]:
         return next((c for c in self.calls if c.status == "ok"), None)
 
+    @property
+    def shown_calls(self) -> list:
+        """The answers the page shows for this judge: the first valid one, or - an unstable judge - both."""
+        ok = [c for c in self.calls if c.status == "ok"]
+        if self.status == UNSTABLE:
+            return ok
+        return ok[:1] if self.status in (STABLE, INCOMPLETE) else []
+
+    @property
+    def figures_off(self) -> int:
+        """JUDGE-FIGURE-CHECK-1: sentences marked "[figure not in the pack]" in the answers shown. Counted from
+        the marks in the text, not stored, so the saved results record keeps its exact shape and a reloaded
+        panel states the same count."""
+        from .figures import count_marks
+        return sum(count_marks(c) for c in self.shown_calls)
+
     def verdict_text(self) -> str:
         """What the page's verdict cell says."""
         if self.status == NOT_RUN:
@@ -154,6 +170,12 @@ class PanelResult:
     @property
     def split_line(self) -> str:
         return split_line(self.judges)
+
+    @property
+    def figures_off(self) -> int:
+        """JUDGE-FIGURE-CHECK-1: sentences, across the answers the page shows, that quote a figure the pack
+        does not hold."""
+        return sum(j.figures_off for j in self.judges)
 
     @property
     def agreement_line(self) -> str:
@@ -371,6 +393,9 @@ def run_judges(pack_text: str, config: PanelConfig, caller: Callable, *,
     for i, spec in enumerate(config.judges):
         if results[i] is None:
             results[i] = settle(spec, [done[(i, n)] for n in range(1, config.calls_per_judge + 1)])
+    # JUDGE-FIGURE-CHECK-1: mark any sentence that quotes a figure the pack does not hold. No verdict moves.
+    from .figures import check_judges
+    check_judges(results, pack_text)
     return results
 
 

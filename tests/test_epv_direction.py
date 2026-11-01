@@ -36,9 +36,11 @@ def _vote(buy_above):
                     position=2, cohort_size=13, buy_above_value=buy_above)
 
 
-def test_an_epv_buy_on_a_negative_reading_says_it_is_the_best_of_an_expensive_group():
+def test_an_epv_buy_on_a_negative_reading_says_the_whole_group_is_priced_above_its_value():
     v = _vote(True)
-    assert v.expensive_note == "best of an expensive group: still priced above its no-growth value"
+    # EPV-LABEL-1: "best of an expensive group" read as if the company led the group
+    assert v.expensive_note == ("priced above its no-growth value, like every company in this group; "
+                                "it ranks 2nd of 13 on that gap")
     assert v.expensive_note in v.result()
 
 

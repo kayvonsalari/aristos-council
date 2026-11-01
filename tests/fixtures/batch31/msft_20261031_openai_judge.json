@@ -1,0 +1,5 @@
+{
+ "source": "runs/2026-10-31T18-20-56Z_company_check_MSFT (judge_panel, OpenAI first call)",
+ "reason": "EV/EBIT is 23.1, at the 9th percentile of its five-year range. [pack] FY2026 revenue was $331.8bn. [pack] FY2026 net income was $133.7bn. [pack] Free cash flow was $67.0bn in FY2026. [pack] Capital expenditure was -$115.9bn in FY2026. [pack] The pack's news highlights concerns that hyperscalers' AI capex could pressure valuations and cash flows. [pack] Total debt was $56.8bn at fiscal year end. [pack] Cash and short-term investments were $76.7bn at fiscal year end. [pack] Analysts' average price target is $629.69 implying about 21% upside. [pack]",
+ "driving_fact": "EV/EBIT is 23.1, at the 9th percentile of its five-year range. [pack]"
+}

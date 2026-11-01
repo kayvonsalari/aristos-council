@@ -70,7 +70,7 @@ points at its `error.txt`.
 Over every Markdown report: internal ids or strategy slugs in reader text; `$-` money; inconsistent unit scale
 within one series (a table row whose columns are years or quarters; a column of different companies may mix
 $m and $bn); singular/plural slips ("1 names", "3 company", "(s)"); unmatched `**` or `_`; diagnostic column
-names in reader text; truncated company names ("The Coca-Cola", "Johnson &", a trailing "..."); a repeated
+names in reader text; the word "cohort" or "strategy" anywhere above the fold, which includes the council opinion; truncated company names ("The Coca-Cola", "Johnson &", a trailing "..."); a repeated
 paragraph (the same paragraph under two headings, or the same sentence in two lens notes); a ticked lens
 absent from every table. Over the structured results: the same lens or check stated two ways, SELL votes
 missing from the agreement, and a BUY with no SELL in a lens that ranked 5 or more names (a lens under 5

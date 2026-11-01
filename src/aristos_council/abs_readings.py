@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from aristos_council.plurals import plural, verb
 
+import re
 import logging
 import statistics
 from dataclasses import dataclass, field
@@ -895,6 +896,14 @@ class ForecastRow:
                 f"{_VIEW_CLAUSE[self.mark]}.")
 
 
+def fiscal_year_name(row, default: str) -> str:
+    """FY-NAME-1: "FY to Jun 2027" for a forecast row whose label carries its year-end ("this year (to Jun
+    2027)"), else ``default``. "This year" is ambiguous for a June year-end - Microsoft's "this year" ended
+    in June 2026 and the forecast shown was for the year to June 2027 - so a forward P/E names its year."""
+    m = re.search(r"[(]to ([A-Z][a-z]{2} [0-9]{4})[)]", str(getattr(row, "label", "") or ""))
+    return f"FY to {m.group(1)}" if m else default
+
+
 def _period_label(prefix: str, period_end: str) -> str:
     """"this year (to Dec 2026)" from a fiscal year-end date. Unparseable -> the bare prefix."""
     try:
@@ -1334,7 +1343,7 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
         if row is None or row.now is None:
             return _abstain(f"no analyst consensus EPS for {when}")
         if row.now <= 0:
-            return _abstain(f"{when}'s consensus EPS is not positive; a forward P/E is undefined")
+            return _abstain(f"the consensus EPS for {when} is not positive; a forward P/E is undefined")
         est = row.now
         converted_from = ""
         if relation != "same":
@@ -1359,8 +1368,9 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
                             f"{converted_from})")
 
     rows = tuple(getattr(trend, "rows", ()) or ())
-    fwd_this = forward_pe(rows[0] if len(rows) > 0 else None, "this year")
-    fwd_next = forward_pe(rows[1] if len(rows) > 1 else None, "next year")
+    row0, row1 = (rows[0] if len(rows) > 0 else None), (rows[1] if len(rows) > 1 else None)
+    fwd_this = forward_pe(row0, fiscal_year_name(row0, "this year"))
+    fwd_next = forward_pe(row1, fiscal_year_name(row1, "next year"))
 
     news_items: tuple = ()
     news_note = ""

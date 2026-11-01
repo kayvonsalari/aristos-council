@@ -251,17 +251,23 @@ def _vote_line(report) -> str:
     by = {"buy": ag.buy, "hold": ag.hold, "sell": ag.sell}
     buckets = [k for k in ("buy", "hold", "sell") if by[k]]
     total = _count(ag.n_voted)
+    # VERDICT-FIRST-1: the verdict of record opens the line - the word that holds a strict majority of the
+    # votes, or MIXED when none does - then the split that produced it. The split is ordered with the
+    # verdict's own votes LAST so "one of five votes says BUY (EPV), four say HOLD" reads as the exception
+    # then the rule.
+    record = ag.verdict_of_record
+    head = "MIXED" if record == "MIXED" else f"{record} by majority"
     parts = []
     for i, key in enumerate(buckets):
         labels = by[key]
         who = f" ({_join(labels)})" if len(labels) <= 3 else ""
         verb = "says" if len(labels) == 1 else "say"
         if i == 0:
-            parts.append(f"{_cap(_count(len(labels)))} of {total} votes {verb} {words[key]}{who}")
+            parts.append(f"{_count(len(labels))} of {total} votes {verb} {words[key]}{who}")
         else:
-            lead = "the other " if len(buckets) == 2 else ""
-            parts.append(f"{lead}{_count(len(labels))} {verb} {words[key]}{who}")
-    return "; ".join(parts) + "."
+            parts.append(f"{_count(len(labels))} {verb} {words[key]}{who}")
+    sep = "; " if any("," in p for p in parts) else ", "        # a lens list with commas needs the stronger stop
+    return f"{head}: " + sep.join(parts) + "."
 
 
 def _reason_line(report) -> str:
@@ -311,6 +317,18 @@ LEADS = ("What this run asked.", "What happened.", "Other facts.", "What to doub
          "What this cannot tell you.")
 
 
+def peer_scope(group) -> str:
+    """STORY-SECTOR-1: where the peers were found, said as the ladder says it - step 4 is the broad sector
+    group, step 3 the industry, steps 1-2 the company's closest rivals. The opening line used to say "in its
+    industry" for all four, so a sector-wide group of 13 read as an industry one."""
+    step = getattr(group, "step", 0) or 0
+    if getattr(group, "broad", False) or step >= 4:
+        return "in its broad sector"
+    if step == 3:
+        return "in its industry"
+    return "among its closest rivals"
+
+
 def _asked(report) -> str:
     name = short_name(report)
     group = report.peer_group
@@ -323,7 +341,7 @@ def _asked(report) -> str:
     # B22-B5: no "step 2 of 4 of the peer search, market index of ..." here - that detail lives under
     # "How this peer group was built" in the workings.
     return (f"{name} was ranked against {plural(n, 'similar-sized company', 'similar-sized companies')} "
-            f"in its industry, under {ran}.")
+            f"{peer_scope(group)}, under {ran}.")
 
 
 def _band_sentence(report) -> str:
@@ -427,6 +445,25 @@ def _survived(report) -> str:
     return " ".join(bits) if bits else "No debt, growth or analyst reading could be made."
 
 
+BAND_MIN_SHARE = 0.8            # below four months in five (48 of 60) the band is called thin
+
+
+def thin_band_sentence(report) -> str:
+    """BAND-MONTHS-1: "its valuation band rests on 38 of 60 months", said in "What to doubt" when the band was
+    read from fewer than 80% of the months in its window. The count used to sit only under the workings
+    (Microsoft: 38 of 60), so a reader of the first screen saw a 9th percentile with no hint it was built
+    from two thirds of the history. "" when the band is complete, abstained, or carries no month count."""
+    text = str(getattr(report.check, "valuation_band", "") or "")
+    m = re.search(r"based on (\d+) of (\d+) months", text)
+    if not m or getattr(report.check, "band_percentile", None) is None:
+        return ""
+    covered, total = int(m.group(1)), int(m.group(2))
+    if total <= 0 or covered >= total * BAND_MIN_SHARE:
+        return ""
+    return (f"Its valuation band rests on {covered} of {total} months; the other "
+            f"{total - covered} lack usable statements, so the percentile reads a thinner history.")
+
+
 def _doubt(report) -> str:
     ag = report.agreement
     bits: list[str] = []
@@ -457,6 +494,9 @@ def _doubt(report) -> str:
     p = getattr(report.check, "band_percentile", None)
     if p is None and str(getattr(report.check, "valuation_band", "")).startswith("not evaluated"):
         bits.append("Its valuation band abstained.")
+    thin = thin_band_sentence(report)
+    if thin:
+        bits.append(thin)
     # JUDGE-PANEL-3: only when the panel ran - what the judges could not account for in the facts
     from .judges.render import unexplained_line
     judged = unexplained_line(getattr(report, "judge_panel", None))
@@ -495,16 +535,29 @@ def usable_figures_note(report) -> str:
     if not members:
         return ""
     total = len(members) + 1
-    ranked = [(v.label, v.cohort_size) for v in report.votes if v.ranked and v.cohort_size]
-    if not ranked or all(n == total for _l, n in ranked):
+    ranked = [v for v in report.votes if v.ranked and v.cohort_size]
+    if not ranked or all(v.cohort_size == total for v in ranked):
         return ""
-    by_n: dict[int, list[str]] = {}
-    for label, n in ranked:
-        by_n.setdefault(n, []).append(label)
+    # USABLE-FIGURES-1: "7 of 14 had usable figures" was false when the other seven were taken out by the
+    # lens's own rules (Value + Momentum's 12% return-on-capital bar), not by missing data. Two counts, said
+    # for what they are: names the lens could read, and names that passed its rules.
+    groups: dict[tuple, list] = {}
+    for v in ranked:
+        groups.setdefault((v.cohort_size, getattr(v, "n_no_data", None)), []).append(v.label)
     parts = []
-    for i, (n, labels) in enumerate(by_n.items()):
-        parts.append(f"{n} of {total} had usable figures for {_join(labels)}" if i == 0
-                     else f"{n} of {total} for {_join(labels)}")
+    for (n, no_data), labels in groups.items():
+        who = _join(labels)
+        rules = f"{who}'s rules" if len(labels) == 1 else f"the rules of {who}"
+        if n == total:
+            parts.append(f"all {total} were ranked on {who}")
+        elif no_data is None:
+            parts.append(f"{n} of {total} were ranked on {who}")
+        elif no_data == 0:
+            parts.append(f"{n} of {total} passed {rules}")                  # the figures were all there
+        elif no_data >= total - n:
+            parts.append(f"{n} of {total} had usable figures for {who}")    # every miss was missing data
+        else:
+            parts.append(f"{n} of {total} passed {rules} ({total - no_data} had usable figures)")
     return "; ".join(parts) + "."
 
 

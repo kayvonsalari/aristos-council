@@ -64,7 +64,8 @@ NOT_ASSESSED = "not assessed"
 # one lens's cohort is 6 and another's 18. Stated ONCE per narration section, where the
 # first position appears.
 COHORT_SIZE_NOTE = ("Each lens ranks only the names that passed its own screen, so "
-                    "cohort sizes differ per lens.")
+                    "group sizes differ per lens.")
+
 
 _SECTION_TITLES = {
     "verdict": "Ranker verdict",

@@ -88,6 +88,14 @@ outside). The reply is strict JSON with seven keys:
 
 **ABSTAIN is explicitly allowed and expected** when the judge cannot reach a view.
 
+**Figure check (JUDGE-FIGURE-CHECK-1).** Every number a judge quotes must appear in the pack it was given -
+the same check the plain-English summary has always had. A sentence that quotes a figure the pack does not hold
+is marked inline with `[figure not in the pack]`, the count is kept on the call, and the panel header says how
+many sentences were marked. Nothing is withheld and no verdict moves (judges have no vote). A sentence the judge
+tagged `[own knowledge]` is not marked. The check is presence only: a number that IS in the pack but on a
+different line (the 2026-10-31 "cash was $76.7bn" was the lease figure) is not caught - that needs a
+label-aware check, which this is not.
+
 **Validation is strict.** Exactly those keys; the allowed words; non-empty sentences; `reasoning` at
 most 150 words and `driving_fact` at most 60; **an unlabelled claim is a format error**: every claim in
 `driving_fact` and `reasoning` must end with a valid tag, nothing may follow the last tag, no label may

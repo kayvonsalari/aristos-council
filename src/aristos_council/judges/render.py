@@ -206,7 +206,25 @@ def _split_pairs(split: str):
     return [(p[0], p[1]) for p in parts if len(p) == 2]
 
 
+def figures_line(result: PanelResult) -> str:
+    """JUDGE-FIGURE-CHECK-1: the panel header's count of sentences that quote a figure the facts do not hold
+    ("" when there are none). Each is marked where it stands."""
+    n = getattr(result, "figures_off", 0) or 0
+    if not n:
+        return ""
+    return (f"{plural(n, 'sentence')} quoted a figure that is not in the facts the judges were given; "
+            "each is marked where it stands.")
+
+
 def summary_lines(result: PanelResult) -> list[str]:
+    """The verdict line, then - only when a judge quoted a figure the facts do not hold - one line saying how
+    many sentences did."""
+    lines = _summary_core(result)
+    extra = figures_line(result)
+    return lines + [extra] if extra else lines
+
+
+def _summary_core(result: PanelResult) -> list[str]:
     """ONE line: the verdict of record with the lenses' votes in the bracket, then the panel's split
     (judges, not calls) and whether it agrees. e.g. "Verdict of record HOLD (lens votes: 0 BUY,
     2 HOLD, 0 SELL). Panel: 3 HOLD — agrees." """

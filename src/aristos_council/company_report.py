@@ -90,6 +90,17 @@ def tied_phrase(n: int) -> str:
 # --------------------------------------------------------------------------- #
 # Votes
 # --------------------------------------------------------------------------- #
+def epv_expensive_note(position, cohort_size) -> str:
+    """EPV-LABEL-1: a BUY whose own Earnings Power Value reading is negative. "best of an expensive group" read
+    as if the company led it (Microsoft was 3rd of 13); the sentence now says what is true of every name in
+    such a group, then where this one stands on that gap. ONE text for the lens table, the story and the
+    council's facts pack."""
+    base = "priced above its no-growth value, like every company in this group"
+    if position and cohort_size:
+        return f"{base}; it ranks {ordinal(position)} of {cohort_size} on that gap"
+    return base
+
+
 @dataclass(frozen=True)
 class LensVote:
     """One lens's outcome for the company."""
@@ -135,6 +146,10 @@ class LensVote:
     # GROWTH-CAP-WORDING-1 - the lens's BUY cap as a rule ("a BUY needs sales growth in the top half
     # of the ranked names"), stated beside what the lens asks. Empty for a lens without one.
     buy_rule: str = ""
+    # USABLE-FIGURES-1 - how many names of the group this lens could NOT read at all (no data, or a failed
+    # fetch). ``None``: not recorded (a hand-built vote), so the page says nothing about WHY names fell out.
+    # The rest of the shortfall (group size minus ranked minus these) failed the lens's own rules.
+    n_no_data: Optional[int] = None
 
     @property
     def votes(self) -> bool:
@@ -177,8 +192,7 @@ class LensVote:
     @property
     def expensive_note(self) -> str:
         """B25-4: shown beside an Earnings Power Value BUY whose reading is negative."""
-        return ("best of an expensive group: still priced above its no-growth value"
-                if self.buy_above_value else "")
+        return epv_expensive_note(self.position, self.cohort_size) if self.buy_above_value else ""
 
     @property
     def tie_note(self) -> str:
@@ -257,6 +271,28 @@ class CompanyAgreement:
     @property
     def sell_votes(self) -> int:
         return len(self.sell)
+
+    @property
+    def verdict_of_record(self) -> str:
+        """VERDICT-FIRST-1 / COUNCIL-VERDICT-1: the verdict of record - the one word (BUY, HOLD, SELL) that holds a
+        STRICT majority (over half) of the lenses that voted, MIXED when none does, "" when nothing voted. The
+        same rule as the judge panel's record and the MAJORITY_OVERRIDE veto; the page, the story and the
+        council's facts pack all read it from here."""
+        n = self.n_voted
+        for word, count in (("BUY", len(self.buy)), ("HOLD", len(self.hold)), ("SELL", len(self.sell))):
+            if count * 2 > n:
+                return word
+        return "MIXED" if n else ""
+
+    @property
+    def record_line(self) -> str:
+        """"HOLD (1 BUY, 4 HOLD, 0 SELL)" - the verdict of record, then the votes that made it. What the
+        council is told to open on (COUNCIL-VERDICT-1); ``headline`` stays the page's own count sentence."""
+        if not self.n_voted:
+            return self.headline
+        line = (f"{self.verdict_of_record} ({len(self.buy)} BUY, {len(self.hold)} HOLD, "
+                f"{len(self.sell)} SELL)")
+        return f"{line}; {self._did_not_apply()}" if self.n_not_applying else line
 
     @property
     def n_not_applying(self) -> int:
@@ -504,7 +540,7 @@ def _council_agreement_row(agreement: Optional[CompanyAgreement]) -> dict:
            "buy_lenses": list(agreement.buy), "sell_lenses": list(agreement.sell),
            "checks": [{"lens": label, "reading": word}
                       for label, word in agreement.checks.items()],       # (readings carry B24-D4's note)
-           "marks": list(agreement.marks), "headline": agreement.headline}
+           "marks": list(agreement.marks), "headline": agreement.record_line}
 
 
 def _council_cross_lens_verdicts(votes: list[LensVote]) -> list[dict]:
@@ -714,6 +750,16 @@ def run_council_opinion(report: CompanyReport, *, adapter=None, runners=None,
     agreement_row = _council_agreement_row(report.agreement)
     company_facts = _council_company_facts(report)
 
+    # COUNCIL-VERDICT-1: the narrator is handed the VERDICT OF RECORD (the strict majority of the voting
+    # lenses), not the verdict of the first lens that said BUY. Handed a lone lens's BUY as "the ranker
+    # verdict", the 2026-11-01 MSFT run headlined "BUY on 1 of 5 votes" and wrote "The BUY verdict rests
+    # on..." for a company whose record was HOLD 4-to-1. A MIXED record has no single word, so the lead
+    # lens's own word is kept as the scaffold and the explanation says no verdict holds a majority.
+    record_word = report.agreement.verdict_of_record.lower()
+    ranker_word = record_word if record_word in ("buy", "hold", "sell") else lead.verdict
+    ranker_explanation = (report.agreement.record_line if record_word in ("buy", "hold", "sell")
+                          else f"{report.agreement.record_line}; no single verdict holds a majority")
+
     meter, mark = _cost_mark(runners)
     try:
         from .data.news_fallback import fetch_eodhd_news, fetch_yfinance_news
@@ -725,7 +771,7 @@ def run_council_opinion(report: CompanyReport, *, adapter=None, runners=None,
                                                    "yfinance_fetcher": fetch_yfinance_news})
         initial = ResearchState(
             ticker=report.ticker, strategy_id=frame.id,
-            ranker_verdict=Recommendation(lead.verdict), ranker_explanation=lead.result(),
+            ranker_verdict=Recommendation(ranker_word), ranker_explanation=ranker_explanation,
             ranker_cohort_size=lead.cohort_size,
             cross_lens_verdicts=cross_lens, agreement_row=agreement_row,
             company_facts_block=company_facts)
@@ -758,7 +804,7 @@ def run_council_opinion(report: CompanyReport, *, adapter=None, runners=None,
     # the DECISION's own rationale, the same place every other narration check lands.
     _annotate_specialist_repetition(rep, state, [v.label for v in report.votes])
     outcome = CouncilOutcome(
-        ticker=report.ticker, ranker_verdict=lead.verdict, council_verdict=None,
+        ticker=report.ticker, ranker_verdict=ranker_word, council_verdict=None,
         agreement=None, dissent_notes=rep.dissent_notes, report=rep,
         verdict_of_record=agreement_row.get("headline") or None,
         check_lens_labels=frozenset(c["lens"] for c in agreement_row.get("checks", [])))
@@ -870,8 +916,7 @@ def _check_components(result, ticker: str, *, with_direction: bool = False) -> t
     company's own value (from its declared unit) and its rank among the names the lens ranked. A
     factor the company has no value for is said to be missing, never shown as 0. Never raises."""
     from .factors import FACTOR_REGISTRY as FACTORS
-    from .factors import direction_in_words
-    from .report_language import format_value
+    from .factors import direction_in_words, factor_reading_text
 
     try:
         row = next((r for r in (getattr(result, "ranked", None) or [])
@@ -883,7 +928,7 @@ def _check_components(result, ticker: str, *, with_direction: bool = False) -> t
             fd = FACTORS.get(name)
             label = (fd.label if fd is not None else name).replace(" (low best)", "")
             value = row.factor_values.get(name)
-            shown = (format_value(value, fd.unit if fd is not None else "ratio")
+            shown = (factor_reading_text(name, value, fd.unit if fd is not None else "ratio")
                      if value is not None else "no value on file")
             note = (" (the factor is missing for this company, so it was given its average rank)"
                     if name in (row.imputed_factors or []) else "")
@@ -894,10 +939,15 @@ def _check_components(result, ticker: str, *, with_direction: bool = False) -> t
         return ()
 
 
+_PROPER_NAMES = frozenset({"Piotroski", "Altman", "Beneish", "Sloan"})
+
+
 def _plain_factor_label(label: str) -> str:
     """"Earnings yield (EBIT/EV)" -> "earnings yield": no bracket, lower-cased unless it opens on an acronym."""
     label = re.sub(r"\s*\(.*?\)", "", label or "").strip()
-    label = label[:1].lower() + label[1:] if label[1:2].islower() else label
+    # PIOTROSKI-CAP-1: a label that opens on a person's name keeps its capital ("Piotroski F-Score")
+    label = (label[:1].lower() + label[1:]
+             if label[1:2].islower() and label.split(" ")[0] not in _PROPER_NAMES else label)
     return label.replace("price / book", "price-to-book")
 
 
@@ -929,6 +979,19 @@ def driver_clause(result, ticker: str) -> str:
         return ""
 
 
+def _n_no_data(result) -> Optional[int]:
+    """USABLE-FIGURES-1: the names this lens's run could not read (no data / fetch failed), or None when the
+    result does not carry the split."""
+    if not hasattr(result, "unrateable"):
+        return None
+    # a name a screen rule could not READ ("return on invested capital not available") is missing data, not a
+    # rule failure: the lens's own wording for it (factors.screen_unavailable_reason) ends "not available"
+    unread = sum(1 for _t, why in (getattr(result, "excluded", None) or [])
+                 if str(why).rstrip(". ").endswith("not available") or str(why).startswith("not evaluated"))
+    return (len(getattr(result, "unrateable", None) or [])
+            + len(getattr(result, "fetch_errors", None) or []) + unread)
+
+
 def votes_from_multi(multi, ticker: str) -> list[LensVote]:
     """The company's outcome under every lens of a ``MultiStrategyResult``."""
     target = ticker.upper()
@@ -958,12 +1021,14 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
             # count) — caught by SMALLCAP-VIEW-1's own too-few test, fixed by accepting
             # either shape. The "ranked and small" half is kept for any caller that still
             # builds a MultiStrategyCell directly (this file's own unit tests do).
-            votes.append(LensVote(**base, status="too_few", cohort_size=cell.cohort_size))
+            votes.append(LensVote(**base, status="too_few", cohort_size=cell.cohort_size,
+                                  n_no_data=_n_no_data(result)))
         elif cell.status == "ranked":
             votes.append(LensVote(**base, status="ranked", verdict=cell.verdict,
                                   position=cell.position, cohort_size=cell.cohort_size,
                                   factor_note=cell.factor_note,
                                   tied_with=getattr(cell, "tied_with", 0),
+                                  n_no_data=_n_no_data(result),
                                   cap_reason=cap_reason_for_peers(getattr(cell, "cap_reason", "")),
                                   driver_note=driver_clause(result, ticker),
                                   factors_measured=getattr(cell, "factors_measured", 0),

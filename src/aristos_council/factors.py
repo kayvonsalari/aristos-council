@@ -679,6 +679,23 @@ _DIRECTION_DETAIL: dict[str, str] = {
 }
 
 
+# NET-DEBT-ZERO-1: a net-cash company's net debt over operating profit is a small NEGATIVE number, and at one
+# decimal it printed as "-0.0x" (Microsoft). Net cash has no debt to cover, so the reading says so in words; the
+# rank is unchanged (net cash still ranks best).
+NET_DEBT_FACTORS = frozenset({"net_debt_to_ebit", "net_debt_to_operating_income"})
+NET_CASH_READING = "net cash (no debt to cover)"
+
+
+def factor_reading_text(name: str, value, unit: str, *, currency=None) -> str:
+    """One factor value as the page prints it: ``format_value`` from the factor's declared unit, except a
+    net-debt ratio below zero, which reads "net cash (no debt to cover)"."""
+    from .report_language import format_value
+    is_number = isinstance(value, (int, float)) and not isinstance(value, bool)
+    if name in NET_DEBT_FACTORS and is_number and value < 0:
+        return NET_CASH_READING
+    return format_value(value, unit, currency=currency)
+
+
 def direction_in_words(name: str) -> str:
     """"higher is better" / "lower is better" for a registered factor, with its plain detail where one is needed."""
     fd = FACTOR_REGISTRY.get(name)
