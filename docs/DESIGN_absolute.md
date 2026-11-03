@@ -1,224 +1,259 @@
-# ABSOLUTE-1: from "better than its peers" to "will it make money over 3 to 5 years"
+# ABSOLUTE-1: from "better than its peers" to "what does the price require, and what does the record show"
 
-Status: design for approval, 2026-11-03. Nothing here is built. No code, strategy file, backtest result or data file changes with this page.
+Status: design for approval, revision 2, 2026-11-03. Nothing here is built. No code, strategy file, backtest result or data file changes with this page.
+
+How to read the sources on this page. A figure is either cited to a source by name, in brackets, or marked "judgment". A figure the owner's brief attributed to a source that could not be read is not carried over as a fact. It is marked "not confirmed" and listed in the Sources section. Where the source says something different from the brief, the source wins and the difference is said.
 
 ## a. The question Aristos answers now, and why it is being replaced
 
-Today Aristos answers one question: is this company better than the companies around it? Nine lenses rank a company inside an automatic peer group. Eight of them vote BUY, HOLD or SELL, and one only marks (Forensic), and the verdict of record is the strict majority of the votes, or MIXED when none holds one.
+Today Aristos answers one question: is this company better than the companies around it? Nine lenses rank a company inside an automatic peer group. Eight of them vote BUY, HOLD or SELL, and one only marks (Forensic). The verdict of record is the strict majority of the votes, or MIXED when none holds one.
 
-That is a fair question for choosing among forty names. It is the wrong question for an owner deciding whether to buy one. A company can rank first in an expensive group and still lose money. The Microsoft run of 2026-11-01 shows it. Earnings Power Value voted BUY because Microsoft's price sat closer to its no-growth value than ten of thirteen peers, yet the same page says every company in that group is priced above that value. The BUY meant "least expensive of an expensive group".
+That is a fair question for choosing among forty names. It is the wrong question for an owner deciding whether to buy one. A company can rank first in an expensive group and still lose money. The Microsoft run of 2026-11-01 shows it. Earnings Power Value voted BUY because Microsoft's price sat closer to its no-growth value than ten of thirteen peers. Yet the same page says every company in that group is priced above that value. The BUY meant "least expensive of an expensive group".
 
-The new question is: if I buy this company at today's price and hold it for 3 to 5 years, will it make money, and more than a safe alternative would? The doctrine does not change. The maths judges and the language model writes. No model touches the verdict, the gate, the valuation or the return figure.
+The new question is: if I buy this company at today's price and own it for the long run, what does the price require the business to do, and does the record show it can? The doctrine does not change. The maths judges and the language model writes. No model touches the verdict, the gate, the valuation or the return figure.
+
+What this cannot promise. No method guarantees that qualifying companies make money. The page shows what the price requires and what the record shows, and nothing more.
 
 What stays true from the old design: every figure comes from a deterministic tool, a missing input is "not evaluated" and never a failure, and published strategy files are never overwritten.
 
 ## b. The gate: who is excluded before any valuation
 
-The gate asks one thing: can the accounts and the balance sheet be trusted, and will the company survive the holding period? Only accounting and solvency failures exclude. A cheap or expensive price never excludes. Each rule returns excluded (with the reason), passed, or not evaluated.
+The principle: only accounting and solvency failures exclude. A cheap or expensive price never excludes. A cut dividend, a heavy borrower or a big spender is a cost to a shareholder, not a failure, so those are warnings.
 
-| Rule | What it measures | Proposed threshold | Reason and source | When data is missing |
-|---|---|---|---|---|
-| Earnings quality | Accrual ratio: (net income minus operating cash flow) divided by average total assets. The share of profit that has not arrived as cash. | Excluded above 0.10 (10% of assets). Set from the data before build: the top tenth of the market index. | Sloan (1996) showed the highest-accrual tenth of companies earn lower returns later. The 0.10 is a placeholder until the distribution is measured. No published fixed cut exists. | Not evaluated. Already computed today. |
-| Distress | Altman Z-Score: five accounting ratios combined into one number. | Excluded below 1.81. Grey zone 1.81 to 2.99 passes with a note. | Altman (1968): below 1.81 is the distress zone, above 2.99 the safe zone. | Not evaluated. Today it abstains for any company whose share price and accounts use different currencies (ADRs, most non-US reporters). See open question 3. |
-| Accounting health | Piotroski F-Score: nine yes/no checks on profit, leverage and efficiency, 0 to 9. | Excluded at 0 or 1. | Piotroski (2000) called 0 to 1 the low group and 8 to 9 the high group. | Not evaluated when fewer than 5 of the 9 checks can be run (today's rule). |
-| Debt burden | Net debt divided by operating profit (EBIT). | Excluded above 5 times. Net cash always passes. | No single published cut. Rating agencies treat roughly 4 to 5 times operating profit before depreciation as aggressive borrowing. Operating profit after depreciation is smaller, so 5 times it is already the stricter line. | Not evaluated when debt or cash is missing. |
-| Cash runway | For a company with negative operating cash flow: how long net cash lasts at last year's spending. | Excluded under 24 months. | The holding period is 3 to 5 years. A company that cannot fund two years of losses must raise money on someone else's terms. Judgment, not a published figure. | Applies only to cash-burning companies. Not evaluated when cash flow lines are missing. |
-| Dividend cover | Dividends paid divided by the average of three years of free cash flow. | Excluded above 100% for a company that pays a dividend. | A dividend the business does not cover is paid from debt or savings. Convention, not a published cut. | Applies only where a dividend is paid. Not evaluated when free cash flow is missing. |
+The gate has exactly four exclusion rules and two warnings. Each returns excluded (with the figure), passed, or not evaluated. A ratio whose bottom number is zero or negative is never a pass. The case is written out for every rule.
 
-Source status: the author and year named in this table (Sloan 1996, Altman 1968, Piotroski 2000, and the rating agency remark) were written from memory in the first draft. None of those four papers was fetched for this page, and they are not in the Sources section. Verify each cut-off against the paper before phase 1 fixes it. Evidence that was fetched, about accruals and the F-Score, is in section o.
+### Exclusion 1: earnings quality (accrual ratio)
 
-How the rules combine:
+- What it is: the share of profit that has not arrived as cash. Accrual ratio = (net income minus operating cash flow) divided by average total assets. Average total assets is the mean of this year's and last year's.
+- Why this form: Hribar and Collins (2002) show that building accruals from changes in balance sheet accounts, instead of reading them from the statement of cash flows, adds measurement error. Dechow and Schrand (2004) define accruals as earnings less cash from operations and rank companies in tenths by their size. Lev and Nissim divide by the average of opening and closing total assets, and note the cash-flow measure exists only from 1988.
+- Rule: exclude the top tenth of our names. This is Sloan's design [Sloan 1996]: companies are sorted into tenths by accruals, and in Table 6 the highest tenth earned minus 5.5% size-adjusted in the following year and the lowest tenth plus 4.9%. Sloan scales by average total assets but builds accruals from the balance sheet, so the form here differs from his.
+- Boundary: measured in calibration (below) and then frozen. It is not a literature number. For orientation, Ball et al. (2016, Table 1) report a 75th percentile of 0.016 and a 99th of 0.235. Caveat: their accruals are the balance-sheet measure (change in current assets less cash, current liabilities, current debt, taxes payable and depreciation) over lagged, that is opening, total assets, not our cash-flow form over average assets. So it is a rough guide only. 0.10 is the stand-in until the boundary is measured. It is a judgment.
+- Zero or negative case: average total assets at or below zero, or either input missing, is not evaluated. Negative accruals pass.
+- A conflict in the evidence, stated plainly. Lev and Nissim conclude that the accruals anomaly persists and its size has not declined. Mohanram's 2011 draft finds that it produced excess returns until 2002 and has apparently disappeared since. The rule stays as an accounting-quality check, not as a source of return (section o).
 
-- Any one confirmed failure excludes the company, and the page names the rule and its figure.
-- If nothing fails, the company qualifies only if at least three of the four always-applicable rules (earnings quality, distress, accounting health, debt burden) were evaluated, and at least one of distress or debt burden was among them. Otherwise the result is "not enough data", with the missing inputs listed.
-- Cash runway and dividend cover add to the count only when they apply.
-- A company with no operating profit and enough runway is not excluded. It passes the gate but cannot be valued by profit, so section d returns "not valued: no operating profit" and the result is "not enough data".
+### Exclusion 2: distress (Altman Z-double-prime)
 
-Worst-year return on capital and similar quality readings are shown as context, not as exclusions. Reason: a cyclical company has a trough. Oil producers earned well below their cost of capital in 2020, then recovered. A gate that reads the worst of five years would remove them at the bottom of the cycle, which is when the price is lowest and the future return highest. The reading is still printed, with its year, so a reader sees the trough. The same goes for gross profitability and the other Quality readings.
+- What it is: one number from four accounting ratios that measures how close a company is to failing. Altman's version for non-manufacturers, written here without its constant:
+  Z'' = 6.56 X1 + 3.26 X2 + 6.72 X3 + 1.05 X4 [Altman 2000; Altman 2002]
+  X1 = working capital / total assets. X2 = retained earnings / total assets. X3 = EBIT / total assets. X4 = book value of equity / total liabilities. (Working capital is current assets minus current liabilities. EBIT is profit before interest and tax.) The definitions are those on Altman's 2017 slides.
+- Why this version: it uses book equity, not market value, and has no sales term. So a company whose shares are quoted in one currency and whose accounts are in another is no longer a problem. Every input is a statement figure and the ratios cancel the currency. The version in use today abstains for those companies.
+- Rule: exclude below 1.10. Altman (2002): "Z''-Scores below 1.10 indicate a distressed condition", in the form without a constant. The grey zone, 1.10 to 2.60, passes with a note. The 2.60 is derived, not quoted. Altman's 2017 slides give the zones for the version with a constant of 3.25 (distress below 4.35, safe above 5.85). The constant is stated in Altman (2000, 2002, 2018). Taking it off gives 1.10 and 2.60.
+- Honesty line: the general Z-Score model was tested across many countries in Altman, Iwanicz-Drozdowska, Laitinen and Suvas (2017). That abstract could not be read for this page, so its accuracy figure is not quoted and is not confirmed. The rule therefore excludes only in the clear distress zone.
+- Zero or negative case: total liabilities or total assets at or below zero is not evaluated. Negative equity makes X4 negative and the score low. That is real information and is allowed to count.
+- Not for banks and insurers (section c).
 
-Open question 1 asks whether worst-year return on capital should be a hard gate instead.
+### Exclusion 3: accounting health (F-score)
+
+- What it is: nine yes/no checks on profit, borrowing and efficiency, scored 0 to 9 [Piotroski 2000].
+- Rule: exclude a score of 0 or 1. It counts only when all nine checks can be computed, as in his sample design. With fewer, the page shows "x of 9 computable" and the rule is not evaluated. This replaces the present rule, which scores from five checks.
+- The source could not be read for this page (HTTP 403), so the returns he reports for the low and high groups are not quoted and are not confirmed. Walkshäusl (2020) finds high-score firms beat low-score firms by about 10% a year in non-US markets over 2000 to 2018 (section o).
+- Disclosure: the brief says Piotroski tested the score on high book-to-market stocks only, while we apply it to every company. That could not be checked here either.
+
+### Exclusion 4: cash runway, only when operating cash flow is negative
+
+- What it is: how many months the cash lasts. Runway = (cash plus short-term investments) divided by the yearly burn. Burn is the negative free cash flow of the latest year.
+- Rule: exclude under 12 months. This is the going-concern horizon. US accounting asks management whether there is substantial doubt about the entity's ability to continue "within one year after the date that the financial statements are issued" [FASB ASU 2014-15]. IAS 1 paragraph 26 is the international counterpart; the page could not be read, so it is not cited.
+- 12 to 24 months passes with the warning "will need to raise money within the holding period". The 24 is a judgment. The practitioner sources are secondary and say something close but not the same. BiopharmaWatch: "Many investors look for at least 18 to 24 months", and under 12 months "usually means a raise is close". RA Capital: a "convention that public biotech companies should plan to raise money by the time they get down to one year of cash left", which it then argues is not always a concern.
+- Zero or negative case: runs only when operating cash flow is negative. If burn is zero or the company makes cash, the rule does not apply. If a cash line is missing, it is not evaluated.
+
+### Warning A: leverage (net debt divided by EBITDA)
+
+- What it is: how many years of operating cash profit it would take to repay the borrowing. EBITDA is profit before interest, tax, depreciation and amortisation. It needs the new depreciation field (section l).
+- Rule: warn above 6 times. Source: S&P Global Ratings. Its financial risk scale has six bands, from minimal to highly leveraged. In the 2009 criteria, Table 2 (Financial Risk Indicative Ratios, Corporates), the bands for FFO/Debt, Debt/EBITDA and Debt/Capital are: minimal above 60% | under 1.5 times | under 25%; modest 45-60% | 1.5-2 | 25-35%; intermediate 30-45% | 2-3 | 35-45%; significant 20-30% | 3-4 | 45-50%; aggressive 12-20% | 4-5 | 50-60%; highly leveraged under 12% | above 5 | above 60% [S&P, Criteria Methodology: Business Risk/Financial Risk Matrix Expanded, 27 May 2009; read 3 Nov 2026]. The 2024 Corporate Methodology keeps the same scale in its standard table, tables 17 to 19, and adds two more lenient tables: highly leveraged above 5.5 times (medial volatility) and above 6 times (low volatility, used for companies with the most stable cash flows, paragraph 123) [S&P, Corporate Methodology 2024; fetched 3 Nov 2026, supplied from the owner's earlier fetch; this pass's retry was refused with HTTP 403]. The warning uses 6 times, the most lenient of the three lines, so a flagged company is highly leveraged on every S&P table. The standard table says 5 times.
+- Why a warning and not an exclusion: heavy borrowing is normal in some industries. Damodaran (January 2026) lists debt to EBITDA of 6.77 for general utilities, 6.04 for water utilities, 3.85 for telecoms, 1.71 for software and 2.43 for pharmaceuticals, against 6.52 for the whole market and 3.01 without financials. His page does not say whether the debt includes leases. Moody's utilities method sets the Baa band for cash flow before working capital over debt at 13% to 22% in its standard grid and 11% to 19% in its low-business-risk grid.
+- Debt is counted as the tool counts it today (section l, reconciliation). Net cash always passes.
+- Zero or negative case: EBITDA at or below zero is not evaluated. A company with debt and no operating cash profit is shown that way, never as a pass.
+
+### Warning B: dividend cover
+
+- What it is: whether profit pays the dividend. Cover = three-year average net income divided by dividends paid.
+- Rule: below 1.0 reads "not covered" [Wall Street Prep: "Net income is insufficient to pay the dividend"]. 1.0 to 1.5 reads "thin". Sources for the 1.5: Stockopedia, "Dividend Cover of less than 1.5 may indicate a danger of a dividend cut while more than 2 is viewed as healthy" [Stockopedia, Dividend Cover; fetched 3 Nov 2026, supplied from the owner's earlier fetch; this pass's retry was refused with HTTP 403]. AJ Bell calls 2.00 times "a figure traditionally seen as one that offers comfort and protection in the event of any unforeseen economic setback". It puts FTSE 100 cover at 1.99 times and says the top ten yielders' 1.22 times "looks skinny" [AJ Bell Dividend Dashboard Q4 2025; fetched 3 Nov 2026, supplied from the owner's earlier fetch; this pass's retry returned HTTP 404]. Wall Street Prep adds that a cover above 2.0 is perceived as the minimum floor before shareholders should worry.
+- Why net income and not free cash flow: payers whose free cash flow is negative are common in regulated industries and still pay. Damodaran (January 2026): general utilities pay out 65.40% of net income while their free cash flow to equity before borrowing is negative (minus $23,132m), though positive after new borrowing ($1,550m). EEI reports a payout of 60.9% for its index companies over the twelve months to 30 September 2025, a total of dividends over a total of earnings. Moody's does size dividends against cash flow before working capital, in a separate line of its grid.
+- Why a warning: a dividend cut is a cost to the owner, not a failure of the business.
+- Zero or negative case: average net income at or below zero with a dividend being paid reads "not covered", never a pass. No dividend means the warning does not apply.
+
+### How the rules combine
+
+- Any one failed exclusion excludes. The page names the rule and its figure.
+- "Qualifies" needs the Z'' score and the accrual ratio both evaluated. The F-score counts when nine checks exist. Cash runway counts when it applies. Otherwise the result is "not enough data", with the missing inputs listed.
+- Warnings never change the result. They print beside it.
+
+### Context, not exclusion: worst-year return on capital
+
+Worst-year return on capital and similar quality readings stay as context. Reason: a cyclical company has a trough. Oil producers earned well below their cost of capital in 2020, then recovered. A gate that read the worst of five years would remove them at the bottom of the cycle, when the price is lowest. The reading prints with its year, so a reader sees the trough.
+
+### Calibration before any threshold is frozen
+
+- Run every rule on the union of all cohort members, not on the whole index. Locally there are 58 built cohort folders holding 2,044 member rows and 2,020 distinct tickers (the README counts 57 defined cohorts, so one folder is older). Counted as aggregates only; no names are recorded here.
+- Cost: one EODHD fundamentals request is 10 units. Calibrating on 2,020 names is about 20,200 units. The whole market index of about 25,000 listed companies would be about 250,000 units. This is why the cohort union is used.
+- Report, per industry, the share excluded by each rule. If one rule or the set of rules excludes an industry wholesale, the industry is marked "not covered by the gate in this release". The thresholds are never loosened to admit it.
+- The boundary for the top tenth of accruals and the top fifth of investment intensity (section d) are read from this run and frozen in a versioned file before any backtest.
 
 ## c. Banks and insurers
 
-Earnings before interest and tax over enterprise value does not work for a bank. Interest is the bank's cost of goods, and its debt is raw material. The Altman Z-Score and the debt burden rule do not apply for the same reason. Accruals are also unreliable for a lender.
+Not covered in this release. Earnings before interest and tax over enterprise value does not work for a bank, because interest is its cost of goods and its debt is raw material. The distress score, the accrual ratio and the leverage warning do not apply for the same reason. The page says so plainly, shows no return figure and no verdict, and prints the Financials readings (price to book, return on equity) as context. A path for banks would need its own design.
 
-Two options:
+## d. The valuation basis: everything per share
 
-1. A separate path built on the inputs the Financials lens already reads: price against book value and return on equity. The absolute question for a bank is whether its return on equity beats the return investors require, and what price-to-book that justifies. The three measures in section d would be replaced by two: earnings yield on equity (net income over market value) and a growth-implied version of it.
-2. "Not covered", stated plainly on the page, with the Financials readings shown as context and no return figure.
+The base is free cash flow per share. Free cash flow is the cash left after the business has paid for what it needs to stay in business and grow. Per share means it is what one share owns.
 
-Recommendation: option 2 in the first release. A bank path doubles the validation work and has no backtest yet. Option 1 can follow as its own design. Open question 2.
+- Formula: free cash flow per share = (operating cash flow minus capital spending) divided by diluted weighted-average shares. (Diluted means counting shares that options and similar rights could add.)
+- Rule: use the lower of the latest fiscal year and the three-year average of per-share free cash flow. This is a judgment, and it is conservative.
+- Price per share is in the reporting currency. A share quoted in another currency is converted at the current rate. The tool already fetches current exchange rates as price pairs from yfinance for this purpose (the same source the valuation band uses at month ends), so no new source is needed for this step.
+- Why after-tax operating profit cannot be the base. It is profit before the money the business must put back to grow, so it is not cash to the owner. A company that must spend most of what it earns to keep growing would look cheap on it and be expensive on cash.
 
-## d. The three valuation measures
+The verdict rests on the return range alone (section f). There are no separate "measures". The readings below are context printed beside it.
 
-All three compare the price with what the business earns. None uses a peer group. Inputs are in section l's input table.
+### Context 1: earnings yield (the Magic Formula figure, unchanged)
 
-**Hurdle.** The return the company must beat. Ten-year government bond yield plus a margin (section g). Written `h` below.
+Operating profit (EBIT) divided by enterprise value, as today. Enterprise value is the market value of shares plus debt minus cash. The page prints it as context. It no longer feeds any verdict.
 
-### Measure 1: earnings yield against the hurdle
+### Context 2: earnings power value (unchanged at 9%)
 
-Earnings yield is operating profit divided by what it costs to buy the whole business.
+Earnings power value is what the business would be worth if its current normalised profit never grew. The method is Greenwald's. Wall Street Prep: "Earnings Power Value (EPV) = Adjusted Earnings / Cost of Capital (WACC)", with adjusted earnings taken as operating income at the average margin of three to five years, taxed. The Kellogg lecture notes label it "Enterprise Value" at "Cost of Capital = WACC", and subtract debt to reach equity. So it is a value of the whole business at the weighted cost of capital. It is therefore not re-based to the equity hurdle in section g. It stays at 9% and is labelled an enterprise value. It is context.
 
-- Enterprise value (EV) = market value of shares + total debt minus cash and short-term investments. This is the existing calculation. Lease obligations are not in debt, and the page says so.
-- Trailing earnings yield = latest-year operating profit (EBIT) / EV.
-- Forward earnings yield = next-year consensus earnings per share / share price. This is on an equity basis, after interest and tax, so it is shown beside the trailing figure and never mixed with it. It is shown where analysts' forecasts exist, with its fiscal year named.
-- Reading: trailing earnings yield minus the hurdle, in percentage points. Operating profit is before tax, so the comparison uses after-tax operating profit: yield after tax = EBIT x (1 minus tax rate) / EV, with the tax rate rule the Earnings Power Value already uses (the company's own average rate if it falls between 5% and 40%, otherwise a flat 25%).
+### Context 3: investment intensity
 
-### Measure 2: earnings power value against price
-
-Earnings power value (EPV) is what the business is worth if its current profit never grows.
-
-- Existing formula: normalised after-tax operating profit divided by a flat 9% cost of capital. Normalised profit is the average operating margin of up to five fiscal years times the latest year's revenue, taxed as above. At least three years are needed.
-- Reading: EPV / EV minus 1. A negative number means the price already includes growth. A company at minus 64% is priced for a lot of it.
-- The 9% is a fixed assumption for the whole universe, as today. In the new design the cost of capital in this measure should equal the hurdle `h`, so measure 2 and measure 3 use one rate. That is a change to the existing formula (open question 7); until it is approved the page shows EPV at 9% as it does today.
-- Its assumption, in one line: no growth at all, ever. That makes it a floor, not a forecast.
-
-### Measure 3: implied growth
-
-Covered in section e.
-
-### Warning: capital spending far above depreciation
-
-Trailing profit and trailing cash flow both mislead when a company is spending much more on assets than it is writing off. Depreciation lags spending. As new assets age, depreciation rises and operating profit falls unless revenue keeps up. Free cash flow is already lower than profit. Microsoft is the case: operating cash flow was $182.9bn in the year to June 2026 and capital spending was $115.9bn, so free cash flow was $67.0bn against operating profit of $155.2bn.
-
-Rule: show a warning when capital spending is above 1.5 times depreciation and amortisation in each of the last two fiscal years. The 1.5 is a judgment. A steady grower runs near 1.0 to 1.2. The threshold is checked against the market index distribution before build. When the warning is on:
-
-- the page says in one sentence that trailing profit may overstate future profit;
-- implied growth and the return range are computed on both bases, after-tax operating profit and free cash flow, and shown side by side;
-- the headline uses the lower of the two (open question 8).
-
-Depreciation is not read by the tool today (section l). The warning cannot be shown for the saved Microsoft run, so the worked example below uses only the capital spending and free cash flow already on the page.
+- Capital spending divided by depreciation and amortisation is printed. Wall Street Prep writes the ratio the other way up (depreciation over capital spending) and says mature companies with little growth investment sit "near 1.0, or 100%". Its next sentence, about ratios far from 1.0, reads backwards, so it is a weak source. Near 1.0 means spending only to stand still, which is our reading too. The source gives no threshold above that.
+- Abnormal investment is also printed, following Titman, Wei and Xie (NBER w9951): capital spending over sales this year, divided by the average of the same ratio over the previous three years, minus 1. They find that firms that substantially increase capital investment subsequently earn negative benchmark-adjusted returns (an investment-spread return of 0.168% a month, about 2.02% a year, in the paper).
+- Warning when the company is in the top fifth of our names on this measure. The boundary comes from calibration. The top-fifth cut is a judgment.
+- Dropped: the earlier rule "capital spending above 1.5 times depreciation for two years". It had no citable basis. Depreciation is also movable. Microsoft extends the estimated useful life of its data centers and office buildings from 15 to 25 years from the start of fiscal 2027 [CFO Dive, 30 July 2026]. The article calls the effect on operating income a minimal benefit and says the larger effect is on capital spending, because more future data center leases will be operating leases, which are not counted as capital spending. A depreciation-based flag could be moved by an accounting estimate. Printing both measures lets a reader see it.
 
 ## e. Implied growth: the exact calculation
 
-The question: what yearly growth in earnings must this company deliver for ten years to pay a buyer today's price and earn exactly the hurdle?
+The question: what yearly growth in free cash flow per share must this company deliver for ten years to justify today's price, if the buyer earns exactly the hurdle (section g)?
 
-**Base.** `B` = after-tax operating profit, the same normalised figure the EPV uses. Reason: it is before the financing mix, it matches the earnings yield, and it does not swing with one year's capital spending. When the capital spending warning is on, a second run uses latest-year free cash flow as `B`. Free cash flow is already after interest, so it is compared with the market value of shares, not EV; for a company near net-zero debt such as Microsoft the two are within 1%, and the page says which was used.
+- Base `B`: free cash flow per share, by the rule in section d.
+- Price: price per share.
+- Horizon: ten years of growth at a constant rate `g`.
+- After year 10: the cash flow stays flat forever, valued as a perpetuity at the hurdle.
+- Equation: price = sum for t = 1 to 10 of [ B (1+g)^t / (1+h)^t ] + [ B (1+g)^10 / h ] / (1+h)^10, where `h` is the hurdle.
+- Solved by bisection between minus 10% and plus 40% a year. The right side rises steadily with `g`, so there is one answer. If none exists in that range, the page says "not solvable".
 
-**Horizon.** Ten years of growth at a constant rate `g`.
+Compared with three records of growth, per share:
+1. Own 5-year growth in diluted earnings per share, from the statements.
+2. Own 10-year growth in diluted earnings per share. A record is unavailable when the earnings per share in the start year or the end year is at or below zero.
+3. Consensus: the analysts' earnings per share growth, compounded from the last reported fiscal year to the second forecast year (two steps), with both years named on the page. Marked "not testable" (section j).
 
-**Terminal assumption.** After year 10, profit stays flat forever, valued as a perpetuity at the hurdle. This is the same no-growth assumption as the EPV, so measures 2 and 3 agree at `g = 0`. It is conservative: any growth beyond year 10 is a bonus not counted.
+Mark any rate above 18% a year: "few companies have grown faster than 18% a year for ten years". Source: Chan, Karceski and Lakonishok (2003), Table I, ten-year growth, 1951 to 1998. The 90th percentile is 18.0% for sales, 19.4% for operating income before depreciation and 20.4% for income before extraordinary items (the "average" rows), with medians of about 10%. 18% is the lowest of the three, so the mark errs toward flagging. Their abstract says there is no persistence in long-term earnings growth beyond chance. The body finds persistence in sales growth, so the finding is about earnings, not every measure.
 
-**The equation.**
+### Worked example: Microsoft
 
-EV = sum for t = 1 to 10 of [ B x (1+g)^t / (1+h)^t ] + [ B x (1+g)^10 / h ] / (1+h)^10
+Inputs from Microsoft's 10-K for the year to June 2026 (SEC filing; the saved run of 2026-11-01 agrees on cash flow), in millions of dollars:
 
-**Solved** by bisection between minus 10% and plus 40% a year. The right side rises steadily with `g`, so there is one answer. If no answer exists in that range the page says "not solvable" and shows no number.
+| Line | FY2026 | FY2025 | FY2024 |
+|---|---|---|---|
+| Net cash from operations | 182,935 | 136,162 | 118,548 |
+| Additions to property and equipment | 115,948 | 64,551 | 44,477 |
+| Free cash flow | 66,987 | 71,611 | 74,071 |
+| Diluted weighted-average shares (millions) | 7,453 | 7,465 | 7,469 |
+| Free cash flow per share | 8.99 | 9.59 | 9.92 |
 
-**Compared with** three records, each a plain number:
-1. the company's own earnings per share growth over 5 years (existing growth record);
-2. the same over 10 years, from the long annual history (EODHD, with the shorter yfinance history as fallback);
-3. two-year consensus growth: the compound yearly growth from last reported earnings per share to next fiscal year's consensus, where analysts' forecasts exist.
+- Lower-of rule: the three-year average is 9.50 and the latest year is 8.99. The latest year (FY2026) wins. The base is 8.99 a share.
+- Price: $521.91 (saved run). Yield on the base: 8.99 / 521.91 = 1.7%.
+- Bond: 4.93%, the ten-year US yield on 30 October 2026 (EODHD series, close 4.934; section g). FRED shows 4.94 for the same day. Hurdle = 4.93 + 5.0 = 9.93%.
+- Implied growth: the price needs **25.0% a year** for ten years. Computed with a throwaway script, not committed. The same calculation with the three-year average base (9.50) needs 24.2%.
+- Records: own 5-year diluted earnings per share growth 17.2%, own 10-year 21.2% (saved run). Consensus 16.0% a year: two steps from the last reported year (FY2026 diluted earnings per share $17.95, from the 10-K) to the consensus for the year to June 2028 ($24.14). The page used to show 20.6%, a single step between the two forecast years ($20.02 to $24.14). The change is because the definition now starts from the last reported year, which is the only year with an actual figure, and spreads the growth over the two steps it needs. The first step alone (17.95 to 20.02) is 11.5%. All the records sit below the 25.0% the price needs. The own 10-year rate of 21.2% is above 18% and carries the mark.
+- Investment intensity: capital spending of $115.9bn against depreciation, amortisation and other of $38.5bn is 3.0 times. The cash flow statement line also includes "other", so the ratio is approximate. The three-year history of capital spending is 44.5, 64.6 and 115.9 ($bn).
 
-Earnings per share growth, not operating profit growth, is used for all three, because the 10-year history and the consensus both come as earnings per share and no operating profit forecast is available. This mixes a per-share figure with a company-level base. It is acceptable only while buybacks and share issuance are small, and the page says it is an approximation.
+## f. The return range and the verdict of record
 
-### Worked example: Microsoft, run of 2026-11-01
+### The return
 
-Inputs from `runs/2026-11-01T15-15-08Z_company_check_MSFT`:
+The long-run owner's return is the yearly rate `r` at which the ten-year path of free cash flow per share, flat after year 10, is worth exactly today's price. It is the same equation as section e, solved for `r` instead of `g`, for each growth case. A shorter holding also depends on the price the shares sell for, which this data cannot predict.
 
-- Operating profit, year to June 2026: $155.2bn.
-- Enterprise value: about $3.62tn. It is not printed on the page; it is the value that reproduces the page's earnings power value reading of minus 64.3%. Market cap on the page is $3.67tn and net cash is $7.3bn.
-- Tax rate: flat 25% (illustrative). After-tax operating profit `B` = 155.2 x 0.75 = $116.4bn.
-- Hurdle `h` = 8.5%, made of an illustrative 4.5% ten-year bond plus a 4.0 point margin. The bond yield is not in the saved run.
-- Free cash flow: $67.0bn.
+Two conventions it rests on. A ten-year horizon sits inside the range of years that markets typically price in. Mauboussin and Callahan (2014), citing Olsen, say the market-implied competitive advantage period averaged about 8 years from 1976 to 2007, from about 5 years for very competitive industries to 15 for stable ones. Zero growth after year 10 is below Damodaran's rule of thumb that the stable growth rate "should not exceed the riskless rate used in the valuation".
 
-Measure 1: after-tax earnings yield = 116.4 / 3,620 = 3.2%. That is 5.3 points below the hurdle. The page's printed pre-tax figure is 4.4% (the saved run's own EBIT line; 155.2 / 3,620 gives 4.3%). Forward earnings yield: 20.02 / 521.91 = 3.8% for the year to June 2027.
+### Four growth cases
 
-Measure 2: EPV = 116.4 / 0.09 = $1.29tn. EPV / EV minus 1 = minus 64.3%, matching the page.
+1. Own 5-year diluted earnings per share growth.
+2. Own 10-year diluted earnings per share growth.
+3. Consensus (marked "not testable").
+4. The downside case: years 1 and 2 at the consensus rate (own 5-year rate if there is no consensus), then a straight line to the bond yield by year 10, flat after. The reasons are Chan et al.'s result that growth does not persist beyond chance, Damodaran's stable-growth rule, and Mauboussin's horizon. The straight-line shape is a judgment.
 
-Measure 3: with `B` = $116.4bn the price needs growth of **13.4% a year for ten years**. With `B` = $67.0bn free cash flow it needs **21.0% a year**.
+The range runs from the lowest to the highest of the available cases. Fewer than two available means "not enough data".
 
-The records: own 5-year earnings per share growth 17.2%, own 10-year 21.2%, consensus growth from $20.02 (year to June 2027) to $24.14 (year to June 2028) is 20.6% in a single step. That is one year of growth, not two, because last reported earnings per share is not in the saved run. The build reads it from the same analyst data (it carries a "year ago" figure).
+### Microsoft, on the new basis
 
-Reading: on operating profit, Microsoft's record exceeds the 13.4% the price needs. On free cash flow the requirement (21.0%) equals the best of its records. The two bases disagree because of the capital spending. That disagreement is the point of the warning.
+Hurdle 9.93%. Base 8.99 a share.
 
-## f. Expected return, and the verdict of record
-
-**Definition.** For each of three named growth assumptions `g`, the return is the yearly rate `r` that makes the ten-year equation in section e equal today's price: the same equation, solved for `r` instead of `g`. In words, it is the yearly return a buyer earns if profit grows at `g` for ten years and then stays flat, with nothing else assumed. A buyer who holds 3 to 5 years and sells at the same valuation earns about the same.
-
-The three assumptions, and nothing else, make the range:
-1. own 5-year earnings per share growth;
-2. own 10-year earnings per share growth;
-3. two-year consensus growth.
-
-Low end of the range is the lowest of the three returns, high end the highest. No band is invented. If only two of the three exist, the range uses two. If fewer than two exist, the result is "not enough data". Where the consensus case is one of the three, it is marked "not testable" (section j).
-
-**Worked figures, Microsoft, operating profit base, hurdle 8.5%:**
-
-| Growth assumption | Growth | Return |
+| Growth case | Growth | Return |
 |---|---|---|
-| Own 5-year | 17.2% | 10.5% |
-| Consensus | 20.6% | 12.5% |
-| Own 10-year | 21.2% | 12.8% |
+| Own 5-year | 17.2% | 6.5% |
+| Consensus (two steps, 16.0%) | 16.0% | 6.0% |
+| Own 10-year | 21.2% | 8.1% |
+| Downside | 16.0% for two years, then falling to 4.93% | 4.3% |
 
-On the free cash flow base the same three give 6.8%, 8.3% and 8.6%. Because the capital spending warning would be on, the headline range is the lower pair: **6.8% to 8.6% a year against a hurdle of 8.5%**.
+The range is 4.3% to 8.1% a year, against a hurdle of 9.93%. Verdict: **qualifies, below hurdle, 0 of 4 cases clear.** Beside it, for the change in the consensus definition: the old one-step 20.6% would have returned 7.9% for the consensus case and 5.2% for the downside case. The verdict is the same either way.
 
-**Why not "starting yield plus growth".** The plan asks for starting yield plus growth. For Microsoft that sums to 3.2% + 17.2% = 20.4% a year. That figure assumes today's price keeps buying growth of 17% forever. It is not consistent with the implied-growth calculation, which assumes growth stops after ten years. The two would give different answers to the same question. This design therefore uses the ten-year equation, and still prints the starting yield and the growth next to every figure, so a reader sees both parts. Open question 5.
-
-**Valuation change.** No change in valuation (re-rating) is included. A forecast of what multiple investors will pay in five years is not something this data can support. The valuation band is shown as context only.
-
-**Verdict of record.** Four states, set by code:
+### Verdict of record
 
 | State | Rule |
 |---|---|
-| Excluded | At least one gate rule failed. The reason is named. |
-| Not enough data | The gate could not be completed, or fewer than two growth assumptions exist, or no operating profit, or no hurdle. The missing items are listed. |
-| Qualifies, below hurdle | Passed the gate, and at least one of the growth cases returns less than the hurdle. The page also says how many of the cases clear it. |
-| Qualifies, clears hurdle | Passed the gate, and every available growth case returns at least the hurdle. |
+| Excluded | At least one exclusion rule failed. The rule and figure are named. |
+| Not enough data | The gate could not be completed, or fewer than two growth cases exist, or no hurdle, or no free cash flow per share. The missing items are listed. |
+| Qualifies, below hurdle | Passed the gate, and at least one available case returns less than the hurdle. |
+| Qualifies, clears hurdle | Passed the gate, and every available case, the downside case included, returns at least the hurdle. |
 
-Using the lowest case makes "clears" a strict test. Microsoft in the example above would read "Qualifies, below hurdle (1 of 3 cases clear on free cash flow)". Open question 6 asks whether a middle state is wanted.
+The page always shows "n of 4 cases clear" (or n of the cases that exist).
 
-**How it is shown, so that it does not read as a forecast promise.**
-- The figure is labelled "return if the growth holds", never "expected return" or "target".
-- It is always a range with the three named cases, never a single number.
-- The line under it says: these are what the price returns if the stated growth repeats. They are not forecasts. Past growth may not repeat. Forecasts can be wrong. The model's narration cannot change them.
-- A growth case above 15% a year for ten years is marked "few companies have done this" and still shown.
-- No colour implies certainty: the two qualifying states use neutral and positive tones, never a "BUY" word.
+The backtest-form verdict is computed and shown on every live page beside the full one. It uses the cases the backtest can test: own 5-year, own 10-year and the downside case with its fallback, with no consensus. For Microsoft the downside case with the own 5-year rate in years 1 and 2 returns 4.6%, own 5-year 6.5%, own 10-year 8.1%. That is below hurdle, 0 of 3.
 
-**What the figure is worth.** This figure shows what today's price requires. It is a question put to the reader, not an answer. Studies of company-level implied returns find that they rank future returns weakly, and the weakest measures are about as good as a constant (section o, "Implied returns"). The gate and the cash yield carry the evidence; this figure carries the question. Two details of the studies, so the line is not read as stronger than it is: the measure that came out at a slope of about 0.2 against realised returns, where 1.0 would be perfect, is one of three tested (the other two came out at about 0.6), and one study of 2017 finds the same measures useful for tracking expected returns through time.
+### How it is shown, so it does not read as a forecast promise
+
+- The figure is labelled "long-run owner's return if the growth holds". The words "expected return", "target" and "proven" are never used.
+- It is always a range with named cases, never one number.
+- The line under it: these are what the price returns if the stated growth repeats. They are not forecasts. Past growth may not repeat. Forecasts can be wrong. The model's narration cannot change them.
+- Any growth case above 18% a year is marked, and still shown.
+- This figure shows what today's price requires. Studies of company-level implied returns find they rank future returns weakly, so the figure is a question put to the reader and not an answer (section o, "Implied returns"). The gate and the cash yield carry the evidence; this figure carries the question.
 
 ## g. The hurdle
 
-Hurdle = ten-year government bond yield + a margin.
+Hurdle = the ten-year government bond yield of the reporting currency + 5.0 percentage points.
 
-**Margin.** Proposed 4.0 percentage points. This is a judgment, not a sourced figure: no source for the stock-over-bond premium was fetched for this page, so no study is cited. At build, set it from a published estimate of the premium (fetched and cited then), and fix it in the strategy file, not in code.
+**Why 5.0.** Kroll's recommended US equity risk premium is 5.0%, reaffirmed on 30 January 2026 and effective 2 September 2025. It is paired with the higher of a normalised risk-free rate of 3.5% or the spot 20-year Treasury yield [Kroll Cost of Capital Inputs, year-end 2025]. The 2025 survey of finance professionals by Fernandez et al. gives median market risk premia of 5.0 (USA), 5.2 (Germany), 5.1 (UK), 4.4 (Switzerland), 5.7 (Japan) and 7.6 (Brazil), with averages of 5.5, 5.4, 5.4, 4.2, 5.1 and 7.9. For contrast, Damodaran's home page shows an implied premium of 4.41% on 1 November 2026, with 4.20% listed as the previous month. His January 2026 country table gives 4.46% for the US and 4.23% for mature markets. His 1928 to 2025 historical average could not be read and is not used.
 
-**Which bond.** Options: the bond of the company's own currency, or one reference for all. Own-currency is more correct (a Brazilian real return should clear a real-denominated bond) but needs a bond yield series for every currency. One reference (the US ten-year) is simple but wrong for currencies with very different inflation.
+The earlier proposal of 4.0 points is dropped. It was a judgment chosen so that more names would clear, which is the wrong reason.
 
-**What is reachable.** Section l lists it in detail. In short: a US ten-year yield history is expected from yfinance and was not confirmed from this machine on the day of writing (the probe timed out). Other countries' yields are not confirmed from either provider. EODHD publishes government bond yields through its end-of-day price service, and the current plan has no end-of-day prices, so those are expected to be unreachable.
+**One hurdle for all companies.** There is no per-company risk adjustment. That is one honest assumption, stated, instead of many precise-looking guesses.
 
-**When no series is reachable.** The company's result is "not enough data: no hurdle". There is no fixed fallback rate, because a made-up bond yield would put an invented number into the verdict. The last good yield is stored with its date and used for up to 7 days, then it lapses.
+**Bond source.** EODHD's government bond series, read through the end-of-day endpoint (for example `/api/eod/UK10Y.GBOND`). EODHD's page describes 154 series across 34 countries, daily from 2000 or earlier depending on the country, one call each regardless of history length, and lists the endpoints as available on the Fundamentals Data Feed plan [EODHD Macroeconomic Data API]. Probed once for this page on 2026-11-03, with the key read from the local environment file and not printed: the US ten-year series answered HTTP 200 with daily rows. Closes: 4.938 (29 October), 4.934 (30 October), 4.909 (2 November), 4.927 (3 November). So the plan reaches it.
 
-Recommendation: one reference, the US ten-year, for every company in the first release, with a visible line saying so, and a flag for companies whose reporting currency has very different inflation. Open question 4.
+- A currency-to-series table is kept as data. For example, the euro maps to the German ten-year. Currencies pegged to another, such as the Hong Kong dollar, map to the US series, and the mapping is documented. The list of available series needs a token and was not read, so only the two series named above are verified.
+- No series for a currency: the result is "not enough data: no hurdle".
+- The last good yield is kept for 7 days, then lapses.
+- US fallbacks: the ^TNX page on Yahoo Finance loads and shows daily rows, though its stated history is one year in view and the "since 1962" claim is not confirmed. FRED's DGS10 series gave 4.94 for 30 October 2026 and needs a free API key.
+- EODHD also has a US Treasury rates API (beta, all plans, one call per request).
+- Cash comparison in the backtest: the US 3-month bill, FRED DTB3 (3.99 on 30 October 2026), labelled a benchmark and not a hurdle. ^IRX was not checked.
+
+A local bond of a risky country may already carry country risk, so adding 5.0 points can double count it. That is accepted as conservative.
 
 ## h. What happens to each existing lens
 
 | Lens | Disposition | Reason |
 |---|---|---|
-| Forensic | Kept as gate input | Its three readings (accruals, distress, accounting health) become the first three gate rules. The mark-only lens retires in its ranked form. |
-| Quality | Kept as context | Worst-year return on capital and gross profitability print as quality readings. Its debt-to-profit leg moves into the gate. |
-| Earnings Power Value | Kept as a measure | It becomes measure 2. As a voting lens it retires. |
-| Magic Formula RAW | Retired as a vote | Its earnings yield is measure 1. Its return on capital part is context. |
-| Value + Momentum | Retired as a vote | Earnings yield is measure 1. Momentum becomes context with no vote. |
+| Forensic | Kept as gate input | Its accrual and distress readings and its F-score become exclusions 1 to 3. The mark-only lens retires in its ranked form. |
+| Quality | Kept as context | Worst-year return on capital and gross profitability print as quality readings. Its debt-to-profit leg becomes warning A. |
+| Earnings Power Value | Kept as context | Section d, context 2. As a voting lens it retires. |
+| Magic Formula RAW | Retired as a vote | Its earnings yield is context 1. Its return on capital part is context. |
+| Value + Momentum | Retired as a vote | Earnings yield is context 1. Momentum becomes context with no vote. |
 | Growth | Retired as a vote | The growth record feeds the three growth cases. The rank is context. |
-| Defensive Income | Retired as a vote | Dividend cover moves into the gate. Yield and streak are context. |
-| Cyclical Income | Retired as a vote | Same reason. |
-| Financials | Kept as context, and as the base for a later bank path | Section c. |
-| ETF lenses | Unchanged | The new question is about companies. ETFs keep their current lenses. |
+| Defensive Income | Retired as a vote | Its dividend cover becomes warning B. Yield and streak are context. |
+| Cyclical Income | Retired as a vote | Same. |
+| Financials | Kept as context | Section c. |
+| ETF lenses | Unchanged | The new question is about companies. |
 | Legacy lenses already hidden | Unchanged | |
-
-Overlaps, stated plainly: Magic Formula's earnings yield and measure 1 are the same ratio. Earnings Power Value and measure 2 are the same formula, with the one open change in the cost of capital. Measure 3 has no counterpart today.
 
 Strategy files are not edited. The new gate and valuation live in new, versioned files.
 
 ## i. The company page, in the order a reader meets it
 
-1. **The answer** (written by code, two lines). The verdict of record in plain words, then the one reason that mattered most. Example for an excluded name: "Excluded: debt is 7.2 times operating profit, above the 5 times limit." Example for a qualifying name: "Qualifies, below hurdle: the price returns 6.8% to 8.6% a year if growth holds, against a hurdle of 8.5%."
-2. **The story** (written by code, five short paragraphs, same shape as today): what was asked, what the gate found, what the price needs, what to doubt, what this cannot tell you. The optional model summary still replaces it when ticked, and still cannot change a number.
-3. **The gate** as a six-row table: rule, reading, limit, result.
-4. **The price test**: earnings yield against hurdle, EPV against price, implied growth against the three records, side by side. The capital spending warning sits here when on.
-5. **The return range**: the three growth cases, the return for each, the hurdle, the verdict.
-6. **Context, no vote**: quality readings (with the trough year named), momentum, where the company sits among rivals, the valuation band, analysts' readings.
+1. **The answer** (written by code, two lines): the verdict of record in plain words, then the one reason that mattered most.
+2. **The story** (written by code, five short paragraphs): what was asked, what the gate found, what the price requires, what to doubt, what this cannot tell you. The optional model summary still replaces it when ticked, and cannot change a number.
+3. **The gate**: a table of four exclusion rules and two warnings, each with its reading, its limit and its result.
+4. **The price test**: earnings yield, implied growth against the three records, and investment intensity.
+5. **The return range**: the four growth cases, the return for each, the hurdle, the verdict, "n of 4 cases clear", and the backtest-form verdict beside it.
+6. **Context, no vote**: quality readings (with the trough year named), momentum, where the company sits among rivals, the valuation band, earnings power value, analysts' readings.
 7. **The judge panel**, when ticked, asked the same question (section k).
 8. **The workings**, folded: every source, every input with its date, the old relative-lens table labelled "baseline: relative view, no longer votes".
 
@@ -228,161 +263,188 @@ The text download keeps every section.
 
 **Question.** Did names that qualified beat (a) a broad index, (b) cash, and (c) an equal-weight basket of companies in the same industry, over 1 and 3 years? The third comparison stops a sector boom being mistaken for skill. Tested by industry, as today.
 
+**Order of reporting.** Gate alone first, then gate plus valuation, reported separately so the result says which part works.
+
+**Three forms.**
+1. Gate alone: every name that passes the gate.
+2. Gate plus relative cheapness: within each industry, the cheapest third of the qualifying names on free cash flow yield (free cash flow per share divided by price). Ranked inside the industry, never across industries, so no bet is placed on cheap industries. This is the form with published support (section o).
+3. Gate plus the absolute verdict: only names that read "clears hurdle" on the backtest form (own 5-year, own 10-year and the downside case with its fallback; no consensus). This answers the owner's question. It has no published evidence of its own, and the page shows the gap between forms 2 and 3.
+
 **Method, reusing what exists.**
-- Monthly rounds. At each month end, the gate and the trailing parts of the valuation run on accounts the company had already published, using the existing as-of reader.
-- The names held depend on the form being tested (next block). Each form is held equal-weight for 12 and for 36 months, with the existing 0.5% round-trip cost.
-- Excess return is measured against each of the three comparisons separately.
-- The luck test is the existing one: 500 random baskets of the same size and turnover, drawn from the same industry pool, scored the same way. The drop-best check is the existing one: remove the best pick each round, only rounds with 4 or more names.
-- Pass bar: at least 2 points a year over the equal-weight industry basket over the full window, with the luck score under 5%. The count of winning years is reported, not required. Reason: cheapness works with long droughts. One fetched study measures a drawdown of 55% in value against growth from 2007 to mid-2020 (Arnott et al. 2021, section o), so a rule that demanded most years to win would reject a real effect. A figure for how often five-year windows lose was cited to a Swedroe article that could not be fetched; it is not used. This replaces the earlier bar of 6 winning years in 10.
-- The 3-year hold has far fewer independent rounds and is reported without a pass or fail.
-
-**Three forms, tested and reported separately.**
-
-1. **Gate alone.** Every name that passes the gate, equal-weight, against the three comparisons.
-2. **Gate plus relative cheapness.** Within each industry group, the cheapest third of the qualifying names on free cash flow yield (free cash flow divided by enterprise value). Cheapness is ranked inside the industry, never across industries, so no bet is placed on cheap industries.
-3. **Gate plus the absolute verdict.** Only names that read "qualifies, clears hurdle" (section f), using the two own-record growth cases, because consensus cannot be tested.
-
-What each form is for, stated plainly:
-
-- Form 2 is the form with published evidence: cheap-and-sound selections in Piotroski and So (2012), the cheap-plus-quality screen of Gray and Carlisle (reviewed by the CFA Institute), and the industry adjustment in Novy-Marx (2013). What was fetched on each is in section o. Piotroski and So's own return numbers could not be fetched and are not quoted.
-- Form 3 is the form that answers the owner's question, "will it make money over my holding period". It has no published evidence of its own: it is built from the implied-growth measure, which section o shows is weak at ranking stocks.
-- The page will show the gap between form 2 and form 3 in the same table. If form 3 does not beat form 2, the absolute verdict is adding a question, not evidence.
+- Monthly rounds on accounts already published, using the as-of reader. Each form is held equal-weight for 12 and for 36 months, with the existing 0.5% round-trip cost.
+- Qualifying counts are reported per month and per industry, so a result built on three names is visible as such.
+- Market value at past dates is historical diluted share count times the price on that date, using EODHD's outstanding-shares history. It is not today's value scaled by price change, which is what the backtest does now.
+- Three comparisons, kept: a broad index, cash (the US 3-month bill) and the equal-weight same-industry basket. Excess is measured against each separately.
+- Luck test: the existing one, 500 random baskets of the same size and turnover drawn from the same industry pool. Drop-best check: the existing one.
+- Pass bar: at least 2 points a year over the equal-weight industry basket across the full window, with the luck score under 5%. The count of winning years is reported, not required, because cheapness works with long droughts. One fetched study measures a drawdown of 55% in value against growth from 2007 to mid-2020 [Arnott et al. 2021].
+- The 3-year hold is reported without pass or fail, since it has far fewer independent rounds.
 
 **What can and cannot be tested.**
-- Testable: the gate, the trailing earnings yield, the EPV, and implied growth against the company's own 5- and 10-year records. All use accounts only.
-- Not testable: everything that rests on analysts. The data holds no analyst forecasts as they stood on a past date, only today's. Consensus growth, forward earnings yield and the consensus return case therefore have no backtest, and the page labels them "not tested". In the backtest, the return range uses the two own-record cases.
-- The hurdle needs a ten-year yield on each past date. A US series is expected to be reachable; other countries are not confirmed. The backtest uses the US ten-year for all names, as the live design does.
-- Cash needs a short-term rate history (US three-month bill from yfinance, expected, unconfirmed).
+- Testable: the gate, free cash flow yield, and implied growth against the company's own records. All use accounts only.
+- Not testable: everything that rests on analysts. The data holds no analyst forecasts as they stood on a past date. Consensus growth, forward earnings yield and the consensus case are labelled "not tested". The downside case uses its fallback form (own 5-year rate in years 1 and 2).
+- The hurdle needs a bond yield on each past date. The EODHD series goes back to 2000 or earlier by country, so the US series is reachable. The backtest uses the reporting currency's series where one is mapped.
 
 **Look-ahead and survivorship limits, said plainly.**
-- Accounts are the provider's restated record, not the figures first published. The filing-date mode limits which years are visible by when they were filed. It works only for companies whose accounts come from EODHD with filing dates; a company without them falls back to period end plus 90 days, counted and reported.
-- The company list is today's market index. Companies that were delisted, merged or went bankrupt are not in it. This flatters any method, and flatters a gate that removes failing companies the most, because it never sees the ones that failed and vanished.
-- Market value at past dates is rebuilt from today's value scaled by price change. Split-sized jumps in share count withhold the value.
+- Accounts are the provider's restated record, not the figures first published. The filing-date mode limits which years are visible by when they were filed. It works only for companies whose accounts come from EODHD with filing dates. Others fall back to period end plus 90 days, counted and reported.
+- The company list is today's market index. Companies that were delisted, merged or went bankrupt are not in it. So the gate can never be called "proven": the companies that failed and vanished are not in the data, and a test that removes failing companies is flattered most by their absence. The page says "no edge shown in a test that cannot see failures", not "proven".
 - Prices come from yfinance, adjusted for splits and dividends.
 
-**Baseline kept.** The existing results (`backtests/`, the track record column and the proof-or-not badges) stay unchanged and are labelled the relative baseline. The new results go in a separate directory and a separate summary file. Neither overwrites the other.
+**Baseline kept.** The existing results (`backtests/`, the track record column and the badges) stay unchanged and are labelled the relative baseline. The new results go in a separate directory and a separate summary file.
 
 ## k. The judge panel
 
-The judges today are asked for BUY, HOLD or SELL from a pack with no lens opinions. They keep the same pack and the same stability rule (ask twice, keep both if they differ). Only the question changes. Proposed wording:
+The judges today are asked for BUY, HOLD or SELL from a pack with no lens opinions. They keep the same pack and the same stability rule (ask twice, keep both if they differ). Only the question changes, so that they are asked what the maths is asked. Proposed wording:
 
-"Using only the evidence pack and anything you know about the company, which you must label, would a person who buys this company at today's price and holds it for 3 to 5 years more likely than not earn more than a ten-year government bond yields plus 4 points a year? Answer YES, NO or ABSTAIN, with a confidence and the one fact that decided it."
+"Using only the evidence pack and anything you know about the company, which you must label, would a person who buys this company at today's price and holds it for ten years more likely than not earn more than the ten-year government bond yield of the company's currency plus 5 points a year? Answer YES, NO or ABSTAIN, with a confidence and the one fact that decided it."
 
-The answers are YES, NO and ABSTAIN. This is the same question the maths answers. The pack stays free of the code's verdict, hurdle result and return range, so the panel is independent of the maths. After the code has finished, the page shows whether the panel agrees with the verdict (YES against "clears hurdle", NO against "below hurdle").
+The ten years match the return in section f. The pack stays free of the code's verdict, hurdle result and return range. After the code has finished, the page shows whether the panel agrees with the verdict (YES against "clears hurdle", NO against "below hurdle").
 
-Old judge records stay as they are, separate, labelled as answers to the old question, and are not mixed into the new agreement figure. The bar in the judge panel document (12 months, 30 names) restarts for the new question.
+Old judge records stay as they are, labelled as answers to the old question, and are not mixed into the new agreement figure. The bar in the judge panel document (12 months, 30 names) restarts for the new question.
 
 ## l. Build plan, and what stays byte-identical
 
-### Inputs: what exists, what needs a new fetch, what cannot be had
+### Inputs: what exists, what needs a new field, what needs a new fetch
 
-| Input | Status today | Notes |
+| Input | Status | Notes |
 |---|---|---|
 | Net income, operating cash flow, total assets (accrual ratio) | Exists | Annual, period-matched. |
-| Altman Z inputs (current assets and liabilities, retained earnings, EBIT, total assets, total liabilities, revenue, market cap) | Exists | Abstains when price and accounts currencies differ. Coverage gap. |
-| Piotroski F-Score and its nine checks | Exists | Needs 5 of 9 checks. |
-| Operating profit and EBIT, annual series | Exists | Newest first, dated in the as-of reader. |
-| Enterprise value | Exists | Market value + total debt minus cash; leases not included, noted in the report. |
-| Net debt over operating profit | Exists | Shown as "net cash" below zero. |
-| Worst-year return on capital | Exists | Last 5 years. |
-| Cash runway | Exists as a reading | Narrow rule: applies only when operating cash flow is negative. |
-| Dividend cover | Exists | Dividends over mean free cash flow. |
-| Earnings power value | Exists | 9% and 25% are fixed constants. |
-| Free cash flow, operating cash flow, capital spending | Exists | Annual lists, newest first. |
-| Depreciation and amortisation | **New field** | Not read anywhere. Both providers carry it on the cash flow statement; it needs a new field and a mapper line, and no extra request. To be confirmed on a live payload at build. |
-| Tax provision, pretax income | Exists | Used by the EPV tax rule. |
-| 5- and 10-year earnings per share growth | Exists | 10-year from the EODHD long history; yfinance fallback gives about 4 years. |
-| Consensus earnings per share, this and next fiscal year, and 90 days ago | Exists | EODHD analyst data. Gaps outside the US. |
-| Consensus "year ago" earnings per share | **Exists in the payload, not kept** | The probe lists it. Needs one extra field kept for the two-year growth. |
-| Consensus operating profit, revenue or long-term growth | **Cannot be had** | The probe lists only earnings per share fields. Not verified for others. The design does not rely on them. |
-| Ten-year government bond yield history, US | **New fetch, unconfirmed** | Expected from yfinance. The probe timed out on 2026-11-03 and is not confirmed. |
-| Ten-year yields, other countries | **Unconfirmed, probably cannot be had** | Not on yfinance in a form probed. EODHD serves bond yields through its end-of-day price service, which the current plan does not include. A single one-unit probe is the first step of phase 2. |
-| Short-term cash rate history | **New fetch, unconfirmed** | Same source as the bond. |
-| Broad index total return | **New fetch** | A broad index fund via yfinance. |
-| Analyst forecasts as they stood on past dates | **Cannot be had** | Not stored. Limits section j. |
+| Z'' inputs (current assets and liabilities, retained earnings, EBIT, total assets, total liabilities, book equity) | Exists | All annual statement lines are already read. The new score uses book equity, so the price-currency mismatch goes away. |
+| F-score and its nine checks | Exists | Rule changes from "5 of 9 checks" to "all 9". |
+| Operating profit and EBIT, annual | Exists | Newest first, dated in the as-of reader. |
+| Free cash flow, operating cash flow, capital spending | Exists | Annual lists. |
+| Depreciation and amortisation | New field | Not read anywhere in the tool today. Needed for EBITDA and for capital spending over depreciation. Both providers carry it on the cash flow statement; confirm on a live payload at build. |
+| Diluted weighted-average shares, history | New field | The yfinance path already stores diluted earnings per share; the share line itself is not stored. The EODHD income statement block does not carry diluted shares (probed on KO.US, 2026-09-21), so that path would use the outstanding-shares history, which is a basic count. State which was used. |
+| Cash runway | Exists as a reading | Rule changes: gross cash over burn, 12 and 24 month lines. |
+| Dividends paid, net income | Exists | Cover on net income is new arithmetic on existing lines. |
+| Earnings power value | Exists | Unchanged. |
+| Tax provision, pretax income | Exists | Used by earnings power value only. |
+| 5- and 10-year earnings per share growth | Exists | 10-year from the EODHD long history; the yfinance fallback gives about 4 years. |
+| Consensus earnings per share, this and next fiscal year | Exists | EODHD analyst data. Gaps outside the US. |
+| Consensus "year ago" earnings per share | New field | The probed payload lists it; the parser does not keep it. Needed for the two-step consensus rate. |
+| Consensus operating profit, revenue or long-term growth | Cannot be had | The probe lists only earnings per share fields. |
+| Ten-year government bond yield, daily history | New fetch | EODHD bond series, probed: reachable on the current plan. Needs a currency-to-series table. |
+| Exchange rates | Exists | Price pairs through the market data adapter, month-end series and current rate. |
+| US 3-month bill history | New fetch | FRED DTB3 (needs a free key) or ^IRX (not checked). |
+| Broad index total return | New fetch | A broad index fund through yfinance. |
+| Historical share counts for past market value | New fetch | EODHD outstanding shares history. |
+| Analyst forecasts as they stood on past dates | Cannot be had | Not stored. |
+
+### Reconciliation: Microsoft's net cash
+
+The saved run says net cash of $7.3bn (cash and short-term investments $64.5bn, total debt $57.2bn). Microsoft's 10-K for the year to June 2026 shows cash, cash equivalents and short-term investments of $76.8bn (76,843m) and borrowings of $40.3bn (current portion of long-term debt 9,227m plus long-term debt 31,067m).
+
+- The tool counts debt as the balance sheet's own "Total Debt" row, not as borrowings alone. For June 2026 that row is $56.8bn (56,826m), which equals borrowings of 40,294m plus the long-term operating lease liability line of 16,532m. So the tool's debt includes the long-term operating lease line, and excludes the larger lease total the vendor's headline adds, which the page shows separately.
+- The saved run's $64.5bn and $57.2bn come from a later balance sheet. The same run states a trailing P/E for the twelve months to September 2026, so the September 2026 quarter was already reported. That date is inferred, not read from a filing.
+- On the 10-K at June 2026 the net position is $76.8bn minus $56.8bn = $20.0bn net cash on the tool's definition, or $76.8bn minus $40.3bn = $36.5bn counting borrowings only.
+- The page will state the definition: "debt as the tool counts it: borrowings plus the long-term operating lease line, from the latest balance sheet", with its date.
 
 ### Phase 1: the gate
 
-- A new, versioned gate definition, new gate result type, new company page section. Reuses the existing accrual, distress, F-Score, debt, runway and cover readings.
-- Calibration step before thresholds are fixed: measure each reading across the market index and write the distribution into this page.
-- No change to any vote.
+- A new, versioned gate definition, a gate result type, and the page sections. Reuses the accrual, distress, F-score, runway and cover readings. Changes: the cash-flow accrual form, the distress version with book equity, the nine-check F-score rule, the runway lines, and the two warnings.
+- Calibration step first (section b). No change to any vote.
 
-### Phase 2: absolute valuation and expected return
+### Phase 2: valuation, hurdle and return
 
-- Depreciation field, "year ago" consensus field, bond series fetch with storage, the three measures, the capital spending warning, implied growth solver, the return range and the verdict of record.
-- Probe the bond sources first, and report before building anything on them.
-- Open question 7 decided first (cost of capital in the EPV).
+- Step 1: the bond series probe. Done for this page (section g): the US ten-year answers HTTP 200 on the current plan. The probe should be repeated for each mapped series before it is relied on.
+- Depreciation field, diluted shares field, year-ago consensus field, bond series fetch with storage, free cash flow per share, the implied growth solver, the four cases, the return range and the verdict.
 
 ### Phase 3: report and UI
 
 - The page order in section i, code-written answer and story in new templates, the gate table, the price test, the return range. Judge question change (section k). Old lens table moved into the folded workings.
-- The sweep gains rules: no lens id or column name in the first three sections, and no "expected return" or "forecast" wording.
+- The sweep gains rules: no lens id or column name in the first three sections, and none of the words "expected return", "target" or "proven".
 
 ### Phase 4: backtest
 
-- New runner beside the existing one, separate output directory, the three comparisons, the 1- and 3-year holds, the existing luck and drop-best code.
+- New runner beside the existing one, separate output directory, the three forms, the three comparisons, the 1- and 3-year holds, and the existing luck and drop-best code.
 
 ### Stays byte-identical in every phase
 
 - Every file under `backtests/` and the track record table.
-- Every strategy file, and the rank engine's outputs for the existing lenses (saved ranks and votes).
+- Every strategy file, and the outputs of the existing lenses (saved ranks and votes).
 - Every saved verdict (`verdicts/`) and saved report (`reports/`).
-- The results JSON of the Microsoft evidence runs under `runs/`, except for files written by the new section, which are additive.
-- The full suite stays green after each phase. New behaviour ships with tests anchored to this page's worked example.
+- The results of the Microsoft evidence runs under `runs/`, except for files written by the new sections, which are additive.
+- The full suite stays green after each phase. New behaviour ships with tests anchored to the worked example in sections e and f.
 
-## m. Open questions for the owner
+## m. Decisions
 
-1. **Worst-year return on capital: context or hard gate?** Recommended: context, for the cyclical reason in section b. If hard, apply it with a lower floor (for example, positive and above the hurdle's bond rate) and exempt cyclical industries by a stated rule.
-2. **Banks and insurers: separate path, or "not covered"?** Recommended: "not covered" with the Financials readings as context, and a later design for a separate path.
-3. **Which distress score?** The current Altman Z uses market cap and sales, so it abstains for most non-US companies. The non-manufacturer version (Altman 1995) uses book equity and drops the sales term, so it works across currencies. Recommended: switch to the non-manufacturer version, with its published zones (distress below 1.1, safe above 2.6), and check the cut points against the paper at build.
-4. **Which bond and which margin?** Recommended: US ten-year for all in the first release, margin 4.0 points, both set in the strategy file.
-5. **Return formula: ten-year equation or "yield plus growth"?** Recommended: the ten-year equation, printing yield and growth beside it.
-6. **A middle verdict state?** Recommended: no. Keep four states, with a line saying how many growth cases clear.
-7. **Should the EPV cost of capital become the hurdle?** Recommended: yes in the new measure; the old lens keeps its 9% in its published file.
-8. **When the capital spending warning is on, headline on the lower base?** Recommended: yes.
-9. **Judge pack:** should the judges see the hurdle and the three growth rates? Recommended: no; they see the same pack as now, so they stay independent of the maths.
-10. **Thresholds in section b that are judgment, not published** (accrual 0.10, debt 5 times, runway 24 months, cover 100%, capital spending 1.5 times): approve them as proposals, to be re-set from the measured distribution in phase 1, then frozen in a versioned file before any backtest. Recommended: yes.
-11. **Growth above 15% a year:** mark only, or cap? Recommended: mark only.
-12. **Keep the accrual rule in the gate?** The fetched evidence (section o) says the accruals anomaly stopped paying after 2002. Recommended: keep it as an accounting-quality check only, and drop it if the phase 1 calibration shows it removes companies without a matching rise in later losses.
-13. **Backtest bar:** 2 points a year over the equal-weight industry basket across the full window, luck under 5%, winning years reported not required. Recommended: yes (section j).
+Each decision with its source or "judgment". The former open questions 1 to 13 are answered first.
+
+1. Worst-year return on capital: context, not a gate. Judgment (the cyclical reasoning in section b).
+2. Banks and insurers: not covered in this release. Decided by the owner.
+3. Distress score: Z'' without constant, excluded below 1.10, grey to 2.60. [Altman 2000; Altman 2002; Altman 2017 slides for the 2.60 derivation.]
+4. Bond and margin: the reporting currency's ten-year yield plus 5.0 points. [Kroll 2026; Fernandez et al. 2025; EODHD bond series.]
+5. Return formula: the ten-year equation, flat after year 10. [Mauboussin and Callahan 2014; Damodaran terminal value rule.] Yield-plus-growth is not used, because it assumes growth continues for ever.
+6. A middle verdict state: none. Four states, with "n of 4 cases clear". Judgment.
+7. Cost of capital in earnings power value: unchanged at 9%, labelled an enterprise value at the weighted cost of capital, context only. [Greenwald via Kellogg lecture notes; Wall Street Prep.]
+8. Capital spending: no base switch. The base is free cash flow per share (lower of latest and three-year average); investment intensity prints as context with a top-fifth warning. [Titman, Wei and Xie.] The 1.5 times rule is dropped.
+9. Judges: they do not see the hurdle or the growth rates. Judgment.
+10. Thresholds: each is listed under "Judgment calls" below or carries a source in section b.
+11. Growth above 15%: replaced by a mark above 18% a year. [Chan, Karceski and Lakonishok 2003, Table I.]
+12. Accrual rule: kept, top tenth excluded, boundary from calibration. [Sloan 1996 design; Hribar and Collins 2002.] The evidence is mixed (Lev and Nissim against Mohanram), so it is a check on accounts and not a source of return.
+13. Backtest bar: 2 points a year over the equal-weight industry basket, luck under 5%, winning years reported. Judgment, with the drought reason from Arnott et al. 2021.
+
+New decisions.
+
+14. Valuation base: free cash flow per share, the lower of the latest year and the three-year average. Judgment.
+15. Hurdle margin: 5.0 points over the bond. [Kroll 2026; Fernandez et al. 2025.]
+16. Bond source: EODHD bond series through the end-of-day endpoint, probed; US fallbacks ^TNX and FRED DGS10. [EODHD Macroeconomic Data API; FRED.]
+17. Downside case: two years at consensus then a straight line to the bond yield. Shape is judgment; reasons from Chan et al., Damodaran and Mauboussin.
+18. Capital spending measure: capital spending over depreciation printed, plus abnormal investment. [Titman, Wei and Xie; Wall Street Prep.]
+19. Leverage and dividend cover: warnings, not exclusions. Leverage above 6 times [S&P 2009 Table 2 and 2024 tables 17 to 19; Damodaran January 2026; Moody's utilities method]. Cover below 1.0 not covered, 1.0 to 1.5 thin [Wall Street Prep; Stockopedia; AJ Bell].
+20. F-score: excludes 0 or 1, and only when all nine checks can be computed. [Piotroski 2000, source not read.]
+21. Cash runway: under 12 months excludes; 12 to 24 passes with a warning. [FASB ASU 2014-15 for the 12; BiopharmaWatch and RA Capital for the context.]
+22. Industry not-covered rule: an industry excluded wholesale is marked "not covered by the gate in this release", and thresholds are never loosened. Judgment.
+
+### Judgment calls, listed together
+
+- The lower-of base rule (latest year or three-year average).
+- Three-year averages for dividend cover and the free cash flow base.
+- The 24-month line in the runway warning.
+- The 0.10 stand-in for the accrual boundary, and the top-fifth cut for investment intensity.
+- The downside case shape.
+- One hurdle for all companies.
+- The pegged-currency mapping of bond series.
+- The ten-year horizon of the judges' question.
 
 ## n. Where this design disagrees with the plan
 
-- **Expected return is not "starting yield plus growth".** The simple sum assumes growth continues forever and contradicts the implied-growth calculation. The design uses one equation for both, and still prints the parts. (Section f.)
-- **Worst-year return on capital is context, not a gate.** The plan lists it in the exclusion gate. Cyclicals on a trough year would be excluded at the point of highest future return. Moved to context; hard gate left as open question 1.
-- **Cash runway applies only to cash-burning companies, and an unprofitable company with a runway is "not enough data", not excluded.** The plan states runway for loss-makers; this fixes the boundary and avoids calling a profitless but funded company a failure.
-- **Altman Z needs a different version for most non-US names.** The plan assumes the current Z-Score. It abstains for any company whose price and accounts are in different currencies, so the gate would return "not enough data" for much of the world. (Open question 3.)
-- **The range is the three named growth cases, and "clears hurdle" means all available cases clear.** The plan asks for a verdict of "clears hurdle" without defining it. The design picks the strict reading.
-- **Implied growth is compared against earnings per share records, not operating profit records.** The plan says earnings or free cash flow. The long history and consensus are only per share. The mismatch is stated, not hidden.
-- **No fixed fallback hurdle.** The plan asks what happens without a bond series. The design returns "not enough data" rather than an invented rate.
-- **The consensus case is untestable and labelled so.** The plan already says consensus parts are untested; the design adds that the backtest range uses only the two own-record cases.
-- **Banks are "not covered" in the first release.** The plan allows either; this picks the cheaper and says so.
-- **The backtest tests three forms, not one, and the pass bar changes** (section j). Form 3 is the owner's question; form 2 has the published support; the page shows the gap. The 6-years-in-10 requirement is dropped and winning years are reported only.
-- **Four of the brief's evidence figures are corrected or left out** (section o and p): the 3.6 point tilt result is paired with about 4% tracking error, not 8%; the 0.2 implied-return slope is one of three models; the Lee, So and Wang finding holds for most individual measures in the cross section, not all; and the Swedroe, Research Affiliates, Morningstar, Piotroski and So and Greenblatt figures could not be fetched.
-- **ETF lenses stay.** The plan does not mention funds. They are left alone.
+- **The verdict rests on free cash flow per share and the price, not on earnings yield against a bond yield.** The plan's three measures are now context or are replaced. After-tax operating profit is not cash to the owner when growth needs reinvestment.
+- **Expected return is not "starting yield plus growth".** The simple sum assumes growth continues for ever and contradicts the implied-growth calculation. The design uses one equation for both.
+- **The holding period is not 3 to 5 years.** The return is a long-run ten-year owner's return. A shorter holding depends on the selling price, which this data cannot predict.
+- **Worst-year return on capital is context, not a gate.** Cyclicals would be excluded at the bottom of the cycle.
+- **Only four exclusions.** Leverage and dividend cover are warnings, because heavy borrowing is normal in some industries and a dividend cut is a cost, not a failure.
+- **The hurdle margin is 5.0 points, not 4.0, and it is sourced.**
+- **There is a fourth growth case, the downside case,** and "clears hurdle" means all available cases clear.
+- **The distress score changes to the version with book equity.** The one in use abstains for any company whose price and accounts are in different currencies.
+- **Banks and insurers are not covered.**
+- **No fixed fallback hurdle.** No bond series means "not enough data".
+- **The consensus case is untestable and labelled so.**
+- **The backtest has three forms and the pass bar changes.** Winning years are reported, not required. The gate is never called "proven".
+- **Brief figures that did not hold as written** are listed in the Sources section.
+- **ETF lenses stay.** The plan does not mention funds.
 
 ## o. What the evidence says to expect
 
-Every figure in this section was read on the page or in the paper named beside it, in this pass. Where a figure from the brief could not be confirmed, it is left out and listed in section p. Where the brief's wording differed from the source, the source's wording is used and the difference is said.
+Every figure in this section was read on the page or in the paper named beside it. Where a figure from the brief could not be confirmed, it is left out and listed in the Sources section.
 
 ### Published rules fade, and some never held
 
 - McLean and Pontiff (2016) studied 97 variables shown to predict stock returns. Portfolio returns are 26% lower out of sample and 58% lower after publication.
-- Hou, Xue and Zhang (Review of Financial Studies, 2020): 65% of the 452 anomalies in their library fail the ordinary significance hurdle of an absolute t-value of 1.96, with microcaps mitigated by large-exchange breakpoints and value-weighted returns. At the stricter multiple-testing hurdle of 2.78 the failure rate is 82%. Their earlier 2017 NBER draft gives different counts (447 anomalies, 64%), so the published numbers are used.
+- Hou, Xue and Zhang (Review of Financial Studies, 2020): 65% of the 452 anomalies in their library fail the ordinary significance hurdle of an absolute t-value of 1.96, with microcaps mitigated by large-exchange breakpoints and value-weighted returns. At the stricter hurdle of 2.78 the failure rate is 82%. Their earlier 2017 NBER draft gives different counts (447 anomalies, 64%), so the published numbers are used.
 - The other side: Jensen, Kelly and Pedersen (2023) find a baseline replication rate of 56.9% on US returns, rising to 84.9% under their own method, across 153 factors in 93 countries. They say part of the gap to Hou, Xue and Zhang comes from weighting: capped value weights add 8.5 points to their rate. The two papers disagree on how much survives, so this page does not pick a single share.
 - Microcaps and equal weighting inflate published results. Hou, Xue and Zhang write that microcaps are on average only 3% of the market value of the US universe but about 60% of the number of stocks, and that "anomalies in microcaps are more apparent than real". Our cohort size floors of $1bn to $10bn and the $5bn tested-range limit on the company page keep the smallest companies out. Our backtest is still equal-weight, so this lowers the risk and does not remove it.
-- Accruals: Mohanram's 2011 draft (the file fetched is dated September 2011, not 2014) reports that the accruals anomaly produced excess returns consistently for over four decades until 2002 and since then has apparently disappeared. It credits part of the decline to analysts' cash flow forecasts. This weakens the case for the accrual rule as a source of return. It stays in the gate as an accounting-quality check, and open question 12 asks whether to keep it.
+- Accruals: Mohanram's 2011 draft (the file fetched is dated September 2011) reports that the accruals anomaly produced excess returns consistently for over four decades until 2002 and since then has apparently disappeared. It credits part of the decline to analysts' cash flow forecasts. Lev and Nissim reach the opposite conclusion: the anomaly persists and its magnitude has not declined. Both are in the sources. The accrual rule stays as an accounting-quality check.
 
 ### Quality and profitability hold up better
 
 - Asness, Frazzini and Pedersen (2019), quality minus junk: the factor delivers positive returns in 23 out of 24 countries studied, in a sample of 54,616 stocks from June 1957 to December 2016.
-- Walkshäusl (2020), Journal of Asset Management: over 2000 to 2018, high-FSCORE firms outperform low-FSCORE firms by about 10% per year across developed non-US and emerging countries (9.9% developed, 12.0% emerging in the body). The count of 35 markets in the brief was not found in the parts read and is not used. The paper also cites Piotroski and So (2012, Table 1) for 10.03% a year for the US F-Score premium.
+- Walkshäusl (2020), Journal of Asset Management: over 2000 to 2018, high-FSCORE firms outperform low-FSCORE firms by about 10% per year across developed non-US and emerging countries (9.9% developed, 12.0% emerging in the body). The count of 35 markets in the brief was not found and is not used. The paper also cites Piotroski and So (2012, Table 1) for 10.03% a year for the US F-Score premium.
 - Novy-Marx (2013): profitability, measured as gross profits over assets, has roughly the same power as book-to-market in predicting the cross-section of average returns, and controlling for it raises the performance of value strategies, especially among the largest, most liquid stocks.
 - Fama and French (2013 draft): profitability and investment add to the description of average returns, and the value factor is redundant in the five-factor model. In plain terms, cheapness alone explains less than its reputation suggests, which is one reason the gate comes first.
 
 ### Cheapness works, with long droughts
 
-- Arnott, Harvey, Kalesnik and Linnainmaa (2021): value, as measured by the Fama-French book-to-market factor, has underperformed growth investing since 2007, producing a drawdown of 55% as of mid-2020. The brief said "lost 55% against growth"; the source says a drawdown of the factor.
+- Arnott, Harvey, Kalesnik and Linnainmaa (2021): value, as measured by the Fama-French book-to-market factor, has underperformed growth investing since 2007, producing a drawdown of 55% as of mid-2020.
 
 ### Cheap plus quality, in backtests
 
@@ -397,24 +459,24 @@ Every figure in this section was read on the page or in the paper named beside i
 - So over ten years to 30 September 2026 the fund returned 11.56% against 15.32% for the S&P 500 and 11.42% for the value benchmark. It matched the value benchmark and lagged the market by about 3.8 points a year. That arithmetic is ours.
 - QVAL's process, from its investment case: start from the 1,500 largest US stocks, remove low-volume, red-flag, bad-price-action and extreme-valuation names, rank on EBIT over total enterprise value, then remove low financial-strength scores. That is close to form 2 in section j. The document is dated 31 March 2025 and shows a different start date, so none of its returns are used.
 - AAII's Magic Formula screen, as listed on 30 October 2026: 2022 minus 21.3%, 2023 13.5%, 2024 17.2%, 2025 17.9%, 2026 to date minus 13.5%, "Annualized Total" 6.4% (the window is not stated on the page). One screen as followers run it, not a fund.
-- Greenblatt's comparison of managed and self-managed accounts (84.1%, 59.4%, 62.7% in the brief) is not on the Validea page fetched and is not used.
+- Greenblatt's comparison of managed and self-managed accounts is not on the Validea page fetched and is not used.
 
 ### Tilts in practice
 
-- Fitzgibbons and co-authors, "Long-Only Style Investing: Don't Just Mix, Integrate", as summarised by CXO Advisory (the AQR affiliation is not stated on the page): against the value-weighted MSCI World, February 1993 to December 2015, standalone value and momentum portfolios outperform by an average annualised net 1.7%, with tracking errors just under 8%. The mixed and integrated combinations outperform by an average net 2.5%, with tracking errors about 4%. The integrated combination is reported at 3.6%. The brief paired 3.6 with a tracking error near 8%; the page pairs 8% with the standalone portfolios and about 4% with the combinations.
+- Fitzgibbons and co-authors, "Long-Only Style Investing: Don't Just Mix, Integrate", as summarised by CXO Advisory (the AQR affiliation is not stated on the page): against the value-weighted MSCI World, February 1993 to December 2015, standalone value and momentum portfolios outperform by an average annualised net 1.7%, with tracking errors just under 8%. The mixed and integrated combinations outperform by an average net 2.5%, with tracking errors about 4%. The integrated combination is reported at 3.6%.
 - The Research Affiliates 2017 finding that over half of the paper value return disappears in live funds could not be fetched. It is not used.
 
 ### Implied returns
 
 - Li and Mohanram (the file fetched is dated 2013), regression of future realised returns on an implied-return measure, where 1 would be perfect: the HVZ model 0.209, 0.192 and 0.087 for years one, two and three ahead (the last not significant); the AR model 0.584, 0.498 and 0.576; the RIV model 0.652, 0.574 and 0.594. So "about 0.2" holds for the weakest of three models; the other two are about 0.5 to 0.65.
-- Lee, So and Wang (the June 2017 working paper; the published 2021 version in the Review of Financial Studies was not fetched): among the measures tested, only a composite and one other consistently perform better than a trivial estimate, that is, a fixed constant. Four of the five individual implied-cost-of-capital measures underperform a constant in the cross section, and three of the five outperform every non-implied measure in time series. The abstract says only that these measures are particularly useful in tracking time-series variations in expected returns. The wording "no better than a constant at ranking stocks" is supported for most individual measures in the cross section, not for all of them and not in time series.
-- Li, Ng and Swaminathan (2013): aggregate implied cost of capital strongly predicts future excess market returns at horizons ranging from one month to four years. That is a market-level, time-series result. It does not contradict the two papers above, and it is not evidence for ranking stocks.
+- Lee, So and Wang (the June 2017 working paper; the published 2021 version was not fetched): among the measures tested, only a composite and one other consistently perform better than a trivial estimate, that is, a fixed constant. Four of the five individual implied-cost-of-capital measures underperform a constant in the cross section, and three of the five outperform every non-implied measure in time series.
+- Li, Ng and Swaminathan (2013): aggregate implied cost of capital strongly predicts future excess market returns at horizons from one month to four years. That is a market-level, time-series result, and not evidence for ranking stocks.
 
 ### Sector and industry
 
-- AAII (June 2022): Greenblatt also excludes financials and utilities because of their unique financial structures. This design already treats banks and insurers as "not covered" (section c). Utilities are not excluded here. The debt rule may remove many of them; check at calibration.
+- AAII (June 2022): Greenblatt also excludes financials and utilities because of their unique financial structures. This design treats banks and insurers as "not covered" (section c). Utilities are not excluded here. The leverage warning will flag many of them; check at calibration.
 - Novy-Marx (2013) uses variables demeaned by the 49 Fama-French industries and finds industry-adjusted gross profitability has more power than the straight measure. So comparisons are made within an industry, and no bet is placed on cheap industries.
-- The Morningstar 2017 figures on stock-level against industry-level value (2.36% and minus 0.32% in the brief) could not be fetched and are not used.
+- The Morningstar 2017 figures on stock-level against industry-level value could not be fetched and are not used.
 
 ### The realistic target
 
@@ -424,7 +486,73 @@ A backtest of ours showing far more than that is to be treated as an error until
 
 ## p. Sources
 
-Status is what happened in this pass. "Fetched" means the page or paper was read and the figures above were checked against it. Several documents were PDFs that the page-reading tool returned as raw bytes; their text was extracted from saved copies.
+Status is what happened in this pass. "Fetched" means the page or paper was read and the figures used were checked against it. Several documents were PDFs that the page-reading tool returned as raw bytes; their text was extracted from saved copies.
+
+### Sources for sections b to n
+
+Fetched and used:
+
+- Sloan 1996, The Accounting Review: https://www.cuhk.edu.hk/acy2/workshop/June2009Wasley/1996TAR).pdf
+- Hribar and Collins 2002 (abstract; it says balance-sheet accruals add measurement error, and does not use the words "preferred"): https://iro.uiowa.edu/esploro/outputs/journalArticle/Errors-in-Estimating-Accruals-Implications-for/9984380479802771
+- Dechow and Schrand 2004, CFA Institute (accruals as earnings less cash from operations, in deciles; no single formula or threshold): https://rpc.cfainstitute.org/-/media/documents/book/rf-publication/2004/rf-v2004-n3-3927-pdf.pdf
+- Lev and Nissim, The Persistence of the Accruals Anomaly: http://www.columbia.edu/~dn75/The%20Persistence%20of%20the%20Accruals%20Anomaly.pdf
+- Ball, Gerakos, Linnainmaa, Nikolaev 2016 (Table 1: accruals 75th percentile 0.016, 99th 0.235; balance-sheet measure over lagged assets): https://www.anderson.ucla.edu/documents/sites/about/clubs/asam/6-Accruals-cash-flows-and-operating-profitability.pdf
+- Altman 2000 (Z'' coefficients; constant +3.25 for the emerging market model; no Z'' zones): https://moodle2.units.it/pluginfile.php/322514/mod_resource/content/0/Zscores.pdf
+- Altman 2002 ("Z''-Scores below 1.10 indicate a distressed condition", form without constant): https://archive.nyu.edu/bitstream/2451/26485/2/02-41.pdf
+- Altman 2017 Hofstra slides (formula with constant 3.25; zones 4.35 and 5.85; original Z zones 1.8 and 2.99): https://www.hofstra.edu/pdf/community/bdc/breslin/breslin-evolution-of-altman-z-score.pdf
+- Altman 2018, A fifty-year retrospective (formula with constant; applies to non-manufacturers and non-US firms; no Z'' zones): https://mebfaber.com/wp-content/uploads/2020/11/Altman_Z_score_models_final.pdf
+- Moody's, Regulated Electric and Gas Utilities methodology, exhibit copy (Baa band 13% to 22% in the standard grid; garbled text, rows rebuilt from band edges): https://puc.sd.gov/commission/dockets/electric/2026/EL26-003/Vol2Section6/Exh1TStevens.pdf
+- Damodaran, Debt to EBITDA by sector, January 2026: https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/dbtfund.html
+- Damodaran, Margins by sector, January 2026 (fetched; not used for any figure): https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/margin.html
+- Damodaran, Dividend fundamentals by sector, January 2026: https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/divfund.html
+- Damodaran, Country risk premiums, January 2026: https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/ctryprem.html
+- Damodaran home page (implied premium 4.41% on 1 November 2026; 4.20% as the previous month): https://pages.stern.nyu.edu/~adamodar/New_Home_Page/home.htm
+- Damodaran, terminal value rule: https://pages.stern.nyu.edu/~adamodar/New_Home_Page/littlebook/terminalvalue.htm
+- Fernandez, Garcia de la Garza, Fernandez Acin 2025 survey: https://breesept.tulane.edu/wp-content/uploads/sites/18/2026/03/Rf-and-Rm-Rf-2025.pdf
+- Kroll Cost of Capital Inputs at Year-End 2025 (30 January 2026): https://edge.sitecorecloud.io/krollllc17bf0-kroll6fee-proda464-0e9b/media/Cost-of-Capital/kroll-cost-of-capital-updates-jan26-executive-summary.pdf
+- EEI Q4 2025 Dividends Summary: https://www.eei.org/-/media/Project/EEI/Documents/Issues-and-Policy/Finance-And-Tax/Quarterly-Financial-Updates/2025_Q4_Dividends_Summary.pdf
+- Wall Street Prep, Dividend Coverage Ratio (below 1.0 insufficient; above 2.0 the minimum floor): https://wallstreetprep.com/knowledge/dividend-coverage-ratio
+- S&P, Criteria Methodology: Business Risk/Financial Risk Matrix Expanded, 27 May 2009 (Table 2, the six bands; read from this copy on 3 Nov 2026): https://www.efis.psc.mo.gov/Document/Display/44676
+- FASB ASU 2014-15 ("within one year after the date that the financial statements are issued"): https://storage.fasb.org/ASU%202014-15.pdf
+- RA Capital on going-concern clauses: https://www.racap.com/rapport/going-concern-clauses-not-always-concerning
+- BiopharmaWatch, cash runway (18 to 24 months; the brief's 12 to 24 is not in the text): https://www.biopharmawatch.com/learn/biotech-cash-runway-and-dilution
+- EODHD Macroeconomic Data API (GBOND): https://eodhd.com/financial-apis/macroeconomic-data-api
+- EODHD US Treasury rates API (beta): https://eodhd.com/financial-apis/us-treasury-ust-interest-rates-api-beta
+- FRED DGS10: https://fred.stlouisfed.org/series/DGS10 (4.94 for 30 October 2026, not 4.93) ; DTB3: https://fred.stlouisfed.org/series/DTB3 (3.99) ; API: https://fred.stlouisfed.org/docs/api/fred/series_observations.html (key required)
+- Yahoo Finance ^TNX history (loads; one year in view; intraday close shown; the "since 1962" claim is not on the page): https://finance.yahoo.com/quote/%5ETNX/history/
+- Chan, Karceski, Lakonishok 2003 (Table I; the median reading depends on a column alignment that had to be reconstructed from extracted text): https://www.lsvasset.com/pdf/research-papers/Level+Persistence_of_Growth_Rates_FINAL.pdf
+- Mauboussin and Callahan 2014 (about 8 years, 5 to 15 across industries, attributed to Olsen and called a competitive advantage period): https://strawman.com/member/uploads/objects/a9/41159492407c5bf57c2e67861056bed2decf7d.pdf
+- Titman, Wei, Xie, Capital Investments and Stock Returns (NBER w9951): https://www.nber.org/papers/w9951.pdf
+- Cooper, Gulen, Schill 2008 (secondary summary; fetched, not used for any figure): https://quantpedia.com/strategies/asset-growth-effect
+- Wall Street Prep, Growth vs Maintenance Capex (writes depreciation over capital spending; weak): https://www.wallstreetprep.com/knowledge/growth-capex-vs-maintenance-capex/
+- Greenwald EPV at WACC, Kellogg lecture notes: https://kellogg.northwestern.edu/faculty/jagannathan/teaching/practicum/2006/files/Week3/VI_Lecture_3.pdf ; Wall Street Prep EPV: https://www.wallstreetprep.com/knowledge/earnings-power-value-epv
+- Microsoft 10-K FY2026, EDGAR (R2, R4, R6; all briefed lines matched): https://www.sec.gov/Archives/edgar/data/789019/000119312526323660/R2.htm ; press release: https://www.microsoft.com/en-us/investor/earnings/fy-2026-q4/press-release-webcast
+- CFO Dive, 30 July 2026 (data centers and office buildings, 15 to 25 years from the start of fiscal 2027; not server and network equipment as the brief said): https://www.cfodive.com/news/microsoft-holds-line-ai-spending-plans/826648/
+
+Listed in the brief but not usable, and why:
+
+- Piotroski 2000: HTTP 403 on every attempt. Table 3 returns, the group sizes and the high book-to-market sample are not confirmed: https://test2.ivey.uwo.ca/media/3775523/value_investing_the_use_of_historical_financial_statement_information.pdf
+- S&P Global Ratings, Corporate Methodology 2024 (tables 17 to 19: highly leveraged above 5, 5.5 and 6 times; paragraph 123): fetched 3 Nov 2026 per the owner, whose figures are used; this pass's retry was refused (Akamai access denied, then HTTP 403): https://www.maalot.co.il/Publications/MT20240412122958.PDF
+- Altman, Iwanicz-Drozdowska, Laitinen, Suvas 2017 (abstract): blocked. The accuracy figure of about 0.75 and the 34 countries are not confirmed: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2536340
+- Stockopedia, Dividend Cover (less than 1.5 a danger of a cut; more than 2 healthy): fetched 3 Nov 2026 per the owner, whose quotation is used; this pass's retries were refused with HTTP 403: https://www.stockopedia.com/ratios/dividend-cover-rolling-5130
+- AJ Bell Dividend Dashboard Q4 2025 (2.00 times comfort; FTSE 100 1.99 times; top ten yielders 1.22 times "looks skinny"): fetched 3 Nov 2026 per the owner, whose quotations are used; this pass's retries returned HTTP 404: https://www.ajbell.co.uk/group/sites/ajbell.co.uk/files/AJ%20Bell%20Dividend%20Dashboard%20Q4%202025.pdf
+- IAS 1 paragraph 26: a subscription page was returned: https://www.ifrs.org/content/dam/ifrs/publications/pdf-standards/english/2021/issued/part-a/ias-1-presentation-of-financial-statements.pdf
+- Damodaran, ERP 2026 edition (the 7.03% 1928 to 2025 average): blocked, so the figure and its basis are not confirmed: https://ripuc.ri.gov/sites/g/files/xkgbur841/files/2026-05/DPUC%20Attachment%202%20to%20RIE%202-1(e).pdf
+- EODHD GBOND symbol list: answers "Unauthenticated" without a token, so it was not read: https://eodhd.com/api/exchange-symbol-list/GBOND
+
+Differences between the brief and the sources, for the record:
+
+- FRED DGS10 for 30 October 2026 is 4.94, not 4.93. EODHD's close is 4.934, which rounds to the briefed 4.93. This page uses the EODHD figure.
+- Kroll's risk-free rate is the higher of 3.5% or the spot 20-year Treasury yield, not simply "normalised".
+- The Damodaran implied premium of 4.20% is the "previous month" line; the current line is 4.41% on 1 November 2026.
+- FASB says "one year", not "12 months". BiopharmaWatch says 18 to 24 months, not 12 to 24.
+- Wall Street Prep's capital spending ratio is written depreciation over capital spending.
+- The Microsoft useful-life change is for data centers and office buildings, not servers.
+- Chan et al.: the abstract's "no persistence" refers to earnings growth; the "past five years" wording was not verified.
+- Mauboussin and Callahan: an average of about 8 years for the competitive advantage period (Olsen), and the 5 to 15 year spread is across industries.
+- The Microsoft saved run's net cash of $7.3bn: see section l for the reconciliation.
+
+### Sources for section o (from the earlier brief; fetched in the previous pass)
 
 Fetched and used:
 
@@ -448,12 +576,10 @@ Fetched and used:
 - AAII on Greenblatt's exclusions (29 June 2022): https://www.aaii.com/stockideas/article/17812-greenblatts-magic-formula-for-beating-the-market ; AAII screen performance (30 October 2026, secondary): https://www.aaii.com/stock-screens/performance
 - AQR long-only value and momentum, via CXO Advisory (2016, secondary; the summary tool, not the raw page, was read): https://www.cxoadvisory.com/value-premium/integrating-momentum-and-value-stock-exposures
 
-Listed in the brief but not usable, and why:
+Not usable, and why:
 
-- Alpha Architect, value premium, risk and mispricing (https://alphaarchitect.com/value-premium-risk-mispricing/): returned HTTP 403. The 20.8% and 10.5% figures are not used.
-- Validea reprint of Greenblatt (https://blog.validea.com/greenblatt-less-is-more-in-portfolio-management/): read through an archive copy, dated 31 January 2012 in its metadata. The figures 84.1, 59.4 and 62.7 are not on it.
+- Alpha Architect, value premium, risk and mispricing (https://alphaarchitect.com/value-premium-risk-mispricing/): HTTP 403. The 20.8% and 10.5% figures are not used.
+- Validea reprint of Greenblatt (https://blog.validea.com/greenblatt-less-is-more-in-portfolio-management/): read through an archive copy, dated 31 January 2012 in its metadata. The managed and self-managed figures are not on it.
 - Research Affiliates 2017 via Advisor Perspectives (https://www.advisorperspectives.com/commentaries/2017/04/13/the-incredible-shrinking-factor-return): HTTP 403.
 - Swedroe 2018 (https://www.advisorperspectives.com/articles/2018/06/14/in-defense-of-the-value-premium): HTTP 403. The 22% of five-year windows is not confirmed.
 - Morningstar 2017 (https://www.morningstar.co.uk/static/UploadManager/Assets/The_Impact_of_Industry_Tilts_on_Factor_Performance.pdf): redirected to a home page.
-
-Named in section b and written from memory in the first draft, not fetched: Sloan 1996, Altman 1968, Piotroski 2000, and the rating agency remark on borrowing.
