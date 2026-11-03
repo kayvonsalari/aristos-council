@@ -8,11 +8,17 @@
 #   * the leverage warning becomes "highly leveraged": net debt / EBITDA above 6 OR cash flow over debt
 #     below 12%, both readings printed (the net debt / EBITDA warning stays);
 #   * the runway 12 to 24 month band is its own warning row;
-#   * the accrual boundary is 0.10 (set by the owner); version 1's measured 0.0054 is not carried over.
+#   * the accrual boundary is 0.10 (set by the owner); version 1's measured 0.0054 is not carried over;
+#   * (ABSOLUTE-GATE-3) the runway triggers on cash flow BEFORE working capital at or below zero, the
+#     same measure solvency uses, so every company falls under exactly one of the two; a year in which free
+#     cash flow is not negative passes as "funded by working capital this year";
+#   * (ABSOLUTE-GATE-3) dividend cover warns only below 1.0; "thin to comfortable" is printed context.
 #
 # Only accounting and solvency failures exclude. Four exclusion rules, four warnings. Every threshold
 # carries its source on the line beside it. Immutable once frozen: a change is absolute_gate_v3.yaml.
-# NOT YET RECALIBRATED: version 1's calibration (docs/GATE_CALIBRATION.md) measured the version 1 rules.
+# Calibrated 2026-11-03 on 2020 names (docs/GATE_CALIBRATION.md); the calibration
+# changed no threshold: it re-measured the investment-intensity boundary and listed the industries
+# the rules exclude wholesale.
 
 id: absolute_gate_v2
 version: 2
@@ -86,8 +92,10 @@ warnings:
     label: Dividend cover
     measure: three-year average net income / dividends paid
     years: 3
-    not_covered_below: 1.0
-    thin_below: 1.5
+    not_covered_below: 1.0          # the warning fires only here
+    context: >-
+      below 1.0 the dividend is not covered; 1.5 to 2.0 is the range sources call thin to comfortable
+      (printed beside the figure; it is context, not a warning)
     source: >-
       Wall Street Prep (below 1.0 net income is insufficient; above 2.0 the minimum floor); Stockopedia
       ("less than 1.5 may indicate a danger of a dividend cut"); AJ Bell (2.00 comfort, 1.22 "looks skinny").
@@ -95,16 +103,15 @@ warnings:
 # Carried forward from version 1's calibration: it does not depend on the rules that changed.
 investment_intensity:
   measure: capex/sales this year over the average of the prior three years, minus 1 (Titman, Wei and Xie)
-  warn_above: 0.2676          # the measured 80th percentile, 2026-11-03 (version 1 calibration)
+  warn_above: 0.2676          # the measured 80th percentile, 2026-11-03 (version 2 calibration)
   boundary_percentile: 80
 
-# Version 1's list was measured under version 1's rules and is not valid here. Version 2 has NOT been
-# recalibrated (that refetches every name: python -m aristos_council.gate calibrate --redo). If a
-# recalibration excludes industries wholesale, they enter as version 3, never as an edit to this file.
+# Industries the version 2 rules exclude wholesale (more than half of their names), measured on the
+# calibration of 2026-11-03. The thresholds are never loosened to admit them.
 not_covered_industries: []
 
 calibration:
-  date: null
-  universe_size: null
-  units_spent: null
-  file: null
+  date: 2026-11-03
+  universe_size: 2020
+  units_spent: 20200
+  file: data/gate_calibration_v2.json

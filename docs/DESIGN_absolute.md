@@ -18,64 +18,91 @@ What stays true from the old design: every figure comes from a deterministic too
 
 ## b. The gate: who is excluded before any valuation
 
-The principle: only accounting and solvency failures exclude. A cheap or expensive price never excludes. A cut dividend, a heavy borrower or a big spender is a cost to a shareholder, not a failure, so those are warnings.
+Three standing principles, in the owner's words:
 
-The gate has exactly four exclusion rules and two warnings. Each returns excluded (with the figure), passed, or not evaluated. A ratio whose bottom number is zero or negative is never a pass. The case is written out for every rule.
+- **(a)** An exclusion rule that removes more than one name in ten at calibration is the wrong instrument and becomes a mark until re-specified.
+- **(b)** The gate excludes only for broken accounts or solvency. Everything else is a mark the reader sees.
+- **(c)** Size is not a gate question. The absolute path runs for any company, and one below the backtested range is labelled "outside the tested range", never blocked.
+
+The gate has four exclusion rules and four warnings. Each returns excluded (with the figure), passed, or not evaluated. A ratio whose bottom number is zero or negative is never a pass. The case is written out for every rule. A cheap or expensive price never excludes. A cut dividend, a heavy borrower, a weak distress score or a big spender is a cost to a shareholder, not a failure, so those are warnings.
 
 ### Exclusion 1: earnings quality (accrual ratio)
 
 - What it is: the share of profit that has not arrived as cash. Accrual ratio = (net income minus operating cash flow) divided by average total assets. Average total assets is the mean of this year's and last year's.
 - Why this form: Hribar and Collins (2002) show that building accruals from changes in balance sheet accounts, instead of reading them from the statement of cash flows, adds measurement error. Dechow and Schrand (2004) define accruals as earnings less cash from operations and rank companies in tenths by their size. Lev and Nissim divide by the average of opening and closing total assets, and note the cash-flow measure exists only from 1988.
-- Rule: exclude the top tenth of our names. This is Sloan's design [Sloan 1996]: companies are sorted into tenths by accruals, and in Table 6 the highest tenth earned minus 5.5% size-adjusted in the following year and the lowest tenth plus 4.9%. Sloan scales by average total assets but builds accruals from the balance sheet, so the form here differs from his.
-- Boundary: measured in calibration (below) and then frozen. It is not a literature number. For orientation, Ball et al. (2016, Table 1) report a 75th percentile of 0.016 and a 99th of 0.235. Caveat: their accruals are the balance-sheet measure (change in current assets less cash, current liabilities, current debt, taxes payable and depreciation) over lagged, that is opening, total assets, not our cash-flow form over average assets. So it is a rough guide only. 0.10 is the stand-in until the boundary is measured. It is a judgment.
+- Rule: exclude above 0.10. Sloan's design [Sloan 1996] sorts companies into tenths by accruals, and in his Table 6 the highest tenth earned minus 5.5% size-adjusted in the following year and the lowest tenth plus 4.9%. He builds accruals from the balance sheet, so the form here differs from his.
+- Why 0.10 and not the top tenth of our names: gate version 1 measured it. On 2,018 cohort names the cash-flow form is mostly negative (median minus 0.049), because depreciation is a non-cash expense that the cash-flow form adds back. The top-tenth boundary on our names was therefore 0.0054, a line near zero that says little about how poor the earnings are, and it excluded one name in ten by construction. The owner set the fixed line 0.10 for version 2. For orientation only, Ball et al. (2016, Table 1) report a 75th percentile of 0.016 and a 99th of 0.235 for the balance-sheet measure over opening assets, a different form.
+- Calibration result at 0.10: 1% of names are excluded by this rule.
 - Zero or negative case: average total assets at or below zero, or either input missing, is not evaluated. Negative accruals pass.
 - A conflict in the evidence, stated plainly. Lev and Nissim conclude that the accruals anomaly persists and its size has not declined. Mohanram's 2011 draft finds that it produced excess returns until 2002 and has apparently disappeared since. The rule stays as an accounting-quality check, not as a source of return (section o).
 
-### Exclusion 2: distress (Altman Z-double-prime)
+### Exclusion 2: solvency (cash flow over debt)
 
-- What it is: one number from four accounting ratios that measures how close a company is to failing. Altman's version for non-manufacturers, written here without its constant:
-  Z'' = 6.56 X1 + 3.26 X2 + 6.72 X3 + 1.05 X4 [Altman 2000; Altman 2002]
-  X1 = working capital / total assets. X2 = retained earnings / total assets. X3 = EBIT / total assets. X4 = book value of equity / total liabilities. (Working capital is current assets minus current liabilities. EBIT is profit before interest and tax.) The definitions are those on Altman's 2017 slides.
-- Why this version: it uses book equity, not market value, and has no sales term. So a company whose shares are quoted in one currency and whose accounts are in another is no longer a problem. Every input is a statement figure and the ratios cancel the currency. The version in use today abstains for those companies.
-- Rule: exclude below 1.10. Altman (2002): "Z''-Scores below 1.10 indicate a distressed condition", in the form without a constant. The grey zone, 1.10 to 2.60, passes with a note. The 2.60 is derived, not quoted. Altman's 2017 slides give the zones for the version with a constant of 3.25 (distress below 4.35, safe above 5.85). The constant is stated in Altman (2000, 2002, 2018). Taking it off gives 1.10 and 2.60.
-- Honesty line: "the general Z-Score model works reasonably well for most countries (the prediction accuracy is approximately 0.75)", and "classification accuracy can be improved further (above 0.90) by using country-specific estimation" [Altman, Iwanicz-Drozdowska, Laitinen and Suvas 2017, abstract; read on the vlex copy on 3 Nov 2026; the SSRN page refused]. That accuracy is the authors' own measure, not a hit rate we have tested. The rule therefore excludes only in the clear distress zone.
-- Zero or negative case: total liabilities or total assets at or below zero is not evaluated. Negative equity makes X4 negative and the score low. That is real information and is allowed to count.
+- What it is: whether the cash the business makes before working-capital swings is a safe multiple of what it owes. Solvency = cash from operations before working-capital changes divided by total debt.
+- Cash from operations before working-capital changes = operating cash flow minus the cash flow statement's change in working capital (a positive change means cash was released). It is the measure Moody's calls CFO pre-WC. Total debt is gross, not net, as Moody's measures it, and is counted as the tool counts it: the balance sheet's own Total Debt row (borrowings plus the long-term operating lease line).
+- Rule: exclude below 5%. In Moody's utilities method the grid factor "CFO pre-WC / Debt" puts 5% to 13% in the Ba band and 1% to 5% in the B band in the standard grid [Moody's, Regulated Electric and Gas Utilities methodology; the exhibit text was garbled and its rows were rebuilt from the band edges]. Below 5% is therefore the B band and below.
+- Sign cases, in order. Net cash passes and debt at or below zero passes, both before any ratio is formed. Cash flow before working capital at or below zero reads "not evaluated: loss-maker, see runway", and the runway rule decides. A negative ratio never excludes on its own. A missing debt figure, or a missing cash-flow line, is not evaluated; operating cash flow never stands in for the figure before working capital.
+- Calibration result: 1% of names are excluded by this rule.
+- This rule replaced Altman's distress score as exclusion 2. The score is now warning B.
 - Not for banks and insurers (section c).
 
 ### Exclusion 3: accounting health (F-score)
 
 - What it is: nine yes/no checks on profit, borrowing and efficiency, scored 0 to 9 [Piotroski 2000].
-- Rule: exclude a score of 0 or 1. Piotroski's own groups: "The Low F-SCORE portfolio consists of firms with an aggregate score of 0 or 1; the High F-SCORE portfolio consists of firms with a score of 8 or 9." It counts only when all nine checks can be computed, as in his sample design. With fewer, the page shows "x of 9 computable" and the rule is not evaluated. This replaces the present rule, which scores from five checks.
+- Rule: exclude a score of 0 or 1. Piotroski's own groups: "The Low F-SCORE portfolio consists of firms with an aggregate score of 0 or 1; the High F-SCORE portfolio consists of firms with a score of 8 or 9." It counts only when all nine checks can be computed, as in his sample design. With fewer, the page shows "x of 9 computable" and the rule is not evaluated. This replaces the earlier rule, which scored from five checks.
 - Evidence: one-year market-adjusted returns of 0.134 for the high group and minus 0.096 for the low group. "The mean return difference of 0.230 is significant at the 1% level." [Piotroski 2000, Table 3; fetched 3 Nov 2026 in the owner's earlier pass; this pass's retry was refused]. Walkshäusl (2020) finds high-score firms beat low-score firms by about 10% a year in non-US markets over 2000 to 2018 (section o).
 - Disclosure: his sample is "firms in the highest BM quintile with sufficient financial statement data to calculate the various performance signals" [same source and note]. He tested the score on high book-to-market stocks only, and we apply it to every company.
+- Calibration result: 0% of names are excluded; 3% are not evaluated (fewer than nine checks).
 
-### Exclusion 4: cash runway, only when operating cash flow is negative
+### Exclusion 4: cash runway
 
 - What it is: how many months the cash lasts. Runway = (cash plus short-term investments) divided by the yearly burn. Burn is the negative free cash flow of the latest year.
+- It triggers on cash from operations before working-capital changes at or below zero, the same measure the solvency rule uses. So every company falls under exactly one of the two rules: positive goes to solvency, at or below zero comes here. If free cash flow is not negative in such a year, working capital funded the business, and the runway passes with the note "funded by working capital this year". There is no "not enough data" outcome for that case.
 - Rule: exclude under 12 months. This is the going-concern horizon. US accounting asks management whether there is substantial doubt about the entity's ability to continue "within one year after the date that the financial statements are issued" [FASB ASU 2014-15]. IAS 1 paragraph 26 is the international counterpart; the page could not be read, so it is not cited.
-- 12 to 24 months passes with the warning "will need to raise money within the holding period". The 24 is a judgment. The practitioner sources are secondary and say something close but not the same. BiopharmaWatch: "Many investors look for at least 18 to 24 months", and under 12 months "usually means a raise is close". RA Capital: a "convention that public biotech companies should plan to raise money by the time they get down to one year of cash left", which it then argues is not always a concern.
-- Zero or negative case: runs only when operating cash flow is negative. If burn is zero or the company makes cash, the rule does not apply. If a cash line is missing, it is not evaluated.
+- 12 to 24 months passes, and warning D fires. The 24 is a judgment. BiopharmaWatch: "Many investors look for at least 18 to 24 months", and under 12 months "usually means a raise is close". RA Capital: a "convention that public biotech companies should plan to raise money by the time they get down to one year of cash left", which it then argues is not always a concern.
+- Zero or negative case: if a cash line is missing, it is not evaluated.
+- Calibration result: 1% of names are excluded by this rule.
 
-### Warning A: leverage (net debt divided by EBITDA)
+### Warning A: highly leveraged (two readings)
 
-- What it is: how many years of operating cash profit it would take to repay the borrowing. EBITDA is profit before interest, tax, depreciation and amortisation. It needs the new depreciation field (section l).
-- Rule: warn above 6 times. Source: S&P Global Ratings. Its financial risk scale has six bands, from minimal to highly leveraged. In the 2009 criteria, Table 2 (Financial Risk Indicative Ratios, Corporates), the bands for FFO/Debt, Debt/EBITDA and Debt/Capital are: minimal above 60% | under 1.5 times | under 25%; modest 45-60% | 1.5-2 | 25-35%; intermediate 30-45% | 2-3 | 35-45%; significant 20-30% | 3-4 | 45-50%; aggressive 12-20% | 4-5 | 50-60%; highly leveraged under 12% | above 5 | above 60% [S&P, Criteria Methodology: Business Risk/Financial Risk Matrix Expanded, 27 May 2009; read 3 Nov 2026]. The 2024 Corporate Methodology keeps the same scale in its standard table, tables 17 to 19, and adds two more lenient tables: highly leveraged above 5.5 times (medial volatility) and above 6 times (low volatility, used for companies with the most stable cash flows, paragraph 123) [S&P, Corporate Methodology 2024; fetched 3 Nov 2026, supplied from the owner's earlier fetch; this pass's retry was refused with HTTP 403]. The warning uses 6 times, the most lenient of the three lines, so a flagged company is highly leveraged on every S&P table. The standard table says 5 times.
+- What it is: how heavy the borrowing is, read two ways. Net debt divided by EBITDA says how many years of operating cash profit it would take to repay the borrowing (EBITDA is profit before interest, tax, depreciation and amortisation; it needs the depreciation field, section l). Cash flow over debt is the solvency ratio above. Both readings are printed.
+- Rule: the warning fires when net debt over EBITDA is above 6 times or cash flow over debt is below 12%. Source: S&P Global Ratings. Its financial risk scale has six bands, from minimal to highly leveraged. In the 2009 criteria, Table 2 (Financial Risk Indicative Ratios, Corporates), the bands for FFO/Debt, Debt/EBITDA and Debt/Capital are: minimal above 60% | under 1.5 times | under 25%; modest 45-60% | 1.5-2 | 25-35%; intermediate 30-45% | 2-3 | 35-45%; significant 20-30% | 3-4 | 45-50%; aggressive 12-20% | 4-5 | 50-60%; highly leveraged under 12% | above 5 | above 60% [S&P, Criteria Methodology: Business Risk/Financial Risk Matrix Expanded, 27 May 2009; read 3 Nov 2026]. So 12% is S&P's highly leveraged line for cash flow over debt. The 2024 Corporate Methodology keeps the same scale in its standard table, tables 17 to 19, and adds two more lenient tables: highly leveraged above 5.5 times (medial volatility) and above 6 times (low volatility, used for companies with the most stable cash flows, paragraph 123) [S&P, Corporate Methodology 2024; fetched 3 Nov 2026, supplied from the owner's earlier fetch; this pass's retry was refused with HTTP 403]. The EBITDA line uses 6 times, the most lenient of the three, so a flagged company is highly leveraged on every S&P table. The standard table says 5 times.
 - Why a warning and not an exclusion: heavy borrowing is normal in some industries. Damodaran (January 2026) lists debt to EBITDA of 6.77 for general utilities, 6.04 for water utilities, 3.85 for telecoms, 1.71 for software and 2.43 for pharmaceuticals, against 6.52 for the whole market and 3.01 without financials. His page does not say whether the debt includes leases. Moody's utilities method sets the Baa band for cash flow before working capital over debt at 13% to 22% in its standard grid and 11% to 19% in its low-business-risk grid.
-- Debt is counted as the tool counts it today (section l, reconciliation). Net cash always passes.
-- Zero or negative case: EBITDA at or below zero is not evaluated. A company with debt and no operating cash profit is shown that way, never as a pass.
+- Net cash passes on both readings. EBITDA at or below zero makes that reading not evaluated, and the other reading can still decide.
+- Calibration result: 9% of names fire it.
 
-### Warning B: dividend cover
+### Warning B: distress score low (Altman Z-double-prime)
+
+- What it is: one number from four accounting ratios that measures how close a company is to failing. Altman's version for non-manufacturers, written here without its constant:
+  Z'' = 6.56 X1 + 3.26 X2 + 6.72 X3 + 1.05 X4 [Altman 2000; Altman 2002]
+  X1 = working capital / total assets. X2 = retained earnings / total assets. X3 = EBIT / total assets. X4 = book value of equity / total liabilities. (Working capital is current assets minus current liabilities. EBIT is profit before interest and tax.) The definitions are those on Altman's 2017 slides.
+- Why this version: it uses book equity, not market value, and has no sales term. So a company whose shares are quoted in one currency and whose accounts are in another is no longer a problem. Every input is a statement figure and the ratios cancel the currency.
+- Rule: the warning fires below 1.10. Altman (2002): "Z''-Scores below 1.10 indicate a distressed condition", in the form without a constant. The grey zone, 1.10 to 2.60, passes with a note. The 2.60 is derived, not quoted. Altman's 2017 slides give the zones for the version with a constant of 3.25 (distress below 4.35, safe above 5.85). The constant is stated in Altman (2000, 2002, 2018). Taking it off gives 1.10 and 2.60.
+- Why a warning and not an exclusion: "the general Z-Score model works reasonably well for most countries (the prediction accuracy is approximately 0.75)", and "classification accuracy can be improved further (above 0.90) by using country-specific estimation" [Altman, Iwanicz-Drozdowska, Laitinen and Suvas 2017, abstract; read on the vlex copy on 3 Nov 2026; the SSRN page refused]. That accuracy is the authors' own measure, not a hit rate we have tested. Version 1 used it as an exclusion and it removed 20% of names, including whole industries of ordinary operating companies. By principle (a) it is a mark.
+- Zero or negative case: total liabilities or total assets at or below zero is not evaluated. Negative equity makes X4 negative and the score low. That is real information and is allowed to count.
+- Calibration result: 20% of names fire it.
+
+### Warning C: dividend cover
 
 - What it is: whether profit pays the dividend. Cover = three-year average net income divided by dividends paid.
-- Rule: below 1.0 reads "not covered" [Wall Street Prep: "Net income is insufficient to pay the dividend"]. 1.0 to 1.5 reads "thin". Sources for the 1.5: Stockopedia, "Dividend Cover of less than 1.5 may indicate a danger of a dividend cut while more than 2 is viewed as healthy" [Stockopedia, Dividend Cover; fetched 3 Nov 2026, supplied from the owner's earlier fetch; this pass's retry was refused with HTTP 403]. AJ Bell calls 2.00 times "a figure traditionally seen as one that offers comfort and protection in the event of any unforeseen economic setback". It puts FTSE 100 cover at 1.99 times and says the top ten yielders' 1.22 times "looks skinny" [AJ Bell Dividend Dashboard Q4 2025; fetched 3 Nov 2026, supplied from the owner's earlier fetch; this pass's retry returned HTTP 404]. Wall Street Prep adds that a cover above 2.0 is perceived as the minimum floor before shareholders should worry.
+- Rule: the warning fires below 1.0, where the dividend is not covered [Wall Street Prep: "Net income is insufficient to pay the dividend"]. Between 1.0 and 1.5 nothing fires. The page prints the cover figure with the line "below 1.0 the dividend is not covered; 1.5 to 2.0 is the range sources call thin to comfortable". That range is context from the sources: Stockopedia, "Dividend Cover of less than 1.5 may indicate a danger of a dividend cut while more than 2 is viewed as healthy" [Stockopedia, Dividend Cover; fetched 3 Nov 2026, supplied from the owner's earlier fetch; this pass's retry was refused with HTTP 403]. AJ Bell calls 2.00 times "a figure traditionally seen as one that offers comfort and protection in the event of any unforeseen economic setback". It puts FTSE 100 cover at 1.99 times and says the top ten yielders' 1.22 times "looks skinny" [AJ Bell Dividend Dashboard Q4 2025; fetched 3 Nov 2026, supplied from the owner's earlier fetch; this pass's retry returned HTTP 404]. Wall Street Prep adds that a cover above 2.0 is perceived as the minimum floor before shareholders should worry.
 - Why net income and not free cash flow: payers whose free cash flow is negative are common in regulated industries and still pay. Damodaran (January 2026): general utilities pay out 65.40% of net income while their free cash flow to equity before borrowing is negative (minus $23,132m), though positive after new borrowing ($1,550m). EEI reports a payout of 60.9% for its index companies over the twelve months to 30 September 2025, a total of dividends over a total of earnings. Moody's does size dividends against cash flow before working capital, in a separate line of its grid.
 - Why a warning: a dividend cut is a cost to the owner, not a failure of the business.
 - Zero or negative case: average net income at or below zero with a dividend being paid reads "not covered", never a pass. No dividend means the warning does not apply.
+- Calibration result: 11% of names fire it.
+
+- Data guards, found by a cache check before the gate was frozen: the cash-flow dividends line counts only when the provider also records a per-share dividend or a yield, and only the latest fiscal year's line is used. Without them, companies that pay no dividend but whose line held other flows (a software company showed 1,022m, a chip maker 2,088m) read as payers, and 398 spurious payers lifted the warning from 11% to 20% of names.
+- A limit that remains: on 165 of 1,419 payers (12%) the line is more than 1.5 times the common dividend that the per-share figure implies. It may include payouts to preferred, minority or hybrid holders, and 60 of the not-covered names are among them (without them the warning would fire on 8% of names). The raw lines are not kept, so this is reported, not corrected.
+
+### Warning D: runway between 12 and 24 months
+
+- It fires for a company under the runway rule whose cash lasts less than 24 months: "will need to raise money within the holding period". Under 12 months the exclusion takes it. See exclusion 4 for the sources and the trigger.
+- Calibration result: 1% of names fire it.
 
 ### How the rules combine
 
 - Any one failed exclusion excludes. The page names the rule and its figure.
-- "Qualifies" needs the Z'' score and the accrual ratio both evaluated. The F-score counts when nine checks exist. Cash runway counts when it applies. Otherwise the result is "not enough data", with the missing inputs listed.
+- "Qualifies" needs the accrual ratio evaluated and solvency settled. Solvency is settled when it is evaluated, or when the company is a loss-maker before working capital and its runway is evaluated (the runway decides). The F-score counts when nine checks exist. Otherwise the result is "not enough data", with the missing inputs listed.
 - Warnings never change the result. They print beside it.
 
 ### Context, not exclusion: worst-year return on capital
@@ -86,8 +113,10 @@ Worst-year return on capital and similar quality readings stay as context. Reaso
 
 - Run every rule on the union of all cohort members, not on the whole index. Locally there are 58 built cohort folders holding 2,044 member rows and 2,020 distinct tickers (the README counts 57 defined cohorts, so one folder is older). Counted as aggregates only; no names are recorded here.
 - Cost: one EODHD fundamentals request is 10 units. Calibrating on 2,020 names is about 20,200 units. The whole market index of about 25,000 listed companies would be about 250,000 units. This is why the cohort union is used.
-- Report, per industry, the share excluded by each rule. If one rule or the set of rules excludes an industry wholesale, the industry is marked "not covered by the gate in this release". The thresholds are never loosened to admit it.
-- The boundary for the top tenth of accruals and the top fifth of investment intensity (section d) are read from this run and frozen in a versioned file before any backtest.
+- Report, per industry, the share excluded by each rule. If the rules exclude an industry wholesale (more than half of its names), the industry is marked "not covered by the gate in this release". The thresholds are never loosened to admit it.
+- Version 2 was calibrated on 2026-11-03 (2020 names, 20200 units; docs/GATE_CALIBRATION.md). Share of names excluded, by rule: the accrual ratio 1%, solvency 1%, the F-score 0%, the cash runway 1%. Overall, 3% are excluded and 97% qualify. **No exclusion rule breaks the guardrail.** The largest share removed by one rule is 1%.
+- Industries excluded wholesale by the version 2 rules: 0.
+- The calibration changed no threshold. It re-measured the investment-intensity boundary (the top fifth, section d) and listed the industries above, and wrote both into the gate file.
 
 ## c. Banks and insurers
 
@@ -232,7 +261,7 @@ A local bond of a risky country may already carry country risk, so adding 5.0 po
 
 | Lens | Disposition | Reason |
 |---|---|---|
-| Forensic | Kept as gate input | Its accrual and distress readings and its F-score become exclusions 1 to 3. The mark-only lens retires in its ranked form. |
+| Forensic | Kept as gate input | Its accrual reading and its F-score become exclusions 1 and 3; its distress reading becomes warning B. The mark-only lens retires in its ranked form. |
 | Quality | Kept as context | Worst-year return on capital and gross profitability print as quality readings. Its debt-to-profit leg becomes warning A. |
 | Earnings Power Value | Kept as context | Section d, context 2. As a voting lens it retires. |
 | Magic Formula RAW | Retired as a vote | Its earnings yield is context 1. Its return on capital part is context. |
@@ -250,7 +279,7 @@ Strategy files are not edited. The new gate and valuation live in new, versioned
 
 1. **The answer** (written by code, two lines): the verdict of record in plain words, then the one reason that mattered most.
 2. **The story** (written by code, five short paragraphs): what was asked, what the gate found, what the price requires, what to doubt, what this cannot tell you. The optional model summary still replaces it when ticked, and cannot change a number.
-3. **The gate**: a table of four exclusion rules and two warnings, each with its reading, its limit and its result.
+3. **The gate**: a table of four exclusion rules and four warnings, each with its reading, its limit and its result.
 4. **The price test**: earnings yield, implied growth against the three records, and investment intensity.
 5. **The return range**: the four growth cases, the return for each, the hurdle, the verdict, "n of 4 cases clear", and the backtest-form verdict beside it.
 6. **Context, no vote**: quality readings (with the trough year named), momentum, where the company sits among rivals, the valuation band, earnings power value, analysts' readings.
@@ -308,13 +337,14 @@ Old judge records stay as they are, labelled as answers to the old question, and
 | Input | Status | Notes |
 |---|---|---|
 | Net income, operating cash flow, total assets (accrual ratio) | Exists | Annual, period-matched. |
-| Z'' inputs (current assets and liabilities, retained earnings, EBIT, total assets, total liabilities, book equity) | Exists | All annual statement lines are already read. The new score uses book equity, so the price-currency mismatch goes away. |
+| Z'' inputs (current assets and liabilities, retained earnings, EBIT, total assets, total liabilities, book equity) | Exists | All annual statement lines are read. The score uses book equity, so the price-currency mismatch goes away. It is warning B. |
 | F-score and its nine checks | Exists | Rule changes from "5 of 9 checks" to "all 9". |
 | Operating profit and EBIT, annual | Exists | Newest first, dated in the as-of reader. |
 | Free cash flow, operating cash flow, capital spending | Exists | Annual lists. |
-| Depreciation and amortisation | New field | Not read anywhere in the tool today. Needed for EBITDA and for capital spending over depreciation. Both providers carry it on the cash flow statement; confirm on a live payload at build. |
+| Depreciation and amortisation | Added (ABSOLUTE-GATE-1) | Read on both providers: yfinance row "Depreciation And Amortization", EODHD `Cash_Flow` key `depreciation` (both 38,534m for Microsoft FY2026). Needed for EBITDA and for capital spending over depreciation. |
+| Change in working capital | Added (ABSOLUTE-GATE-2) | Read on both providers: yfinance row "Change In Working Capital", EODHD `Cash_Flow` key `changeInWorkingCapital` (both minus 4,895m for Microsoft FY2026). Cash from operations before working-capital changes = operating cash flow minus this line. |
 | Diluted weighted-average shares, history | New field | The yfinance path already stores diluted earnings per share; the share line itself is not stored. The EODHD income statement block does not carry diluted shares (probed on KO.US, 2026-09-21), so that path would use the outstanding-shares history, which is a basic count. State which was used. |
-| Cash runway | Exists as a reading | Rule changes: gross cash over burn, 12 and 24 month lines. |
+| Cash runway | Exists as a reading | Triggers on cash flow before working capital at or below zero; gross cash over burn; 12 months excludes, 24 months warns. |
 | Dividends paid, net income | Exists | Cover on net income is new arithmetic on existing lines. |
 | Earnings power value | Exists | Unchanged. |
 | Tax provision, pretax income | Exists | Used by earnings power value only. |
@@ -340,8 +370,8 @@ The saved run says net cash of $7.3bn (cash and short-term investments $64.5bn, 
 
 ### Phase 1: the gate
 
-- A new, versioned gate definition, a gate result type, and the page sections. Reuses the accrual, distress, F-score, runway and cover readings. Changes: the cash-flow accrual form, the distress version with book equity, the nine-check F-score rule, the runway lines, and the two warnings.
-- Calibration step first (section b). No change to any vote.
+- Built as ABSOLUTE-GATE-1 and amended by ABSOLUTE-GATE-2 and ABSOLUTE-GATE-3: a versioned gate definition (`gates/absolute_gate_v2.yaml`; version 1 stays on disk as the record), a gate result type, the page sections, the calibration tool. Four exclusions (accrual ratio, solvency, F-score, runway) and four warnings (highly leveraged, distress score, dividend cover, runway between 12 and 24 months).
+- Calibrated on the cohort union (section b). No change to any vote.
 
 ### Phase 2: valuation, hurdle and return
 
@@ -371,7 +401,7 @@ Each decision with its source or "judgment". The former open questions 1 to 13 a
 
 1. Worst-year return on capital: context, not a gate. Judgment (the cyclical reasoning in section b).
 2. Banks and insurers: not covered in this release. Decided by the owner.
-3. Distress score: Z'' without constant, excluded below 1.10, grey to 2.60. [Altman 2000; Altman 2002; Altman 2017 slides for the 2.60 derivation.]
+3. Distress score: Z'' without constant, a warning below 1.10, never an exclusion; grey to 2.60. [Altman 2000; Altman 2002; Altman 2017 slides for the 2.60 derivation.] Owner's decision in ABSOLUTE-GATE-2, by principle (a).
 4. Bond and margin: the reporting currency's ten-year yield plus 5.0 points. [Kroll 2026; Fernandez et al. 2025; EODHD bond series.]
 5. Return formula: the ten-year equation, flat after year 10. [Mauboussin and Callahan 2014; Damodaran terminal value rule.] Yield-plus-growth is not used, because it assumes growth continues for ever.
 6. A middle verdict state: none. Four states, with "n of 4 cases clear". Judgment.
@@ -380,7 +410,7 @@ Each decision with its source or "judgment". The former open questions 1 to 13 a
 9. Judges: they do not see the hurdle or the growth rates. Judgment.
 10. Thresholds: each is listed under "Judgment calls" below or carries a source in section b.
 11. Growth above 15%: replaced by a mark above 18% a year. [Chan, Karceski and Lakonishok 2003, Table I.]
-12. Accrual rule: kept, top tenth excluded, boundary from calibration. [Sloan 1996 design; Hribar and Collins 2002.] The evidence is mixed (Lev and Nissim against Mohanram), so it is a check on accounts and not a source of return.
+12. Accrual rule: kept, excluded above 0.10. The owner's fixed line replaces the measured top-tenth boundary, which on the cash-flow form was 0.0054 (median minus 0.049, depreciation added back). [Sloan 1996 design; Hribar and Collins 2002; gate version 1 calibration.] The evidence is mixed (Lev and Nissim against Mohanram), so it is a check on accounts and not a source of return.
 13. Backtest bar: 2 points a year over the equal-weight industry basket, luck under 5%, winning years reported. Judgment, with the drought reason from Arnott et al. 2021.
 
 New decisions.
@@ -390,17 +420,22 @@ New decisions.
 16. Bond source: EODHD bond series through the end-of-day endpoint, probed; US fallbacks ^TNX and FRED DGS10. [EODHD Macroeconomic Data API; FRED.]
 17. Downside case: two years at consensus then a straight line to the bond yield. Shape is judgment; reasons from Chan et al., Damodaran and Mauboussin.
 18. Capital spending measure: capital spending over depreciation printed, plus abnormal investment. [Titman, Wei and Xie; Wall Street Prep.]
-19. Leverage and dividend cover: warnings, not exclusions. Leverage above 6 times [S&P 2009 Table 2 and 2024 tables 17 to 19; Damodaran January 2026; Moody's utilities method]. Cover below 1.0 not covered, 1.0 to 1.5 thin [Wall Street Prep; Stockopedia; AJ Bell].
+19. Leverage: one warning, "highly leveraged", with two readings: net debt over EBITDA above 6 times, or cash flow over debt below 12% [S&P 2009 Table 2 and 2024 tables 17 to 19; Damodaran January 2026; Moody's utilities method]. Dividend cover: a warning only below 1.0 (not covered); 1.5 to 2.0 is printed context for thin to comfortable [Wall Street Prep; Stockopedia; AJ Bell]. Both are warnings, never exclusions.
 20. F-score: excludes 0 or 1, and only when all nine checks can be computed. [Piotroski 2000, Table 3; figures from the owner's earlier fetch, this pass's retry was refused.]
-21. Cash runway: under 12 months excludes; 12 to 24 passes with a warning. [FASB ASU 2014-15 for the 12; BiopharmaWatch and RA Capital for the context.]
-22. Industry not-covered rule: an industry excluded wholesale is marked "not covered by the gate in this release", and thresholds are never loosened. Judgment.
+21. Cash runway: under 12 months excludes; 12 to 24 passes and its own warning fires. [FASB ASU 2014-15 for the 12; BiopharmaWatch and RA Capital for the context.]
+22. Industry not-covered rule: an industry excluded wholesale (more than half of its names) is marked "not covered by the gate in this release", and thresholds are never loosened. Judgment.
+23. Solvency rule: exclusion 2, cash from operations before working-capital changes over gross total debt, excluded below 5% (Moody's B band and below); net cash and debt at or below zero pass first; cash flow at or below zero is "not evaluated: loss-maker, see runway"; a negative ratio never excludes on its own. [Moody's utilities method, CFO pre-WC / Debt grid.] Owner's decision in ABSOLUTE-GATE-2.
+24. Runway trigger: cash from operations before working-capital changes at or below zero, the same measure as solvency, so every company falls under exactly one of the two rules; a year with free cash flow not negative passes as "funded by working capital this year"; the old "not enough data" outcome for that case is removed. Owner's ruling in ABSOLUTE-GATE-3.
+25. Principle (a): an exclusion rule that removes more than one name in ten at calibration is the wrong instrument and becomes a mark until re-specified. The calibration reports a breach and never changes a rule. Owner's principle.
+26. Principle (b): the gate excludes only for broken accounts or solvency; everything else is a mark the reader sees. Owner's principle.
+27. Principle (c): size is not a gate question. The absolute path runs for any company, and one below the backtested range is labelled "outside the tested range", never blocked. Owner's principle.
 
 ### Judgment calls, listed together
 
 - The lower-of base rule (latest year or three-year average).
 - Three-year averages for dividend cover and the free cash flow base.
-- The 24-month line in the runway warning.
-- The 0.10 stand-in for the accrual boundary, and the top-fifth cut for investment intensity.
+- The 24-month line in the runway warning, and the 5% solvency line (the edge of Moody's B band, applied to every industry).
+- The top-fifth cut for investment intensity. (The 0.10 accrual line is the owner's.)
 - The downside case shape.
 - One hurdle for all companies.
 - The pegged-currency mapping of bond series.
@@ -415,7 +450,7 @@ New decisions.
 - **Only four exclusions.** Leverage and dividend cover are warnings, because heavy borrowing is normal in some industries and a dividend cut is a cost, not a failure.
 - **The hurdle margin is 5.0 points, not 4.0, and it is sourced.**
 - **There is a fourth growth case, the downside case,** and "clears hurdle" means all available cases clear.
-- **The distress score changes to the version with book equity.** The one in use abstains for any company whose price and accounts are in different currencies.
+- **The distress score changes to the version with book equity, and is a warning.** The one in use abstains for any company whose price and accounts are in different currencies.
 - **Banks and insurers are not covered.**
 - **No fixed fallback hurdle.** No bond series means "not enough data".
 - **The consensus case is untestable and labelled so.**

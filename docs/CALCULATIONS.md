@@ -1247,7 +1247,7 @@ failure (house rule 3). The state is one of excluded, qualifies, not enough data
 |---|---|---|---|
 | Highly leveraged | net debt / EBITDA, **or** cash flow before working capital / total debt; both readings are printed. EBITDA = EBIT + depreciation and amortisation at the same year end; net debt = Total Debt row minus cash plus short-term investments | net debt / EBITDA above 6 times, or cash flow under 12% of debt (S&P's "highly leveraged" lines) | net cash passes on both readings; EBITDA at or below zero: that reading is not evaluated and the other can still decide; a loss-maker has no cash-flow-over-debt reading; both unreadable: not evaluated |
 | Distress score | Altman Z'' = 6.56 X1 + 3.26 X2 + 6.72 X3 + 1.05 X4; X1 = (current assets - current liabilities) / total assets, X2 = retained earnings / total assets, X3 = EBIT / total assets, X4 = book equity / total liabilities; no constant | below 1.10 (distress zone); 1.10 to 2.60 is a grey zone that passes with a note | total assets or total liabilities at or below zero: not evaluated; negative equity is computed (it lowers X4); a missing line, or statements the provider says are in more than one currency: not evaluated. Every input is a statement line, so an ADR evaluates where the 1968 Z-Score (which mixes in market cap) abstains. The 1968 Z-Score is untouched |
-| Dividend cover | mean net income of up to three years / dividends paid in the latest year | below 1.0 reads "not covered"; 1.0 to 1.5 reads "thin" | no dividend on record: does not apply; mean net income at or below zero with a dividend paid: "not covered", never a pass; net income missing: not evaluated |
+| Dividend cover | mean net income of up to three years / dividends paid in the latest year | below 1.0 reads "not covered"; 1.0 to 1.5 reads "thin" | no dividend on record: does not apply (the cash-flow dividends line counts only when the provider also records a per-share dividend or yield, and only the latest fiscal year's line is used: EODHD's line carried other flows for companies that pay none); mean net income at or below zero with a dividend paid: "not covered", never a pass; net income missing: not evaluated |
 | Cash runway (warning) | the same months as the runway exclusion | under 24 months (the exclusion takes under 12) | as the runway exclusion |
 
 Combination: any failed exclusion excludes, naming the rule and its figure. "Qualifies" needs the accrual ratio
@@ -1263,11 +1263,13 @@ New adapter fields, both providers, no extra request: depreciation and amortisat
 (yfinance row "Change In Working Capital"; EODHD `Cash_Flow` key `changeInWorkingCapital`).
 
 Calibration: `python -m aristos_council.gate calibrate` runs the gate over the union of the built cohort
-members (10 EODHD units a name) and writes aggregates only to `data/gate_calibration_v1.json` and
-`docs/GATE_CALIBRATION.md`. The committed files are version 1's calibration; version 2 has not been
-recalibrated (a recalibration refetches every name because the cache schema changed). Abnormal investment
-(capital spending over sales, divided by its prior three-year average, minus 1; Titman, Wei and Xie) is
-measured by the calibration and carried into version 2's file at its version 1 value; nothing reads it yet.
+members (10 EODHD units a name, in batches of 50, the unit count written after every batch) and writes
+aggregates only to `data/gate_calibration_v2.json` and `docs/GATE_CALIBRATION.md`. Version 1's numbers stay in
+`data/gate_calibration_v1.json`. Version 2 was calibrated on 2026-11-03: 2,020 names, 2,018 read, 20,200
+units; the owner's guardrail (an exclusion rule that removes more than one name in ten is mis-specified) is
+tested and reported, and no rule is changed by the tool. The calibration re-measured abnormal investment
+(capital spending over sales, divided by its prior three-year average, minus 1; Titman, Wei and Xie) and
+wrote its 80th percentile into the gate file; nothing reads it yet.
 
 ## 5. Guards
 

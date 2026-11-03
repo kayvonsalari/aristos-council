@@ -33,7 +33,11 @@ NOT_EVALUATED, NOT_APPLICABLE = "not_evaluated", "not_applicable"
 
 FINANCIAL_SECTORS = ("Financial Services", "Financials")      # abs_readings.is_financial_sector
 NOT_COVERED_FIELD = "Fundamentals.sector"
+COVER_CONTEXT = ("below 1.0 the dividend is not covered; 1.5 to 2.0 is the range sources call thin "
+                 "to comfortable")
 LOSS_MAKER_NOTE = "loss-maker, see runway"
+# runway notes that mean an input is missing (not evaluated), as opposed to "does not apply"
+_RUNWAY_MISSING = ("operating cash flow missing", "change in working capital missing", "no accounts")
 
 
 @dataclass(frozen=True)
@@ -131,10 +135,11 @@ def _cash_runway(f, d: GateDefinition) -> RuleResult:
     r = gr.cash_runway(f)
     limit = f"excluded under {d.runway_exclude_below_months:.0f} months"
     if not r.applies:
-        if r.note in ("operating cash flow missing", "no accounts"):
+        if r.note in _RUNWAY_MISSING:
             return RuleResult("cash_runway", "Cash runway", "not evaluated", limit, NOT_EVALUATED, r.note)
-        why = "operating cash flow is not negative" if "not negative" in r.note else r.note
-        return RuleResult("cash_runway", "Cash runway", "does not apply", limit, NOT_APPLICABLE, why)
+        return RuleResult("cash_runway", "Cash runway", "does not apply", limit, NOT_APPLICABLE, r.note)
+    if r.funded_by_wc:
+        return RuleResult("cash_runway", "Cash runway", "not burning cash", limit, PASS, r.note)
     if r.months is None:
         return RuleResult("cash_runway", "Cash runway", "not evaluated", limit, NOT_EVALUATED, r.note)
     verdict = FAIL if r.months < d.runway_exclude_below_months else PASS
@@ -189,7 +194,7 @@ def _distress_score(f, d: GateDefinition) -> RuleResult:
 
 def _dividend_cover(f, d: GateDefinition) -> RuleResult:
     r = gr.dividend_cover(f, years=d.cover_years)
-    limit = f"not covered below {d.cover_not_covered_below:.1f}; thin to {d.cover_thin_below:.1f}"
+    limit = COVER_CONTEXT
     if not r.applies:
         if r.note in ("dividends paid missing", "no accounts"):
             return RuleResult("dividend_cover", "Dividend cover", "not evaluated", limit,
@@ -199,13 +204,9 @@ def _dividend_cover(f, d: GateDefinition) -> RuleResult:
     if r.cover is None:
         return RuleResult("dividend_cover", "Dividend cover", "not evaluated", limit, NOT_EVALUATED, r.note)
     if r.cover < d.cover_not_covered_below:
-        word, verdict = "not covered", WARN
-    elif r.cover < d.cover_thin_below:
-        word, verdict = "thin", WARN
-    else:
-        word, verdict = "covered", PASS
-    return RuleResult("dividend_cover", "Dividend cover", f"{_times(r.cover)} ({word})", limit,
-                      verdict, r.note, r.cover)
+        return RuleResult("dividend_cover", "Dividend cover", f"{_times(r.cover)} (not covered)", limit,
+                          WARN, r.note, r.cover)
+    return RuleResult("dividend_cover", "Dividend cover", _times(r.cover), limit, PASS, r.note, r.cover)
 
 
 def _runway_warning(f, d: GateDefinition) -> RuleResult:
@@ -213,10 +214,11 @@ def _runway_warning(f, d: GateDefinition) -> RuleResult:
     limit = f"warning under {d.runway_warn_below_months:.0f} months"
     label = "Cash runway"
     if not r.applies:
-        if r.note in ("operating cash flow missing", "no accounts"):
+        if r.note in _RUNWAY_MISSING:
             return RuleResult("runway_warning", label, "not evaluated", limit, NOT_EVALUATED, r.note)
-        return RuleResult("runway_warning", label, "does not apply", limit, NOT_APPLICABLE,
-                          "operating cash flow is not negative")
+        return RuleResult("runway_warning", label, "does not apply", limit, NOT_APPLICABLE, r.note)
+    if r.funded_by_wc:
+        return RuleResult("runway_warning", label, "not burning cash", limit, PASS, r.note)
     if r.months is None:
         return RuleResult("runway_warning", label, "not evaluated", limit, NOT_EVALUATED, r.note)
     if r.months < d.runway_warn_below_months:
@@ -283,9 +285,8 @@ def evaluate_gate(f, definition: GateDefinition) -> GateResult:
         if sol.note == LOSS_MAKER_NOTE:
             run = by_key["cash_runway"]
             if run.result != PASS:                          # the runway decides, and it cannot
-                why = ("it does not apply: operating cash flow is not negative"
-                       if run.result == NOT_APPLICABLE else run.note)
-                missing.append(f"solvency and cash runway (a loss-maker before working capital; {why})")
+                missing.append(f"solvency and cash runway (a loss-maker before working capital; "
+                               f"the runway is {run.result.replace('_', ' ')}: {run.note})")
         else:
             missing.append(f"solvency ({sol.note})")
     if missing:

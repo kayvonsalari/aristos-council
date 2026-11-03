@@ -58,7 +58,7 @@ def msft() -> Fundamentals:
         total_revenue=[331_800 * M, 281_700 * M],
         gross_profit_annual=[230_000 * M, 193_000 * M],
         shares_outstanding_annual=[7_430 * M, 7_433 * M],
-        dividends_paid=25_000 * M,
+        dividends_paid=25_000 * M, dividend_per_share=3.4, dividend_yield=0.008,
         # debt as the tool counts it: 9,227 + 31,067 + the 16,532 long-term operating lease line
         total_debt=56_826 * M, total_cash=76_843 * M)
 
@@ -334,14 +334,45 @@ def test_a_score_of_two_passes_the_cut():
 # --------------------------------------------------------------------------- #
 # cash runway: an exclusion under 12 months, and its own warning from 12 to 24
 # --------------------------------------------------------------------------- #
-def _burn(cash, fcf=-100.0, ocf=-80.0):
-    return _f(operating_cash_flow_annual=[ocf], free_cash_flow_annual=[fcf], total_cash=cash)
+def _burn(cash, fcf=-100.0, ocf=-80.0, dwc=0.0):
+    return _f(operating_cash_flow_annual=[ocf], change_in_working_capital_annual=[dwc],
+              free_cash_flow_annual=[fcf], total_cash=cash)
 
 
-def test_runway_does_not_apply_when_operating_cash_flow_is_positive():
-    f = _f(operating_cash_flow_annual=[50.0], free_cash_flow_annual=[-10.0], total_cash=5.0)
+def test_runway_does_not_apply_when_cash_flow_before_working_capital_is_positive():
+    f = _f(operating_cash_flow_annual=[50.0], change_in_working_capital_annual=[0.0],
+           free_cash_flow_annual=[-10.0], total_cash=5.0)
     assert engine._cash_runway(f, D).result == "not_applicable"
     assert engine._runway_warning(f, D).result == "not_applicable"
+
+
+def test_the_runway_triggers_on_cash_flow_before_working_capital_not_on_reported_operating_cash_flow():
+    """Operating cash flow +20 only because working capital released +60: before working capital the flow is
+    -40, so the runway applies (and the solvency ratio does not). ABSOLUTE-GATE-3."""
+    f = _burn(cash=150.0, fcf=-100.0, ocf=20.0, dwc=60.0)
+    assert gr.cash_runway(f).applies
+    assert engine._cash_runway(f, D).result == "pass"                    # 18 months
+
+
+def test_a_loss_maker_year_with_free_cash_flow_not_negative_is_funded_by_working_capital_and_passes():
+    f = _burn(cash=10.0, fcf=5.0, ocf=20.0, dwc=60.0)                    # -40 before working capital
+    r = engine._cash_runway(f, D)
+    assert r.result == "pass" and r.note == "funded by working capital this year"
+    w = engine._runway_warning(f, D)
+    assert w.result == "pass" and w.note == "funded by working capital this year"
+
+
+def test_every_company_falls_under_exactly_one_of_solvency_and_the_runway():
+    """Cash flow before working capital positive: solvency forms (or passes) and the runway does not apply.
+    At or below zero: the runway applies and the solvency ratio is never formed."""
+    positive = _f(total_debt=1000.0, total_cash=10.0, operating_cash_flow_annual=[90.0],
+                  change_in_working_capital_annual=[0.0], free_cash_flow_annual=[40.0])
+    assert gr.solvency(positive).state == "ratio" and not gr.cash_runway(positive).applies
+    loss = _f(total_debt=1000.0, total_cash=10.0, operating_cash_flow_annual=[-90.0],
+              change_in_working_capital_annual=[0.0], free_cash_flow_annual=[-140.0])
+    assert gr.solvency(loss).state == "loss_maker" and gr.cash_runway(loss).applies
+    zero = replace(loss, operating_cash_flow_annual=[0.0])
+    assert gr.solvency(zero).state == "loss_maker" and gr.cash_runway(zero).applies
 
 
 def test_runway_under_twelve_months_excludes():
@@ -366,22 +397,20 @@ def test_runway_of_twenty_four_months_or_more_passes_both():
 
 
 def test_runway_with_cash_missing_is_not_evaluated():
-    f = _f(operating_cash_flow_annual=[-80.0], free_cash_flow_annual=[-100.0])
+    f = _f(operating_cash_flow_annual=[-80.0], change_in_working_capital_annual=[0.0],
+           free_cash_flow_annual=[-100.0])
     assert engine._cash_runway(f, D).result == "not_evaluated"
 
 
-def test_runway_with_operating_cash_flow_missing_is_not_evaluated():
+def test_runway_with_operating_cash_flow_or_the_working_capital_line_missing_is_not_evaluated():
     assert engine._cash_runway(_f(total_cash=100.0), D).result == "not_evaluated"
+    assert engine._cash_runway(_f(total_cash=100.0, operating_cash_flow_annual=[-80.0]), D).result == "not_evaluated"
 
 
 def test_runway_burn_is_free_cash_flow_derived_from_capex_when_the_provider_gives_none():
-    f = _f(operating_cash_flow_annual=[-20.0], capital_expenditure_annual=[-30.0], total_cash=100.0)
+    f = _f(operating_cash_flow_annual=[-20.0], change_in_working_capital_annual=[0.0],
+           capital_expenditure_annual=[-30.0], total_cash=100.0)
     assert gr.cash_runway(f).months == pytest.approx(12.0 * 100.0 / 50.0)
-
-
-def test_runway_does_not_apply_when_free_cash_flow_is_not_negative():
-    assert not gr.cash_runway(_f(operating_cash_flow_annual=[-5.0], free_cash_flow_annual=[3.0],
-                                 total_cash=10.0)).applies
 
 
 # --------------------------------------------------------------------------- #
@@ -444,7 +473,8 @@ def test_leverage_reads_the_newest_period_scalars_when_the_provider_gives_no_bal
 # dividend cover warning
 # --------------------------------------------------------------------------- #
 def _cover(ni, paid):
-    return _f(net_income=list(ni), dividends_paid=paid)
+    # a dividend on record (per-share figure) corroborates the cash-flow line, as the rule requires
+    return _f(net_income=list(ni), dividends_paid=paid, dividend_per_share=1.0)
 
 
 def test_no_dividend_means_the_warning_does_not_apply():
@@ -456,9 +486,15 @@ def test_cover_below_one_reads_not_covered():
     assert r.result == "warn" and "not covered" in r.reading
 
 
-def test_cover_between_one_and_one_and_a_half_reads_thin():
+def test_cover_between_one_and_one_and_a_half_is_context_not_a_warning():
     r = engine._dividend_cover(_cover([120.0, 120.0, 120.0], 100.0), D)
-    assert r.result == "warn" and "thin" in r.reading
+    assert r.result == "pass" and r.reading == "1.2 times" and "thin" not in r.reading
+    assert r.limit == ("below 1.0 the dividend is not covered; 1.5 to 2.0 is the range sources call thin "
+                       "to comfortable")
+
+
+def test_cover_of_exactly_one_does_not_warn():
+    assert engine._dividend_cover(_cover([100.0, 100.0, 100.0], 100.0), D).result == "pass"
 
 
 def test_cover_of_one_and_a_half_or_more_passes():
@@ -487,14 +523,40 @@ def test_a_payer_whose_cash_flow_line_is_missing_stays_not_evaluated():
     assert r.result == "not_evaluated"
 
 
-def test_cover_reads_the_newest_periods_dividend_when_the_provider_gives_no_scalar():
-    f = _f(net_income=[300.0, 300.0, 300.0],
+def test_cover_reads_the_latest_periods_dividend_when_the_provider_gives_no_scalar():
+    f = _f(net_income=[300.0, 300.0, 300.0], dividend_per_share=1.0,
            period_scalars={"2025-12-31": {"dividends_paid": 100.0}, "2024-12-31": {"dividends_paid": 1.0}})
     assert gr.dividend_cover(f).cover == pytest.approx(3.0)
 
 
+def test_an_older_periods_line_is_never_this_years_dividend():
+    """Found by the cache check (ABSOLUTE-GATE-3): the fallback used to take the newest period that had ANY
+    value, so a company with no dividend line this year borrowed a figure from years back."""
+    f = _f(net_income=[300.0, 300.0, 300.0], dividend_per_share=1.0,
+           period_scalars={"2025-12-31": {"dividends_paid": None}, "2021-12-31": {"dividends_paid": 1000.0}})
+    r = gr.dividend_cover(f)
+    assert r.cover is None and r.note == "dividends paid missing"
+    assert engine._dividend_cover(f, D).result == "not_evaluated"
+
+
+def test_a_cash_flow_line_without_a_dividend_on_record_is_not_a_dividend():
+    """Found by the cache check: EODHD's dividends line carried other flows for companies that pay none (a
+    software company with no dividend showed 1,022m). Corroboration by the per-share dividend or yield is
+    required, so these read 'no dividend paid', not 'not covered'."""
+    f = _f(net_income=[-60.0, -40.0, -50.0], dividends_paid=1022.0)
+    r = engine._dividend_cover(f, D)
+    assert r.result == "not_applicable" and r.reading == "no dividend paid"
+    assert engine._dividend_cover(replace(f, dividend_per_share=0.0, dividend_yield=0.0), D).result \
+        == "not_applicable"
+
+
+def test_a_yield_alone_corroborates_the_dividend():
+    f = _f(net_income=[100.0, 100.0, 100.0], dividends_paid=50.0, dividend_yield=0.02)
+    assert gr.dividend_cover(f).cover == pytest.approx(2.0)
+
+
 def test_cover_with_net_income_missing_is_not_evaluated():
-    assert engine._dividend_cover(_f(dividends_paid=100.0), D).result == "not_evaluated"
+    assert engine._dividend_cover(_f(dividends_paid=100.0, dividend_per_share=1.0), D).result == "not_evaluated"
 
 
 # --------------------------------------------------------------------------- #
@@ -562,13 +624,24 @@ def test_a_loss_maker_is_excluded_by_the_runway_when_it_is_short():
     assert g.state == EXCLUDED and "Cash runway" in g.reason and "Solvency" not in g.reason
 
 
-def test_a_loss_maker_before_working_capital_whose_runway_does_not_apply_has_nothing_to_decide():
-    """Operating cash flow positive only because working capital released cash: cash flow before working
-    capital is negative (solvency not evaluated) and the runway does not apply, so neither can decide."""
+def test_a_company_whose_operating_cash_flow_is_positive_only_through_working_capital_is_decided_by_the_runway():
+    """Owner's ruling (ABSOLUTE-GATE-3): the old "not enough data" outcome for this case is removed. Cash flow
+    before working capital is negative (-40), so the runway decides; free cash flow is not negative this year,
+    so it passes as funded by working capital."""
     f = replace(msft(), operating_cash_flow_annual=[20 * M], change_in_working_capital_annual=[60 * M],
-                total_debt=500 * M, total_cash=100 * M, net_income=[15 * M, 10 * M, 5 * M])
+                free_cash_flow_annual=[5 * M], total_debt=500 * M, total_cash=100 * M,
+                net_income=[15 * M, 10 * M, 5 * M])
     g = evaluate_gate(f, D)
-    assert g.state == NOT_ENOUGH_DATA and any("loss-maker" in m for m in g.missing)
+    by = {r.key: r for r in g.rules}
+    assert g.state == QUALIFIES and by["solvency"].note == "loss-maker, see runway"
+    assert by["cash_runway"].result == "pass" and by["cash_runway"].note == "funded by working capital this year"
+    assert g.missing == ()
+
+
+def test_a_loss_maker_whose_runway_cannot_be_evaluated_is_not_enough_data():
+    f = _loss_maker(free_cash_flow_annual=[], capital_expenditure_annual=[])
+    g = evaluate_gate(f, D)
+    assert g.state == NOT_ENOUGH_DATA and any("runway" in m for m in g.missing)
 
 
 def test_a_withheld_f_score_does_not_block_qualifying():
@@ -618,7 +691,7 @@ def test_the_gate_file_loads_with_every_threshold_the_owner_set():
     assert (D.z_warn_below, D.z_grey_to) == (1.10, 2.60)
     assert D.f_exclude_at_or_below == 1 and D.f_required_checks == 9
     assert (D.runway_exclude_below_months, D.runway_warn_below_months) == (12, 24)
-    assert (D.cover_not_covered_below, D.cover_thin_below, D.cover_years) == (1.0, 1.5, 3)
+    assert (D.cover_not_covered_below, D.cover_years) == (1.0, 3)
     assert D.intensity_warn_above == 0.2676                 # carried from version 1's calibration
 
 
@@ -633,6 +706,7 @@ def test_version_one_stays_on_disk_unchanged_and_is_refused_by_the_loader():
     from aristos_council.gate.definition import GATES_DIR
     text = (GATES_DIR / "absolute_gate_v1.yaml").read_text(encoding="utf-8")
     assert "status: frozen" in text and "exclude_above: 0.0054" in text and "exclude_below: 1.10" in text
+    assert text.startswith("# SUPERSEDED by absolute_gate_v2.yaml")
     with pytest.raises(GateDefinitionError, match="version 1"):
         load_gate("absolute_gate_v1")
 

@@ -1,3 +1,6 @@
+# SUPERSEDED by absolute_gate_v2.yaml (ABSOLUTE-GATE-2). Kept unchanged below as the record of what version 1
+# measured; the engine no longer evaluates it. Only this notice was added.
+#
 # ABSOLUTE-GATE-1 - the exclusion gate, version 1 (docs/DESIGN_absolute.md, section b, revision 3).
 #
 # Only accounting and solvency failures exclude. Four exclusion rules, two warnings. This file is

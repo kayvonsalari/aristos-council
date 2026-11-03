@@ -226,31 +226,38 @@ def solvency(f) -> SolvencyReading:
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class RunwayReading:
-    applies: bool                 # False when operating cash flow is not negative
+    applies: bool                 # False when cash flow before working capital is positive
     months: Optional[float] = None
     note: str = ""
+    funded_by_wc: bool = False    # a loss-maker before working capital whose free cash flow is not negative
+
+
+FUNDED_BY_WC_NOTE = "funded by working capital this year"
 
 
 def cash_runway(f) -> RunwayReading:
-    """Months the cash lasts at last year's burn - only for a company whose latest annual operating cash
-    flow is NEGATIVE. Burn is the negative free cash flow of that year (free cash flow = operating cash
-    flow minus capital spending when the provider gives no figure). Cash is cash plus short-term
-    investments. A company that makes cash, or whose free cash flow is not negative, has no burn."""
+    """Months the cash lasts at last year's burn. ABSOLUTE-GATE-3: it triggers on cash from operations BEFORE
+    working-capital changes at or below zero, the same measure the solvency rule uses, so every company
+    falls under exactly one of the two (positive: solvency; at or below zero: this rule). Burn is the
+    negative free cash flow of the latest year (operating cash flow minus capital spending when the provider
+    gives no free cash flow). If free cash flow is not negative in such a year, working capital funded it and
+    the runway passes with that note. Cash is cash plus short-term investments."""
     if f is None:
         return RunwayReading(applies=False, note="no accounts")
-    ocf = _first(getattr(f, "operating_cash_flow_annual", None))
-    if ocf is None:
-        return RunwayReading(applies=False, note="operating cash flow missing")
-    if ocf >= 0:
-        return RunwayReading(applies=False, note="operating cash flow is not negative")
+    cfo = cash_flow_before_working_capital(f)
+    if cfo.value is None:
+        return RunwayReading(applies=False, note=cfo.note)
+    if cfo.value > 0:
+        return RunwayReading(applies=False, note="cash flow before working capital is not negative")
     fcf = _first(getattr(f, "free_cash_flow_annual", None))
     if fcf is None:
+        ocf = _first(getattr(f, "operating_cash_flow_annual", None))
         capex = _first(getattr(f, "capital_expenditure_annual", None))
-        fcf = ocf - abs(capex) if capex is not None else None
+        fcf = ocf - abs(capex) if (ocf is not None and capex is not None) else None
     if fcf is None:
         return RunwayReading(applies=True, note="free cash flow missing")
     if fcf >= 0:
-        return RunwayReading(applies=False, note="free cash flow is not negative")
+        return RunwayReading(applies=True, funded_by_wc=True, note=FUNDED_BY_WC_NOTE)
     cash = _num(getattr(f, "total_cash", None))
     if cash is None:
         scalars = getattr(f, "period_scalars", None) or {}
@@ -275,27 +282,29 @@ class CoverReading:
 
 
 def dividend_cover(f, *, years: int = 3) -> CoverReading:
-    """Average net income of up to ``years`` fiscal years divided by the dividends paid (cash, the
-    current year). No dividend means it does not apply. An average net income at or below zero with a
+    """Average net income of up to ``years`` fiscal years divided by the dividends paid (cash, the LATEST
+    fiscal year). No dividend means it does not apply. An average net income at or below zero with a
     dividend being paid is a cover of zero or less, which the gate reads as "not covered": it is never a
-    pass and never an abstention."""
+    pass and never an abstention.
+
+    Two guards found by the cache check of ABSOLUTE-GATE-3. (1) A dividend must be CORROBORATED by the
+    provider's own per-share dividend or yield: EODHD's cash-flow dividends line carries other flows for
+    companies that pay none (a software company with no dividend showed 1,022m; a chip maker, 2,088m), so
+    a line without a dividend on record is not a dividend. (2) The line must be the LATEST period's: an
+    older year's value is not this year's dividend, so a missing latest line is "missing", never the
+    newest line that happens to be filled in."""
     if f is None:
         return CoverReading(applies=False, note="no accounts")
+    dps, yld = _num(getattr(f, "dividend_per_share", None)), _num(getattr(f, "dividend_yield", None))
+    if not ((dps or 0) > 0 or (yld or 0) > 0):
+        return CoverReading(applies=False, note="no dividend paid")
     paid = _num(getattr(f, "dividends_paid", None))
     if paid is None:
-        # EODHD carries the cash dividend per fiscal period, not as a scalar: read the newest period's
+        # EODHD carries the cash dividend per fiscal period, not as a scalar: the LATEST period's only
         scalars = getattr(f, "period_scalars", None) or {}
-        for period in sorted(scalars, reverse=True):
-            paid = _num((scalars[period] or {}).get("dividends_paid"))
-            if paid is not None:
-                break
+        if scalars:
+            paid = _num((scalars[max(scalars)] or {}).get("dividends_paid"))
     if paid is None:
-        # No cash-flow line. A company with no dividend on record has none to cover (providers leave the
-        # line empty for non-payers); one that does pay has a per-share dividend or a yield, so a missing
-        # line there is a real gap and stays not evaluated.
-        dps, yld = _num(getattr(f, "dividend_per_share", None)), _num(getattr(f, "dividend_yield", None))
-        if not ((dps or 0) > 0 or (yld or 0) > 0):
-            return CoverReading(applies=False, note="no dividend paid")
         return CoverReading(applies=False, note="dividends paid missing")
     if paid <= 0:
         return CoverReading(applies=False, note="no dividend paid")

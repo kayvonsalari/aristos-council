@@ -40,7 +40,6 @@ class GateDefinition:
     z_warn_below: float
     z_grey_to: float
     cover_not_covered_below: float
-    cover_thin_below: float
     cover_years: int
     intensity_warn_above: Optional[float] = None
     not_covered_industries: tuple = ()
@@ -89,7 +88,6 @@ def parse_gate(doc: dict) -> GateDefinition:
         z_warn_below=_need(dist, "warn_below", "warnings.distress_score"),
         z_grey_to=_need(dist, "grey_to", "warnings.distress_score"),
         cover_not_covered_below=_need(cov, "not_covered_below", "warnings.dividend_cover"),
-        cover_thin_below=_need(cov, "thin_below", "warnings.dividend_cover"),
         cover_years=_need(cov, "years", "warnings.dividend_cover", int),
         intensity_warn_above=(float(intensity) if isinstance(intensity, (int, float))
                               and not isinstance(intensity, bool) else None),
