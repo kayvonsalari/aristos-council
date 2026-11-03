@@ -2,7 +2,7 @@
 
 Status: design for approval, revision 2, 2026-11-03. Nothing here is built. No code, strategy file, backtest result or data file changes with this page.
 
-How to read the sources on this page. A figure is either cited to a source by name, in brackets, or marked "judgment". A figure the owner's brief attributed to a source that could not be read is not carried over as a fact. It is marked "not confirmed" and listed in the Sources section. Where the source says something different from the brief, the source wins and the difference is said.
+How to read the sources on this page. A figure is either cited to a source by name, in brackets, or marked "judgment". A figure the owner's brief attributed to a source that could not be read in the verification pass is carried only where the owner's earlier pass fetched it with the quotation given. It is then cited as "fetched 3 Nov 2026 in the owner's earlier pass; this pass's retry was refused", and the Sources section says so. Any other such figure is marked "not confirmed" and listed in the Sources section. Where the source says something different from the brief, the source wins and the difference is said.
 
 ## a. The question Aristos answers now, and why it is being replaced
 
@@ -38,16 +38,16 @@ The gate has exactly four exclusion rules and two warnings. Each returns exclude
   X1 = working capital / total assets. X2 = retained earnings / total assets. X3 = EBIT / total assets. X4 = book value of equity / total liabilities. (Working capital is current assets minus current liabilities. EBIT is profit before interest and tax.) The definitions are those on Altman's 2017 slides.
 - Why this version: it uses book equity, not market value, and has no sales term. So a company whose shares are quoted in one currency and whose accounts are in another is no longer a problem. Every input is a statement figure and the ratios cancel the currency. The version in use today abstains for those companies.
 - Rule: exclude below 1.10. Altman (2002): "Z''-Scores below 1.10 indicate a distressed condition", in the form without a constant. The grey zone, 1.10 to 2.60, passes with a note. The 2.60 is derived, not quoted. Altman's 2017 slides give the zones for the version with a constant of 3.25 (distress below 4.35, safe above 5.85). The constant is stated in Altman (2000, 2002, 2018). Taking it off gives 1.10 and 2.60.
-- Honesty line: the general Z-Score model was tested across many countries in Altman, Iwanicz-Drozdowska, Laitinen and Suvas (2017). That abstract could not be read for this page, so its accuracy figure is not quoted and is not confirmed. The rule therefore excludes only in the clear distress zone.
+- Honesty line: "the general Z-Score model works reasonably well for most countries (the prediction accuracy is approximately 0.75)", and "classification accuracy can be improved further (above 0.90) by using country-specific estimation" [Altman, Iwanicz-Drozdowska, Laitinen and Suvas 2017, abstract; read on the vlex copy on 3 Nov 2026; the SSRN page refused]. That accuracy is the authors' own measure, not a hit rate we have tested. The rule therefore excludes only in the clear distress zone.
 - Zero or negative case: total liabilities or total assets at or below zero is not evaluated. Negative equity makes X4 negative and the score low. That is real information and is allowed to count.
 - Not for banks and insurers (section c).
 
 ### Exclusion 3: accounting health (F-score)
 
 - What it is: nine yes/no checks on profit, borrowing and efficiency, scored 0 to 9 [Piotroski 2000].
-- Rule: exclude a score of 0 or 1. It counts only when all nine checks can be computed, as in his sample design. With fewer, the page shows "x of 9 computable" and the rule is not evaluated. This replaces the present rule, which scores from five checks.
-- The source could not be read for this page (HTTP 403), so the returns he reports for the low and high groups are not quoted and are not confirmed. Walkshäusl (2020) finds high-score firms beat low-score firms by about 10% a year in non-US markets over 2000 to 2018 (section o).
-- Disclosure: the brief says Piotroski tested the score on high book-to-market stocks only, while we apply it to every company. That could not be checked here either.
+- Rule: exclude a score of 0 or 1. Piotroski's own groups: "The Low F-SCORE portfolio consists of firms with an aggregate score of 0 or 1; the High F-SCORE portfolio consists of firms with a score of 8 or 9." It counts only when all nine checks can be computed, as in his sample design. With fewer, the page shows "x of 9 computable" and the rule is not evaluated. This replaces the present rule, which scores from five checks.
+- Evidence: one-year market-adjusted returns of 0.134 for the high group and minus 0.096 for the low group. "The mean return difference of 0.230 is significant at the 1% level." [Piotroski 2000, Table 3; fetched 3 Nov 2026 in the owner's earlier pass; this pass's retry was refused]. Walkshäusl (2020) finds high-score firms beat low-score firms by about 10% a year in non-US markets over 2000 to 2018 (section o).
+- Disclosure: his sample is "firms in the highest BM quintile with sufficient financial statement data to calculate the various performance signals" [same source and note]. He tested the score on high book-to-market stocks only, and we apply it to every company.
 
 ### Exclusion 4: cash runway, only when operating cash flow is negative
 
@@ -205,13 +205,13 @@ The backtest-form verdict is computed and shown on every live page beside the fu
 - It is always a range with named cases, never one number.
 - The line under it: these are what the price returns if the stated growth repeats. They are not forecasts. Past growth may not repeat. Forecasts can be wrong. The model's narration cannot change them.
 - Any growth case above 18% a year is marked, and still shown.
-- This figure shows what today's price requires. Studies of company-level implied returns find they rank future returns weakly, so the figure is a question put to the reader and not an answer (section o, "Implied returns"). The gate and the cash yield carry the evidence; this figure carries the question.
+- This figure shows what today's price requires. Studies of company-level implied returns find they rank future returns only partly: where 1 would be perfect, the weakest model scores about 0.2 and the better ones 0.5 to 0.65, and four of five measures do no better than a fixed constant in the cross section (section o, Implied returns). So the figure is a question put to the reader and not an answer (section o, "Implied returns"). The gate and the cash yield carry the evidence; this figure carries the question.
 
 ## g. The hurdle
 
 Hurdle = the ten-year government bond yield of the reporting currency + 5.0 percentage points.
 
-**Why 5.0.** Kroll's recommended US equity risk premium is 5.0%, reaffirmed on 30 January 2026 and effective 2 September 2025. It is paired with the higher of a normalised risk-free rate of 3.5% or the spot 20-year Treasury yield [Kroll Cost of Capital Inputs, year-end 2025]. The 2025 survey of finance professionals by Fernandez et al. gives median market risk premia of 5.0 (USA), 5.2 (Germany), 5.1 (UK), 4.4 (Switzerland), 5.7 (Japan) and 7.6 (Brazil), with averages of 5.5, 5.4, 5.4, 4.2, 5.1 and 7.9. For contrast, Damodaran's home page shows an implied premium of 4.41% on 1 November 2026, with 4.20% listed as the previous month. His January 2026 country table gives 4.46% for the US and 4.23% for mature markets. His 1928 to 2025 historical average could not be read and is not used.
+**Why 5.0.** Kroll's recommended US equity risk premium is 5.0%, reaffirmed on 30 January 2026 and effective 2 September 2025. It is paired with the higher of a normalised risk-free rate of 3.5% or the spot 20-year Treasury yield [Kroll Cost of Capital Inputs, year-end 2025]. The 2025 survey of finance professionals by Fernandez et al. gives median market risk premia of 5.0 (USA), 5.2 (Germany), 5.1 (UK), 4.4 (Switzerland), 5.7 (Japan) and 7.6 (Brazil), with averages of 5.5, 5.4, 5.4, 4.2, 5.1 and 7.9. For contrast, Damodaran's home page shows an implied premium of 4.41% on 1 November 2026, with 4.20% listed as the previous month. His January 2026 country table gives 4.46% for the US and 4.23% for mature markets. His 1928 to 2025 arithmetic means are 11.85% for stocks, 3.41% for T-bills and 4.82% for T-bonds, with premiums of "8.44% for stocks over T. Bills and 7.03% for stocks over T. Bonds" [Damodaran, Equity Risk Premiums 2026 edition, Table 3; fetched 3 Nov 2026 in the owner's earlier pass; this pass's retry was refused].
 
 The earlier proposal of 4.0 points is dropped. It was a judgment chosen so that more names would clear, which is the wrong reason.
 
@@ -222,7 +222,7 @@ The earlier proposal of 4.0 points is dropped. It was a judgment chosen so that 
 - A currency-to-series table is kept as data. For example, the euro maps to the German ten-year. Currencies pegged to another, such as the Hong Kong dollar, map to the US series, and the mapping is documented. The list of available series needs a token and was not read, so only the two series named above are verified.
 - No series for a currency: the result is "not enough data: no hurdle".
 - The last good yield is kept for 7 days, then lapses.
-- US fallbacks: the ^TNX page on Yahoo Finance loads and shows daily rows, though its stated history is one year in view and the "since 1962" claim is not confirmed. FRED's DGS10 series gave 4.94 for 30 October 2026 and needs a free API key.
+- US fallbacks: ^TNX on Yahoo Finance. Its history page with a 1962 window (https://finance.yahoo.com/quote/%5ETNX/history/?period1=-252460800&period2=-157766400&interval=1mo) shows rows from January 1962 and includes Jun 22, 1962 at 3.9000 (read 3 Nov 2026). ^IRX, with %5EIRX in the same address, also shows rows from January 1962 (its first row as read is 2 January 1962, not June). FRED's DGS10 series gave 4.94 for 30 October 2026 and needs a free API key.
 - EODHD also has a US Treasury rates API (beta, all plans, one call per request).
 - Cash comparison in the backtest: the US 3-month bill, FRED DTB3 (3.99 on 30 October 2026), labelled a benchmark and not a hurdle. ^IRX was not checked.
 
@@ -273,10 +273,10 @@ The text download keeps every section.
 **Method, reusing what exists.**
 - Monthly rounds on accounts already published, using the as-of reader. Each form is held equal-weight for 12 and for 36 months, with the existing 0.5% round-trip cost.
 - Qualifying counts are reported per month and per industry, so a result built on three names is visible as such.
-- Market value at past dates is historical diluted share count times the price on that date, using EODHD's outstanding-shares history. It is not today's value scaled by price change, which is what the backtest does now.
+- Market value at past dates is the historical share count (outstanding shares from the provider; diluted where it carries them) times the price on that date, using EODHD's outstanding-shares history. It is not today's value scaled by price change, which is what the backtest does now.
 - Three comparisons, kept: a broad index, cash (the US 3-month bill) and the equal-weight same-industry basket. Excess is measured against each separately.
 - Luck test: the existing one, 500 random baskets of the same size and turnover drawn from the same industry pool. Drop-best check: the existing one.
-- Pass bar: at least 2 points a year over the equal-weight industry basket across the full window, with the luck score under 5%. The count of winning years is reported, not required, because cheapness works with long droughts. One fetched study measures a drawdown of 55% in value against growth from 2007 to mid-2020 [Arnott et al. 2021].
+- Pass bar: at least 2 points a year over the equal-weight industry basket across the full window, with the luck score under 5%. The count of winning years is reported, not required, because cheapness works with long droughts. Swedroe (2018): the value premium averaged 4.8% a year over 1927 to 2017 and was negative in 22% of five-year periods, 14% of ten-year periods and 6% of twenty-year periods [Swedroe 2018; fetched 3 Nov 2026 in the owner's earlier pass; this pass's retry was refused]. One fetched study measures a drawdown of 55% in value against growth from 2007 to mid-2020 [Arnott et al. 2021].
 - The 3-year hold is reported without pass or fail, since it has far fewer independent rounds.
 
 **What can and cannot be tested.**
@@ -391,7 +391,7 @@ New decisions.
 17. Downside case: two years at consensus then a straight line to the bond yield. Shape is judgment; reasons from Chan et al., Damodaran and Mauboussin.
 18. Capital spending measure: capital spending over depreciation printed, plus abnormal investment. [Titman, Wei and Xie; Wall Street Prep.]
 19. Leverage and dividend cover: warnings, not exclusions. Leverage above 6 times [S&P 2009 Table 2 and 2024 tables 17 to 19; Damodaran January 2026; Moody's utilities method]. Cover below 1.0 not covered, 1.0 to 1.5 thin [Wall Street Prep; Stockopedia; AJ Bell].
-20. F-score: excludes 0 or 1, and only when all nine checks can be computed. [Piotroski 2000, source not read.]
+20. F-score: excludes 0 or 1, and only when all nine checks can be computed. [Piotroski 2000, Table 3; figures from the owner's earlier fetch, this pass's retry was refused.]
 21. Cash runway: under 12 months excludes; 12 to 24 passes with a warning. [FASB ASU 2014-15 for the 12; BiopharmaWatch and RA Capital for the context.]
 22. Industry not-covered rule: an industry excluded wholesale is marked "not covered by the gate in this release", and thresholds are never loosened. Judgment.
 
@@ -445,10 +445,11 @@ Every figure in this section was read on the page or in the paper named beside i
 ### Cheapness works, with long droughts
 
 - Arnott, Harvey, Kalesnik and Linnainmaa (2021): value, as measured by the Fama-French book-to-market factor, has underperformed growth investing since 2007, producing a drawdown of 55% as of mid-2020.
+- Swedroe (2018): the value premium averaged 4.8% a year over 1927 to 2017 and was negative in 22% of five-year periods, 14% of ten-year periods and 6% of twenty-year periods [Swedroe 2018; fetched 3 Nov 2026 in the owner's earlier pass; this pass's retry was refused]. This is why the backtest reports winning years and does not require them.
 
 ### Cheap plus quality, in backtests
 
-- Piotroski and So (2012) is the base paper for combining cheapness with strength of fundamentals. The abstract fetched carries no return figures. The 20.8% against 10.5% a year in the brief came from a page that could not be fetched, and is not used.
+- Piotroski and So (2012) is the base paper for combining cheapness with strength of fundamentals. Its abstract carries no return figures. As reported by Alpha Architect (secondary), for 1972 to 2010: plain value against glamour earned 10.5% a year and was positive in 27 of 39 years; the F-score-conditioned version earned 20.8% a year and was positive in 35 of 39 years [Alpha Architect, Value premium, risk and mispricing; fetched 3 Nov 2026 in the owner's earlier pass; this pass's retry was refused].
 - Gray and Carlisle, Quantitative Value, reviewed by the CFA Institute (16 May 2013): the full model generates a return of 17.68% a year. The review says the authors claim it outperformed the Magic Formula by 3.74% a year from 1974 through 2011. The comparison is the Magic Formula, not an index.
 - Carlisle, Latticework interview, 18 December 2024: "The way we tested, it was about 16.2% compound over the full dataset (1972 to 2017)", against an equal-weight S&P 500 total return of about 10.5%. The visible text does not say these are Magic Formula figures. The second retest in the brief (11.4% against 8.7%, 2003 to 2015) was not found there and is not used.
 
@@ -459,12 +460,12 @@ Every figure in this section was read on the page or in the paper named beside i
 - So over ten years to 30 September 2026 the fund returned 11.56% against 15.32% for the S&P 500 and 11.42% for the value benchmark. It matched the value benchmark and lagged the market by about 3.8 points a year. That arithmetic is ours.
 - QVAL's process, from its investment case: start from the 1,500 largest US stocks, remove low-volume, red-flag, bad-price-action and extreme-valuation names, rank on EBIT over total enterprise value, then remove low financial-strength scores. That is close to form 2 in section j. The document is dated 31 March 2025 and shows a different start date, so none of its returns are used.
 - AAII's Magic Formula screen, as listed on 30 October 2026: 2022 minus 21.3%, 2023 13.5%, 2024 17.2%, 2025 17.9%, 2026 to date minus 13.5%, "Annualized Total" 6.4% (the window is not stated on the page). One screen as followers run it, not a fund.
-- Greenblatt's comparison of managed and self-managed accounts is not on the Validea page fetched and is not used.
+- Greenblatt, Morningstar column, reprinted by Validea on 16 January 2012, for May 2009 to April 2011 (the period is from a secondary page): self-managed accounts had "a cumulative return of 59.4% after all expenses", professionally managed accounts "earned 84.1% after all expenses", and the S&P 500 was "up 62.7%" [Validea reprint; fetched 3 Nov 2026 in the owner's earlier pass; this pass's retry was refused; the address now redirects to the Validea home page, and an archive copy read in the earlier verification pass did not contain these figures]. Reading: the edge was discipline, not the formula.
 
 ### Tilts in practice
 
 - Fitzgibbons and co-authors, "Long-Only Style Investing: Don't Just Mix, Integrate", as summarised by CXO Advisory (the AQR affiliation is not stated on the page): against the value-weighted MSCI World, February 1993 to December 2015, standalone value and momentum portfolios outperform by an average annualised net 1.7%, with tracking errors just under 8%. The mixed and integrated combinations outperform by an average net 2.5%, with tracking errors about 4%. The integrated combination is reported at 3.6%.
-- The Research Affiliates 2017 finding that over half of the paper value return disappears in live funds could not be fetched. It is not used.
+- Research Affiliates (2017), over 1991 to 2016 in live funds: "Well over half of the factor return for market beta and for value (defined as HML) disappears" [Research Affiliates 2017 via Advisor Perspectives; fetched 3 Nov 2026 in the owner's earlier pass; this pass's retry was refused].
 
 ### Implied returns
 
@@ -476,7 +477,7 @@ Every figure in this section was read on the page or in the paper named beside i
 
 - AAII (June 2022): Greenblatt also excludes financials and utilities because of their unique financial structures. This design treats banks and insurers as "not covered" (section c). Utilities are not excluded here. The leverage warning will flag many of them; check at calibration.
 - Novy-Marx (2013) uses variables demeaned by the 49 Fama-French industries and finds industry-adjusted gross profitability has more power than the straight measure. So comparisons are made within an industry, and no bet is placed on cheap industries.
-- The Morningstar 2017 figures on stock-level against industry-level value could not be fetched and are not used.
+- Morningstar 2017, Bryan and McCullough, "The Impact of Industry Tilts on Factor Performance", December 1966 to November 2016: stock-level value "returned 2.36% annualized" and industry-level value was "negative 0.32% annualized" [Morningstar 2017; fetched 3 Nov 2026 in the owner's earlier pass; this pass's retry was refused; the address now redirects to a home page].
 
 ### The realistic target
 
@@ -519,7 +520,7 @@ Fetched and used:
 - EODHD Macroeconomic Data API (GBOND): https://eodhd.com/financial-apis/macroeconomic-data-api
 - EODHD US Treasury rates API (beta): https://eodhd.com/financial-apis/us-treasury-ust-interest-rates-api-beta
 - FRED DGS10: https://fred.stlouisfed.org/series/DGS10 (4.94 for 30 October 2026, not 4.93) ; DTB3: https://fred.stlouisfed.org/series/DTB3 (3.99) ; API: https://fred.stlouisfed.org/docs/api/fred/series_observations.html (key required)
-- Yahoo Finance ^TNX history (loads; one year in view; intraday close shown; the "since 1962" claim is not on the page): https://finance.yahoo.com/quote/%5ETNX/history/
+- Yahoo Finance ^TNX history, 1962 window (rows from January 1962, includes Jun 22, 1962 at 3.9000): https://finance.yahoo.com/quote/%5ETNX/history/?period1=-252460800&period2=-157766400&interval=1mo ; ^IRX, same window (rows from January 1962): https://finance.yahoo.com/quote/%5EIRX/history/?period1=-252460800&period2=-157766400&interval=1mo
 - Chan, Karceski, Lakonishok 2003 (Table I; the median reading depends on a column alignment that had to be reconstructed from extracted text): https://www.lsvasset.com/pdf/research-papers/Level+Persistence_of_Growth_Rates_FINAL.pdf
 - Mauboussin and Callahan 2014 (about 8 years, 5 to 15 across industries, attributed to Olsen and called a competitive advantage period): https://strawman.com/member/uploads/objects/a9/41159492407c5bf57c2e67861056bed2decf7d.pdf
 - Titman, Wei, Xie, Capital Investments and Stock Returns (NBER w9951): https://www.nber.org/papers/w9951.pdf
@@ -529,15 +530,21 @@ Fetched and used:
 - Microsoft 10-K FY2026, EDGAR (R2, R4, R6; all briefed lines matched): https://www.sec.gov/Archives/edgar/data/789019/000119312526323660/R2.htm ; press release: https://www.microsoft.com/en-us/investor/earnings/fy-2026-q4/press-release-webcast
 - CFO Dive, 30 July 2026 (data centers and office buildings, 15 to 25 years from the start of fiscal 2027; not server and network equipment as the brief said): https://www.cfodive.com/news/microsoft-holds-line-ai-spending-plans/826648/
 
+Fetched 3 Nov 2026 in the owner's earlier pass, figures used; this pass's retry was refused:
+
+- Piotroski 2000, Table 3 (low group 0 or 1, high group 8 or 9; returns 0.134 and minus 0.096; sample the highest book-to-market quintile): https://test2.ivey.uwo.ca/media/3775523/value_investing_the_use_of_historical_financial_statement_information.pdf (HTTP 403)
+- Damodaran, Equity Risk Premiums 2026 edition, Table 3 (1928 to 2025 arithmetic means 11.85%, 3.41%, 4.82%; premiums 8.44% and 7.03%): https://ripuc.ri.gov/sites/g/files/xkgbur841/files/2026-05/DPUC%20Attachment%202%20to%20RIE%202-1(e).pdf (HTTP 403)
+
+Fetched in this pass:
+
+- Altman, Iwanicz-Drozdowska, Laitinen, Suvas 2017, abstract (prediction accuracy approximately 0.75; above 0.90 with country-specific estimation), vlex copy: https://international.vlex.com/vid/financial-distress-prediction-in-855618057 ; the SSRN page also listed refused: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2536340
+
 Listed in the brief but not usable, and why:
 
-- Piotroski 2000: HTTP 403 on every attempt. Table 3 returns, the group sizes and the high book-to-market sample are not confirmed: https://test2.ivey.uwo.ca/media/3775523/value_investing_the_use_of_historical_financial_statement_information.pdf
 - S&P Global Ratings, Corporate Methodology 2024 (tables 17 to 19: highly leveraged above 5, 5.5 and 6 times; paragraph 123): fetched 3 Nov 2026 per the owner, whose figures are used; this pass's retry was refused (Akamai access denied, then HTTP 403): https://www.maalot.co.il/Publications/MT20240412122958.PDF
-- Altman, Iwanicz-Drozdowska, Laitinen, Suvas 2017 (abstract): blocked. The accuracy figure of about 0.75 and the 34 countries are not confirmed: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2536340
 - Stockopedia, Dividend Cover (less than 1.5 a danger of a cut; more than 2 healthy): fetched 3 Nov 2026 per the owner, whose quotation is used; this pass's retries were refused with HTTP 403: https://www.stockopedia.com/ratios/dividend-cover-rolling-5130
 - AJ Bell Dividend Dashboard Q4 2025 (2.00 times comfort; FTSE 100 1.99 times; top ten yielders 1.22 times "looks skinny"): fetched 3 Nov 2026 per the owner, whose quotations are used; this pass's retries returned HTTP 404: https://www.ajbell.co.uk/group/sites/ajbell.co.uk/files/AJ%20Bell%20Dividend%20Dashboard%20Q4%202025.pdf
 - IAS 1 paragraph 26: a subscription page was returned: https://www.ifrs.org/content/dam/ifrs/publications/pdf-standards/english/2021/issued/part-a/ias-1-presentation-of-financial-statements.pdf
-- Damodaran, ERP 2026 edition (the 7.03% 1928 to 2025 average): blocked, so the figure and its basis are not confirmed: https://ripuc.ri.gov/sites/g/files/xkgbur841/files/2026-05/DPUC%20Attachment%202%20to%20RIE%202-1(e).pdf
 - EODHD GBOND symbol list: answers "Unauthenticated" without a token, so it was not read: https://eodhd.com/api/exchange-symbol-list/GBOND
 
 Differences between the brief and the sources, for the record:
@@ -576,10 +583,11 @@ Fetched and used:
 - AAII on Greenblatt's exclusions (29 June 2022): https://www.aaii.com/stockideas/article/17812-greenblatts-magic-formula-for-beating-the-market ; AAII screen performance (30 October 2026, secondary): https://www.aaii.com/stock-screens/performance
 - AQR long-only value and momentum, via CXO Advisory (2016, secondary; the summary tool, not the raw page, was read): https://www.cxoadvisory.com/value-premium/integrating-momentum-and-value-stock-exposures
 
-Not usable, and why:
+Fetched 3 Nov 2026 in the owner's earlier pass, figures used; this pass's retry was refused:
 
-- Alpha Architect, value premium, risk and mispricing (https://alphaarchitect.com/value-premium-risk-mispricing/): HTTP 403. The 20.8% and 10.5% figures are not used.
-- Validea reprint of Greenblatt (https://blog.validea.com/greenblatt-less-is-more-in-portfolio-management/): read through an archive copy, dated 31 January 2012 in its metadata. The managed and self-managed figures are not on it.
-- Research Affiliates 2017 via Advisor Perspectives (https://www.advisorperspectives.com/commentaries/2017/04/13/the-incredible-shrinking-factor-return): HTTP 403.
-- Swedroe 2018 (https://www.advisorperspectives.com/articles/2018/06/14/in-defense-of-the-value-premium): HTTP 403. The 22% of five-year windows is not confirmed.
-- Morningstar 2017 (https://www.morningstar.co.uk/static/UploadManager/Assets/The_Impact_of_Industry_Tilts_on_Factor_Performance.pdf): redirected to a home page.
+- Alpha Architect on Piotroski and So (secondary): https://alphaarchitect.com/value-premium-risk-mispricing/ (HTTP 403)
+- Greenblatt column, Validea reprint of 16 January 2012: https://blog.validea.com/greenblatt-less-is-more-in-portfolio-management/ (now redirects to the Validea home page; an archive copy read earlier did not contain the figures)
+- Research Affiliates 2017 via Advisor Perspectives: https://www.advisorperspectives.com/commentaries/2017/04/13/the-incredible-shrinking-factor-return (HTTP 403)
+- Swedroe 2018: https://www.advisorperspectives.com/articles/2018/06/14/in-defense-of-the-value-premium (HTTP 403)
+- Morningstar 2017, Bryan and McCullough: https://www.morningstar.co.uk/static/UploadManager/Assets/The_Impact_of_Industry_Tilts_on_Factor_Performance.pdf (redirects to a home page)
+
