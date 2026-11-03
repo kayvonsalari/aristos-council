@@ -86,6 +86,7 @@ What costs money, and what does not:
 | [docs/JUDGE_PANEL.md](docs/JUDGE_PANEL.md) | The judge panel on the company page: the full-evidence pack (statements, news, readings, no lens opinions), labelled own knowledge, why it has no vote, the stability rule, the logs, `judges score`, and the bar (12 months, 30 names) before any judge earns a vote |
 | [docs/DESIGN_company_story.md](docs/DESIGN_company_story.md) | The single-company page: the two-line answer, the code-written story, one lens table, the workings folded (COMPANY-STORY-1) |
 | [docs/DESIGN_absolute.md](docs/DESIGN_absolute.md) | Design only, not built: from "better than its peers" to "will it make money over 3 to 5 years" (exclusion gate, absolute valuation, implied growth, return range, new backtest) (ABSOLUTE-1) |
+| [docs/GATE_CALIBRATION.md](docs/GATE_CALIBRATION.md) | How often each rule of the absolute exclusion gate fires on our cohort names, by industry, and the two measured boundaries (ABSOLUTE-GATE-1, phase 1; aggregates only) |
 | [CLAUDE.md](CLAUDE.md) | The contributor's working agreement: architecture in reading order, hard rules, sprint history |
 | `docs/diagnosis_*.md` | Two dated post-mortems of specific data defects (kept as case studies) |
 

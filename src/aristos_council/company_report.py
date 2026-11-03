@@ -1422,6 +1422,10 @@ def report_record(report: CompanyReport) -> dict:
         # objects — the same processed-display shape ``sources`` and ``lens_ranks`` use.
         "price_and_cash": (None if pac is None else {
             "lines": pac.lines(), "news_source": pac.news_source}),
+        # ABSOLUTE-GATE-1 (phase 1): ADDITIVE and display-only. Present only when the gate ran; every
+        # key above is unchanged. A reader reads it with .get("gate").
+        **({"gate": report.check.gate.as_dict()}
+           if getattr(report.check, "gate", None) is not None else {}),
     }
 
 
@@ -1452,7 +1456,7 @@ def save_company_report(report: CompanyReport, runs_dir) -> Path:
 # table both moved toward the end; price-and-cash and valuation-band swapped relative
 # order. The text export, the HTML export and the screen renderer (app.py) all follow
 # this SAME order — a test pins it across all three.
-SECTION_ORDER = ("answer", "story", "lens table", "council opinion", "workings",
+SECTION_ORDER = ("answer", "story", "gate", "lens table", "council opinion", "workings",
                  "valuation band", "price and cash", "absolute readings", "what analysts say",
                  "peers", "sources")
 
@@ -1607,6 +1611,11 @@ def story_text_lines(report: CompanyReport) -> list[str]:
         lines.append(f"({READER_SECTION_NOTE})")
     if page.note:
         lines.append(page.note)
+    gate = getattr(report.check, "gate", None)
+    if gate is not None:                                  # ABSOLUTE-GATE-1, after the story, before the table
+        from .gate import render as _gate_render
+        lines.append("")
+        lines += _gate_render.text_lines(gate)
     lines.append("")
     lines += list(page.tag)
     if page.no_vote:

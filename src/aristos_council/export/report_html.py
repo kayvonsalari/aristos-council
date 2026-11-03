@@ -1629,6 +1629,11 @@ def _story_html(report) -> str:
         body.append(f'<p class="note">{_esc(page.note)}</p>')
     out.append("".join(body) + "</section>")
 
+    gate = getattr(report.check, "gate", None)
+    if gate is not None:                                  # ABSOLUTE-GATE-1, after the story, before the table
+        from ..gate import render as _gate_render
+        out.append(_gate_render.html_section(gate, _esc, _table))
+
     table = [f'<section class="section" id="lenses"><h2>{_esc(SECTION_TABLE)}</h2>']
     table += [f'<p class="note">{_esc(line)}</p>' for line in page.tag]
     if page.no_vote:

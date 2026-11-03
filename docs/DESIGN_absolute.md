@@ -1,6 +1,6 @@
 # ABSOLUTE-1: from "better than its peers" to "what does the price require, and what does the record show"
 
-Status: design for approval, revision 2, 2026-11-03. Nothing here is built. No code, strategy file, backtest result or data file changes with this page.
+Status: design for approval, revision 3, 2026-11-03. Phase 1 (the gate, section b) is built as ABSOLUTE-GATE-1; nothing else here is built. No code, strategy file, backtest result or data file changes with this page.
 
 How to read the sources on this page. A figure is either cited to a source by name, in brackets, or marked "judgment". A figure the owner's brief attributed to a source that could not be read in the verification pass is carried only where the owner's earlier pass fetched it with the quotation given. It is then cited as "fetched 3 Nov 2026 in the owner's earlier pass; this pass's retry was refused", and the Sources section says so. Any other such figure is marked "not confirmed" and listed in the Sources section. Where the source says something different from the brief, the source wins and the difference is said.
 
