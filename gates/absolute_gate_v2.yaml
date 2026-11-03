@@ -1,0 +1,110 @@
+# ABSOLUTE-GATE-2 - the exclusion gate, version 2. Supersedes absolute_gate_v1.yaml, which stays on disk
+# unchanged as the record of what version 1 measured (a frozen gate file is never edited).
+#
+# What changed from version 1 (owner's decisions, ABSOLUTE-GATE-2):
+#   * exclusion 2 is SOLVENCY, not Altman Z'': cash from operations before working-capital changes
+#     over total debt as the tool counts it, excluded below 5%;
+#   * Z'' is a WARNING ("distress score low", below 1.10), never an exclusion;
+#   * the leverage warning becomes "highly leveraged": net debt / EBITDA above 6 OR cash flow over debt
+#     below 12%, both readings printed (the net debt / EBITDA warning stays);
+#   * the runway 12 to 24 month band is its own warning row;
+#   * the accrual boundary is 0.10 (set by the owner); version 1's measured 0.0054 is not carried over.
+#
+# Only accounting and solvency failures exclude. Four exclusion rules, four warnings. Every threshold
+# carries its source on the line beside it. Immutable once frozen: a change is absolute_gate_v3.yaml.
+# NOT YET RECALIBRATED: version 1's calibration (docs/GATE_CALIBRATION.md) measured the version 1 rules.
+
+id: absolute_gate_v2
+version: 2
+status: frozen
+design: docs/DESIGN_absolute.md
+supersedes: absolute_gate_v1
+
+rules:
+  earnings_quality:
+    label: Earnings quality
+    measure: accrual ratio, cash-flow form = (net income minus operating cash flow) / average total assets
+    exclude_above: 0.10
+    boundary_status: owner
+    source: >-
+      Sloan 1996 (Table 6: highest accrual tenth minus 5.5% size-adjusted the next year, lowest plus
+      4.9%); Hribar and Collins 2002 and Dechow and Schrand 2004 for the cash-flow form; Lev and Nissim
+      for average total assets. 0.10 is the owner's figure for this version.
+  solvency:
+    label: Solvency
+    measure: cash from operations before working-capital changes / total debt (gross, as the tool counts it)
+    exclude_below: 0.05
+    passes_first: net cash, and debt at or below zero
+    loss_maker: >-
+      cash from operations before working-capital changes at or below zero reads "not evaluated:
+      loss-maker, see runway" and the runway rule decides; a negative ratio never excludes on its own
+    source: >-
+      Moody's, Regulated Electric and Gas Utilities methodology, grid factor CFO pre-WC / Debt: the B band
+      is 1% to 5% in the standard grid, so below 5% is the B band and below. Gross debt, as Moody's measure.
+  accounting_health:
+    label: Accounting health
+    measure: Piotroski F-score, nine yes/no checks
+    exclude_at_or_below: 1
+    required_checks: 9
+    source: >-
+      Piotroski 2000, Table 3: low group 0 or 1, high group 8 or 9; one-year market-adjusted returns
+      0.134 high, minus 0.096 low. Counts only when all nine checks can be computed (his sample
+      design); fewer is "not evaluated" with the count shown. He tested high book-to-market stocks only.
+  cash_runway:
+    label: Cash runway
+    measure: (cash plus short-term investments) / yearly burn, months
+    applies_when: operating cash flow of the latest year is negative
+    burn: negative free cash flow of the latest year
+    exclude_below_months: 12
+    warn_below_months: 24
+    source: >-
+      FASB ASU 2014-15 (going concern looks one year after the statements are issued) for the 12.
+      The 24 is a judgment (BiopharmaWatch: many investors look for 18 to 24 months; RA Capital: the
+      convention is to raise by the time one year of cash is left).
+
+warnings:
+  highly_leveraged:
+    label: Highly leveraged
+    measure: net debt / EBITDA, or cash flow before working capital / total debt; both printed
+    net_debt_to_ebitda_above: 6.0
+    cash_flow_over_debt_below: 0.12
+    source: >-
+      S&P Global Ratings: "highly leveraged" is Debt/EBITDA above 5 in the standard table (2009 Table 2;
+      2024 tables 17 to 19), above 5.5 in the medial-volatility table and above 6 in the low-volatility
+      table; and FFO/Debt below 12% (2009 Table 2). 6 is the most lenient of the three EBITDA lines, so a
+      flagged company is highly leveraged on every table. Debt is the balance sheet's Total Debt row.
+  distress_score:
+    label: Distress score
+    measure: Altman Z'' = 6.56 X1 + 3.26 X2 + 6.72 X3 + 1.05 X4, book equity, no constant
+    warn_below: 1.10
+    grey_to: 2.60
+    source: >-
+      Altman 2000 and 2002 (formula; "Z''-Scores below 1.10 indicate a distressed condition" in the
+      form without a constant). 2.60 = 5.85 minus the 3.25 constant, from the zones on Altman's 2017
+      Hofstra slides (4.35 and 5.85); a derivation, not a quotation. A warning here, never an exclusion.
+  dividend_cover:
+    label: Dividend cover
+    measure: three-year average net income / dividends paid
+    years: 3
+    not_covered_below: 1.0
+    thin_below: 1.5
+    source: >-
+      Wall Street Prep (below 1.0 net income is insufficient; above 2.0 the minimum floor); Stockopedia
+      ("less than 1.5 may indicate a danger of a dividend cut"); AJ Bell (2.00 comfort, 1.22 "looks skinny").
+
+# Carried forward from version 1's calibration: it does not depend on the rules that changed.
+investment_intensity:
+  measure: capex/sales this year over the average of the prior three years, minus 1 (Titman, Wei and Xie)
+  warn_above: 0.2676          # the measured 80th percentile, 2026-11-03 (version 1 calibration)
+  boundary_percentile: 80
+
+# Version 1's list was measured under version 1's rules and is not valid here. Version 2 has NOT been
+# recalibrated (that refetches every name: python -m aristos_council.gate calibrate --redo). If a
+# recalibration excludes industries wholesale, they enter as version 3, never as an edit to this file.
+not_covered_industries: []
+
+calibration:
+  date: null
+  universe_size: null
+  units_spent: null
+  file: null

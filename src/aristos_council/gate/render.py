@@ -10,7 +10,7 @@ from .engine import (EXCLUDED, FAIL, NOT_APPLICABLE, NOT_COVERED, NOT_ENOUGH_DAT
                      PASS, QUALIFIES, WARN)
 
 SECTION_TITLE = "Gate (ABSOLUTE-1 phase 1, does not change the verdict yet)"
-CAPTION = ("Four checks that can exclude a company, and two warnings that never do. Only accounting "
+CAPTION = ("Four checks that can exclude a company, and four warnings that never do. Only accounting "
            "and solvency failures exclude. This section changes no vote and no verdict.")
 HEADERS = ("Check", "Kind", "Reading", "Limit", "Result")
 

@@ -172,6 +172,56 @@ def leverage(f) -> GateReading:
 
 
 # --------------------------------------------------------------------------- #
+# solvency (ABSOLUTE-GATE-2): cash from operations before working-capital changes, over total debt
+# --------------------------------------------------------------------------- #
+def cash_flow_before_working_capital(f) -> GateReading:
+    """Cash from operations BEFORE working-capital changes = operating cash flow minus the cash flow
+    statement's change in working capital (positive = cash released), both at the same fiscal year end.
+    The measure Moody's calls CFO pre-WC. Either line missing: not evaluated (never operating cash flow
+    standing in for it)."""
+    if f is None:
+        return GateReading(note="no accounts")
+    (now,) = period_matched(f, ("operating_cash_flow", "change_in_working_capital"), periods=1)
+    ocf, dwc = now["operating_cash_flow"], now["change_in_working_capital"]
+    if ocf is None:
+        return GateReading(note="operating cash flow missing")
+    if dwc is None:
+        return GateReading(note="change in working capital missing")
+    return GateReading(value=ocf - dwc, note="operating cash flow minus the change in working capital")
+
+
+@dataclass(frozen=True)
+class SolvencyReading:
+    """``state`` is one of: ``ratio`` (value is cash flow / debt), ``net_cash`` and ``no_debt`` (both pass
+    before any ratio is formed), ``loss_maker`` (cash flow before working capital at or below zero: not
+    evaluated, the runway decides), ``missing`` (an input is absent: not evaluated)."""
+
+    state: str
+    ratio: Optional[float] = None
+    note: str = ""
+
+
+def solvency(f) -> SolvencyReading:
+    """Cash flow before working-capital changes over TOTAL debt as the tool counts it (gross, as Moody's
+    does). Net cash passes, and debt at or below zero passes, before the ratio is formed. Cash flow at or
+    below zero is not evaluated ("loss-maker, see runway"): a negative ratio never excludes on its own.
+    A missing debt, or a missing cash-flow line when a ratio is needed, is not evaluated."""
+    debt, cash, _ = debt_and_cash_as_counted(f)
+    if debt is None:
+        return SolvencyReading("missing", note="debt missing")
+    if debt <= 0:
+        return SolvencyReading("no_debt", note="no debt")
+    if cash is not None and debt - cash <= 0:
+        return SolvencyReading("net_cash", note="net cash")
+    cfo = cash_flow_before_working_capital(f)
+    if cfo.value is None:
+        return SolvencyReading("missing", note=cfo.note)
+    if cfo.value <= 0:
+        return SolvencyReading("loss_maker", note="loss-maker, see runway")
+    return SolvencyReading("ratio", ratio=cfo.value / debt, note="cash flow before working capital / total debt")
+
+
+# --------------------------------------------------------------------------- #
 # cash runway
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True)

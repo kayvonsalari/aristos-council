@@ -47,8 +47,8 @@ PERCENTILES = (5, 25, 50, 75, 90, 95)
 # own form. Found on the first calibration pass, where 343 names of exactly these four failed to read.
 EODHD_ONLY_SUFFIXES = frozenset({"LSE", "XETRA", "KO", "AU"})
 
-RULE_KEYS = ("earnings_quality", "distress", "accounting_health", "cash_runway")
-WARN_KEYS = ("leverage", "dividend_cover")
+RULE_KEYS = ("earnings_quality", "solvency", "accounting_health", "cash_runway")
+WARN_KEYS = ("highly_leveraged", "distress_score", "dividend_cover", "runway_warning")
 
 
 class StopRun(Exception):
@@ -99,7 +99,7 @@ def load_universe(cohorts_dir: Path = COHORTS_DIR) -> list[dict]:
 def record_for(entry: dict, f, definition) -> dict:
     g = engine.evaluate_gate(f, definition)
     ai = gr.abnormal_investment(f)
-    rules = {r.key: {"result": r.result, "value": r.value} for r in g.rules}
+    rules = {r.key: {"result": r.result, "value": r.value, "note": r.note} for r in g.rules}
     warns = {w.key: {"result": w.result, "value": w.value} for w in g.warnings}
     return {"ticker": entry["ticker"], "industry": entry["industry"], "status": "ok",
             "sector": getattr(f, "sector", None), "state": g.state, "rules": rules,
@@ -188,8 +188,15 @@ def rederive_state(rec: dict, accrual_boundary: float) -> str:
     other_fail = any(r["result"] == engine.FAIL for k, r in rules.items() if k != "earnings_quality")
     if acc_fail or other_fail:
         return engine.EXCLUDED
-    if acc["value"] is None or rules["distress"]["value"] is None:
+    if acc["value"] is None:
         return engine.NOT_ENOUGH_DATA
+    sol = rules["solvency"]
+    if sol["result"] == engine.NOT_EVALUATED:
+        # a loss-maker is settled by the runway (which must have passed); any other gap is missing data
+        if rules["cash_runway"]["result"] != engine.PASS:
+            return engine.NOT_ENOUGH_DATA
+        if sol.get("note") != engine.LOSS_MAKER_NOTE:
+            return engine.NOT_ENOUGH_DATA
     return engine.QUALIFIES
 
 
@@ -198,8 +205,9 @@ def aggregate(records: dict[str, dict], *, accrual_boundary: float, leverage_war
     errors = [r for r in records.values() if r["status"] != "ok"]
     accrual = [r["rules"]["earnings_quality"]["value"] for r in ok
                if r["rules"]["earnings_quality"]["value"] is not None]
-    leverage = [r["warnings"]["leverage"]["value"] for r in ok
-                if r["warnings"]["leverage"]["value"] is not None]
+    leverage = [r["warnings"]["highly_leveraged"]["value"] for r in ok
+                if r["warnings"]["highly_leveraged"]["value"] is not None]
+    solvency = [r["rules"]["solvency"]["value"] for r in ok if r["rules"]["solvency"]["value"] is not None]
     abn = [r["abnormal_investment"] for r in ok if r["abnormal_investment"] is not None]
 
     def dist(values):
@@ -224,8 +232,6 @@ def aggregate(records: dict[str, dict], *, accrual_boundary: float, leverage_war
             out["excluded_by"][k] = fails / n
             out["not_evaluated"][k] = sum(1 for r in rs if r["rules"][k]["result"] == engine.NOT_EVALUATED) / n
             out["not_applicable"][k] = sum(1 for r in rs if r["rules"][k]["result"] == engine.NOT_APPLICABLE) / n
-        out["warnings"]["cash_runway_warn"] = sum(1 for r in rs
-                                                  if r["rules"]["cash_runway"]["result"] == engine.WARN) / n
         for k in WARN_KEYS:
             out["warnings"][k] = sum(1 for r in rs if r["warnings"][k]["result"] == engine.WARN) / n
             out["not_evaluated"][k] = sum(1 for r in rs if r["warnings"][k]["result"] == engine.NOT_EVALUATED) / n
@@ -241,6 +247,7 @@ def aggregate(records: dict[str, dict], *, accrual_boundary: float, leverage_war
     return {"names_with_data": len(ok), "names_without_data": len(errors),
             "overall": block(ok) if ok else {}, "industries": industries,
             "accrual_ratio": dist(accrual), "net_debt_to_ebitda": dist(leverage),
+            "cash_flow_over_debt": dist(solvency),
             "abnormal_investment": {**dist(abn), "p80": _pct(abn, INTENSITY_PERCENTILE)},
             "measured_accrual_boundary": _pct(accrual, ACCRUAL_PERCENTILE),
             "accrual_boundary_used": accrual_boundary,
@@ -276,10 +283,10 @@ def write_markdown(agg: dict, meta: dict, path: Path = OUT_MD) -> Path:
         "The gate has four rules that can exclude a company and two warnings that never do "
         "(docs/DESIGN_absolute.md, section b). This page says how often each one fires on our names, so "
         "the one threshold that is measured, not argued, can be frozen. It changes no vote and no verdict.", "",
-        "## The two measured boundaries", "",
-        f"- Accrual ratio, top tenth: the 90th percentile of the {agg['accrual_ratio']['n']} names with the "
-        f"ratio is **{_p(agg['measured_accrual_boundary'], 4)}**. Names above it are excluded. The stand-in "
-        f"was 0.10.",
+        "## The measured boundaries", "",
+        f"- Accrual ratio: the 90th percentile of the {agg['accrual_ratio']['n']} names with the ratio is "
+        f"**{_p(agg['measured_accrual_boundary'], 4)}**. Gate version 1 froze that figure as its boundary; "
+        f"gate version 2 uses the owner's 0.10 and reports this one for information.",
         f"- Abnormal investment, top fifth: the 80th percentile of the {agg['abnormal_investment']['n']} names "
         f"with the measure is **{_p(agg['abnormal_investment']['p80'], 4)}**. Recorded for phase 2; nothing "
         "uses it yet.", "",
@@ -289,7 +296,7 @@ def write_markdown(agg: dict, meta: dict, path: Path = OUT_MD) -> Path:
     for key, label in ((engine.EXCLUDED, "Excluded"), (engine.QUALIFIES, "Qualifies"),
                        (engine.NOT_ENOUGH_DATA, "Not enough data"), (engine.NOT_COVERED, "Not covered")):
         lines.append(f"| {label} | {_share(o['state'][key])} |")
-    labels = {"earnings_quality": "Earnings quality (accrual ratio)", "distress": "Distress (Z'')",
+    labels = {"earnings_quality": "Earnings quality (accrual ratio)", "solvency": "Solvency (cash flow over debt)",
               "accounting_health": "Accounting health (F-score 0 or 1)", "cash_runway": "Cash runway under 12 months"}
     lines += ["", "## How often each rule fires", "",
               "| Rule | Excludes | Not evaluated | Does not apply |", "|---|---|---|---|"]
@@ -297,15 +304,20 @@ def write_markdown(agg: dict, meta: dict, path: Path = OUT_MD) -> Path:
         lines.append(f"| {labels[k]} | {_share(o['excluded_by'][k])} | {_share(o['not_evaluated'][k])} | "
                      f"{_share(o['not_applicable'][k])} |")
     lines += ["", "| Warning | Fires | Not evaluated |", "|---|---|---|",
-              f"| Cash runway 12 to 24 months | {_share(o['warnings']['cash_runway_warn'])} | |",
-              f"| Leverage above {agg['leverage_warn_above']:.0f} times | {_share(o['warnings']['leverage'])} | "
-              f"{_share(o['not_evaluated']['leverage'])} |",
+              f"| Highly leveraged (above {agg['leverage_warn_above']:.0f} times net debt / EBITDA, or cash flow "
+              f"under 12% of debt) | {_share(o['warnings']['highly_leveraged'])} | "
+              f"{_share(o['not_evaluated']['highly_leveraged'])} |",
+              f"| Distress score low (Z'' under 1.10) | {_share(o['warnings']['distress_score'])} | "
+              f"{_share(o['not_evaluated']['distress_score'])} |",
               f"| Dividend cover under 1.5 | {_share(o['warnings']['dividend_cover'])} | "
-              f"{_share(o['not_evaluated']['dividend_cover'])} |", "",
+              f"{_share(o['not_evaluated']['dividend_cover'])} |",
+              f"| Cash runway 12 to 24 months | {_share(o['warnings']['runway_warning'])} | "
+              f"{_share(o['not_evaluated']['runway_warning'])} |", "",
               "## Distributions", "",
               "| Measure | Names | " + " | ".join(f"{p}th" for p in PERCENTILES) + " |",
               "|---|---|" + "---|" * len(PERCENTILES)]
     for key, label in (("accrual_ratio", "Accrual ratio"), ("net_debt_to_ebitda", "Net debt / EBITDA (times)"),
+                       ("cash_flow_over_debt", "Cash flow before working capital / total debt"),
                        ("abnormal_investment", "Abnormal investment")):
         d = agg[key]
         lines.append(f"| {label} | {d['n']} | " + " | ".join(_p(d[f"p{p}"]) for p in PERCENTILES) + " |")
@@ -321,14 +333,14 @@ def write_markdown(agg: dict, meta: dict, path: Path = OUT_MD) -> Path:
         lines.append(f"None. (An industry needs at least {THIN_INDUSTRY} names and more than half of them "
                      "excluded.)")
     lines += ["", "## By industry", "",
-              "| Industry | Names | Excluded | Accrual | Distress | F-score | Runway | Leverage warning | Cover warning | Not enough data |",
+              "| Industry | Names | Excluded | Accrual | Solvency | F-score | Runway | Highly leveraged | Cover warning | Not enough data |",
               "|---|---|---|---|---|---|---|---|---|---|"]
     for name, b in agg["industries"].items():
         lines.append(
             f"| {name}{' (thin)' if b['n'] < THIN_INDUSTRY else ''} | {b['n']} | {_share(b['state'][engine.EXCLUDED])} | "
-            f"{_share(b['excluded_by']['earnings_quality'])} | {_share(b['excluded_by']['distress'])} | "
+            f"{_share(b['excluded_by']['earnings_quality'])} | {_share(b['excluded_by']['solvency'])} | "
             f"{_share(b['excluded_by']['accounting_health'])} | {_share(b['excluded_by']['cash_runway'])} | "
-            f"{_share(b['warnings']['leverage'])} | {_share(b['warnings']['dividend_cover'])} | "
+            f"{_share(b['warnings']['highly_leveraged'])} | {_share(b['warnings']['dividend_cover'])} | "
             f"{_share(b['state'][engine.NOT_ENOUGH_DATA])} |")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -437,9 +449,8 @@ def cmd_calibrate(args) -> int:
     if out["stopped"]:
         print("stopped:", out["stopped"], "- run again to resume")
     if out["remaining"] == 0 or args.finish:
-        agg = aggregate(out["records"], accrual_boundary=_pct(
-            [r["rules"]["earnings_quality"]["value"] for r in out["records"].values()
-             if r["status"] == "ok" and r["rules"]["earnings_quality"]["value"] is not None], ACCRUAL_PERCENTILE) or 0.10)
+        agg = aggregate(out["records"], accrual_boundary=definition.accrual_exclude_above,
+                        leverage_warn=definition.leverage_warn_above)
         write_json(agg, meta)
         write_markdown(agg, meta)
         print("wrote", OUT_JSON.relative_to(_ROOT), "and", OUT_MD.relative_to(_ROOT))
@@ -447,6 +458,10 @@ def cmd_calibrate(args) -> int:
 
 
 def cmd_freeze(args) -> int:
+    if load_gate().frozen:
+        print(f"{load_gate().id} is already frozen (its thresholds are the owner's); nothing to freeze. "
+              "A new set of thresholds is a new gate version, never an edit.")
+        return 0
     universe = load_universe(Path(args.cohorts))
     records = _read_records(STATE_DIR / "records.jsonl")
     missing = [e for e in universe if e["ticker"] not in records]

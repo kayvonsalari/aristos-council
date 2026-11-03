@@ -1,5 +1,7 @@
 # Gate calibration (ABSOLUTE-GATE-1)
 
+> **This page measures gate version 1** (Z'' as an exclusion, the measured accrual boundary below). Gate version 2 (`gates/absolute_gate_v2.yaml`) replaces Z'' with a solvency exclusion, makes Z'' a warning, and sets the accrual boundary at 0.10. Version 2 has not been recalibrated: the numbers below do not describe its exclusion rates. Re-running `python -m aristos_council.gate calibrate --redo` refetches every name (about 20,000 EODHD units).
+
 Run on 2026-11-03. Universe: 2020 names (the union of the built cohort members). Names with accounts: 2018; without: 2. EODHD units spent: 12080 (10 units a fundamentals request). Aggregates only: no company is named on this page.
 
 The gate has four rules that can exclude a company and two warnings that never do (docs/DESIGN_absolute.md, section b). This page says how often each one fires on our names, so the one threshold that is measured, not argued, can be frozen. It changes no vote and no verdict.

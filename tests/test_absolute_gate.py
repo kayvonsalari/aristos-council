@@ -1,8 +1,10 @@
-"""ABSOLUTE-GATE-1 (docs/DESIGN_absolute.md, section b): the exclusion gate.
+"""ABSOLUTE-GATE-2 (docs/DESIGN_absolute.md, section b, as amended by the owner): the exclusion gate.
 
-Every rule's pass, fail and not-evaluated case, every sign case, the combination rule, the bank
-fixture, Z'' against a hand computation, the F-score nine-check rule, the Microsoft worked example, the
-shipped gate file, the page section, and the additive saved record. No test reaches a real adapter.
+Four exclusions (accrual ratio, solvency, F-score, cash runway) and four warnings (highly leveraged,
+distress score, dividend cover, runway 12 to 24 months). Every rule's pass, fail and not-evaluated case,
+every sign case, the combination rule, the bank fixture, Z'' against a hand computation, the F-score
+nine-check rule, the Microsoft worked example, the shipped gate files, the page section and the additive
+saved record. No test reaches a real adapter.
 """
 from __future__ import annotations
 
@@ -16,7 +18,7 @@ from aristos_council.gate import (EXCLUDED, NOT_COVERED, NOT_ENOUGH_DATA, QUALIF
 from aristos_council.gate import engine, render
 from aristos_council.tools import gate_readings as gr
 
-D = load_gate()                                  # the shipped definition
+D = load_gate()                                  # the shipped definition (version 2)
 
 
 def _f(**kw) -> Fundamentals:
@@ -27,7 +29,8 @@ def _f(**kw) -> Fundamentals:
 
 # --------------------------------------------------------------------------- #
 # the Microsoft worked example (design sections e and l): 10-K lines for the year to June 2026, in $
-# millions as the filing prints them. FIXTURE-ONLY values are marked; none is claimed as a filing figure.
+# millions as the filing prints them. The change in working capital is the cash flow statement's line
+# (-4,895m in FY2026). FIXTURE-ONLY values are marked; none is claimed as a filing figure.
 # --------------------------------------------------------------------------- #
 M = 1e6
 
@@ -37,6 +40,7 @@ def msft() -> Fundamentals:
         ticker="MSFT", name="Microsoft Corporation", market_cap=3.67e12,
         net_income=[133_749 * M, 101_832 * M, 88_136 * M],
         operating_cash_flow_annual=[182_935 * M, 136_162 * M, 118_548 * M],
+        change_in_working_capital_annual=[-4_895 * M, -5_350 * M, 1_824 * M],
         capital_expenditure_annual=[-115_948 * M, -64_551 * M, -44_477 * M],
         free_cash_flow_annual=[66_987 * M, 71_611 * M, 74_071 * M],
         depreciation_amortization_annual=[38_534 * M, 29_433 * M, 20_958 * M],
@@ -64,17 +68,23 @@ def test_the_microsoft_worked_example_passes_every_rule_with_no_warnings():
     assert g.state == QUALIFIES
     by = {r.key: r for r in g.rules}
     assert by["earnings_quality"].result == "pass" and by["earnings_quality"].value < 0     # negative accruals
-    assert by["distress"].result == "pass" and by["distress"].value > D.z_grey_to          # safe zone
+    assert by["solvency"].result == "pass" and by["solvency"].reading == "net cash"
     assert by["accounting_health"].result == "pass"
     assert by["cash_runway"].result == "not_applicable"                                    # makes cash
-    lev = {w.key: w for w in g.warnings}
-    assert lev["leverage"].result == "pass" and lev["leverage"].reading.startswith("net cash")
-    assert lev["dividend_cover"].result == "pass" and lev["dividend_cover"].value > 1.5
+    w = {x.key: x for x in g.warnings}
+    assert w["highly_leveraged"].result == "pass"
+    assert w["distress_score"].result == "pass" and w["distress_score"].value > D.z_grey_to   # safe zone
+    assert w["dividend_cover"].result == "pass" and w["dividend_cover"].value > 1.5
+    assert w["runway_warning"].result == "not_applicable"
     assert g.reason.endswith("No warnings.")
 
 
+def test_the_microsoft_cash_flow_before_working_capital_is_operating_cash_flow_minus_the_wc_line():
+    # 182,935 - (-4,895) = 187,830: working capital absorbed cash this year, so before it the flow is larger
+    assert gr.cash_flow_before_working_capital(msft()).value == pytest.approx(187_830 * M)
+
+
 def test_the_microsoft_accrual_ratio_is_the_10k_arithmetic():
-    # (133,749 - 182,935) / mean(758,376, 619,003) = -0.0714
     r = gr.earnings_quality(msft())
     assert r.value == pytest.approx((133_749 - 182_935) / ((758_376 + 619_003) / 2), rel=1e-9)
 
@@ -93,7 +103,79 @@ def test_microsofts_ebitda_is_ebit_plus_depreciation_and_amortisation():
 
 
 # --------------------------------------------------------------------------- #
-# Z'' against a hand computation, and its sign cases
+# cash flow before working capital
+# --------------------------------------------------------------------------- #
+def test_cash_flow_before_working_capital_needs_both_lines_and_never_substitutes_operating_cash_flow():
+    assert gr.cash_flow_before_working_capital(_f(operating_cash_flow_annual=[100.0])).value is None
+    assert gr.cash_flow_before_working_capital(_f(change_in_working_capital_annual=[5.0])).value is None
+    assert gr.cash_flow_before_working_capital(
+        _f(operating_cash_flow_annual=[100.0], change_in_working_capital_annual=[30.0])).value == 70.0
+
+
+# --------------------------------------------------------------------------- #
+# solvency: cash flow before working capital over total debt (gross)
+# --------------------------------------------------------------------------- #
+def _sol(debt, cash, ocf, dwc=0.0):
+    return _f(total_debt=debt, total_cash=cash, operating_cash_flow_annual=[ocf],
+              change_in_working_capital_annual=[dwc])
+
+
+def test_solvency_net_cash_passes_before_any_ratio_is_formed():
+    # even a loss-maker with net cash passes: the ratio is never computed
+    r = engine._solvency(_sol(100.0, 500.0, -50.0), D)
+    assert r.result == "pass" and r.reading == "net cash"
+
+
+def test_solvency_debt_at_or_below_zero_passes():
+    for debt in (0.0, -5.0):
+        assert engine._solvency(_sol(debt, 10.0, -50.0), D).result == "pass"
+    assert engine._solvency(_sol(0.0, 10.0, -50.0), D).reading == "no debt"
+
+
+def test_solvency_cash_flow_at_or_below_zero_is_not_evaluated_loss_maker_see_runway():
+    for ocf in (0.0, -40.0):
+        r = engine._solvency(_sol(1000.0, 10.0, ocf), D)
+        assert r.result == "not_evaluated" and r.note == "loss-maker, see runway"
+    # the test is on cash flow BEFORE working capital: a big working-capital inflow does not make it positive
+    r = engine._solvency(_sol(1000.0, 10.0, 20.0, dwc=60.0), D)       # 20 - 60 = -40
+    assert r.result == "not_evaluated" and r.note == "loss-maker, see runway"
+
+
+def test_a_negative_ratio_never_excludes_on_its_own():
+    r = engine._solvency(_sol(1000.0, 10.0, -400.0), D)
+    assert r.result != "fail" and r.value is None
+
+
+def test_solvency_below_five_percent_excludes_and_names_the_figure():
+    r = engine._solvency(_sol(1000.0, 10.0, 40.0), D)                  # 4%
+    assert r.result == "fail" and r.value == pytest.approx(0.04) and "4.0%" in r.reading
+
+
+def test_solvency_of_exactly_five_percent_passes():
+    assert engine._solvency(_sol(1000.0, 10.0, 50.0), D).result == "pass"
+
+
+def test_solvency_above_five_percent_passes_even_between_five_and_twelve():
+    assert engine._solvency(_sol(1000.0, 10.0, 90.0), D).result == "pass"      # 9%: warns elsewhere
+
+
+def test_solvency_with_debt_missing_is_not_evaluated():
+    r = engine._solvency(_f(operating_cash_flow_annual=[50.0], change_in_working_capital_annual=[0.0]), D)
+    assert r.result == "not_evaluated"
+
+
+def test_solvency_with_the_working_capital_line_missing_is_not_evaluated_not_a_pass():
+    r = engine._solvency(_f(total_debt=1000.0, total_cash=10.0, operating_cash_flow_annual=[50.0]), D)
+    assert r.result == "not_evaluated" and "working capital" in r.note
+
+
+def test_solvency_uses_gross_debt_not_net():
+    # net debt is 200; gross debt is 1000, and 4.9% of gross debt excludes
+    assert engine._solvency(_sol(1000.0, 800.0, 49.0), D).result == "fail"
+
+
+# --------------------------------------------------------------------------- #
+# Z'' against a hand computation, and its sign cases (now a WARNING, never an exclusion)
 # --------------------------------------------------------------------------- #
 def _z_inputs(**over):
     base = dict(current_assets_annual=[50.0], current_liabilities_annual=[30.0],
@@ -108,11 +190,6 @@ def test_z_double_prime_matches_a_hand_computation():
     expected = 6.56 * 0.2 + 3.26 * 0.2 + 6.72 * 0.1 + 1.05 * (40 / 60)
     assert expected == pytest.approx(3.336, abs=1e-9)
     assert gr.altman_z_double_prime(_z_inputs()).value == pytest.approx(expected, rel=1e-12)
-
-
-def test_z_double_prime_has_no_constant():
-    """The constant of 3.25 is not added: the 1.10 distress line is for the form without it."""
-    assert gr.altman_z_double_prime(_z_inputs()).value == pytest.approx(3.336)
 
 
 def test_z_double_prime_total_assets_at_or_below_zero_is_not_evaluated():
@@ -137,8 +214,6 @@ def test_z_double_prime_missing_line_is_not_evaluated_and_names_it():
 
 
 def test_z_double_prime_evaluates_where_the_old_z_abstains_on_a_currency_mismatch():
-    """An ADR: price in USD, accounts in EUR. The 1968 Z-Score abstains (its fourth term mixes the two);
-    Z'' reads only statement lines, so it evaluates."""
     from aristos_council.tools.screening import altman_z_score
     f = _z_inputs(currency="USD", financial_currency="EUR", market_cap=1e9, total_revenue=[200.0])
     assert altman_z_score(f).value is None
@@ -146,8 +221,24 @@ def test_z_double_prime_evaluates_where_the_old_z_abstains_on_a_currency_mismatc
 
 
 def test_z_double_prime_abstains_when_the_provider_says_the_statements_are_not_in_one_currency():
-    f = _z_inputs(statements_currency_note="revenue in CNY, statements in USD")
-    assert gr.altman_z_double_prime(f).value is None
+    assert gr.altman_z_double_prime(_z_inputs(statements_currency_note="revenue in CNY")).value is None
+
+
+def test_a_low_distress_score_is_a_warning_and_never_an_exclusion():
+    low = _z_inputs(shareholders_equity=[-500.0])                    # far below 1.10
+    r = engine._distress_score(low, D)
+    assert r.result == "warn" and r.note == "distress zone"
+    g = evaluate_gate(replace(msft(), shareholders_equity=[-900_000 * M]), D)
+    assert g.state == QUALIFIES                                      # the exclusions are untouched
+    assert {w.key: w for w in g.warnings}["distress_score"].result == "warn"
+
+
+def test_the_grey_zone_passes_with_a_note_and_a_missing_score_is_not_evaluated():
+    grey = _z_inputs(retained_earnings_annual=[-10.0], shareholders_equity=[6.0])
+    assert 1.10 <= gr.altman_z_double_prime(grey).value <= 2.60
+    r = engine._distress_score(grey, D)
+    assert r.result == "pass" and r.note == "grey zone"
+    assert engine._distress_score(_z_inputs(shareholders_equity=[]), D).result == "not_evaluated"
 
 
 # --------------------------------------------------------------------------- #
@@ -162,10 +253,9 @@ def test_accrual_above_the_boundary_excludes_and_names_the_figure():
     assert r.result == "fail" and r.value == pytest.approx(0.25) and "0.25" in r.reading
 
 
-def test_the_accrual_limit_is_printed_at_the_precision_of_the_frozen_boundary():
-    """0.0054 must not read as 0.01 (two decimals) on the page."""
+def test_the_accrual_limit_is_the_owners_point_one_oh():
     r = engine._earnings_quality(_acc(30.0, 5.0), D)
-    assert f"excluded above {D.accrual_exclude_above:g}" == r.limit and "0.0054" in r.limit
+    assert D.accrual_exclude_above == 0.10 and r.limit == "excluded above 0.1"
 
 
 def test_negative_accruals_pass():
@@ -214,7 +304,7 @@ def test_the_f_score_counts_with_all_nine_checks():
 
 
 def test_with_eight_checks_the_f_score_is_withheld_and_the_count_is_shown():
-    f = _nine(gross_profit_annual=[])                            # two margin/turnover checks lose an input
+    f = _nine(gross_profit_annual=[])
     r = gr.accounting_health(f)
     assert r.computable < 9 and r.score is None
     rule = engine._accounting_health(f, D)
@@ -232,28 +322,26 @@ def test_a_score_of_zero_or_one_with_nine_checks_excludes():
 
 
 def test_a_score_of_two_passes_the_cut():
-    spec = replace(D, f_exclude_at_or_below=1)
-    # reuse the healthy fixture but degrade until the tally is exactly 2
     f = _nine(net_income=[-5.0, 2.0], operating_cash_flow_annual=[20.0, 4.0],
               long_term_debt_annual=[30.0, 20.0], current_assets_annual=[40.0, 50.0],
               shares_outstanding_annual=[12.0, 10.0], gross_profit_annual=[20.0, 35.0],
               total_revenue=[100.0, 95.0], total_assets_annual=[100.0, 80.0])
     r = gr.accounting_health(f)
     assert r.score == 2
-    assert engine._accounting_health(f, spec).result == "pass"
+    assert engine._accounting_health(f, D).result == "pass"
 
 
 # --------------------------------------------------------------------------- #
-# cash runway
+# cash runway: an exclusion under 12 months, and its own warning from 12 to 24
 # --------------------------------------------------------------------------- #
 def _burn(cash, fcf=-100.0, ocf=-80.0):
     return _f(operating_cash_flow_annual=[ocf], free_cash_flow_annual=[fcf], total_cash=cash)
 
 
 def test_runway_does_not_apply_when_operating_cash_flow_is_positive():
-    r = engine._cash_runway(_f(operating_cash_flow_annual=[50.0], free_cash_flow_annual=[-10.0],
-                               total_cash=5.0), D)
-    assert r.result == "not_applicable"
+    f = _f(operating_cash_flow_annual=[50.0], free_cash_flow_annual=[-10.0], total_cash=5.0)
+    assert engine._cash_runway(f, D).result == "not_applicable"
+    assert engine._runway_warning(f, D).result == "not_applicable"
 
 
 def test_runway_under_twelve_months_excludes():
@@ -262,21 +350,24 @@ def test_runway_under_twelve_months_excludes():
 
 
 def test_runway_between_twelve_and_twenty_four_months_warns_and_does_not_exclude():
-    r = engine._cash_runway(_burn(cash=150.0), D)                # 18 months
-    assert r.result == "warn" and "raise money" in r.note
+    assert engine._cash_runway(_burn(cash=150.0), D).result == "pass"            # 18 months
+    w = engine._runway_warning(_burn(cash=150.0), D)
+    assert w.result == "warn" and "raise money" in w.note
 
 
 def test_runway_exactly_twelve_months_is_a_warning_not_an_exclusion():
-    assert engine._cash_runway(_burn(cash=100.0), D).result == "warn"
+    assert engine._cash_runway(_burn(cash=100.0), D).result == "pass"
+    assert engine._runway_warning(_burn(cash=100.0), D).result == "warn"
 
 
-def test_runway_of_twenty_four_months_or_more_passes():
+def test_runway_of_twenty_four_months_or_more_passes_both():
     assert engine._cash_runway(_burn(cash=200.0), D).result == "pass"
+    assert engine._runway_warning(_burn(cash=200.0), D).result == "pass"
 
 
 def test_runway_with_cash_missing_is_not_evaluated():
-    assert engine._cash_runway(_f(operating_cash_flow_annual=[-80.0], free_cash_flow_annual=[-100.0]), D).result \
-        == "not_evaluated"
+    f = _f(operating_cash_flow_annual=[-80.0], free_cash_flow_annual=[-100.0])
+    assert engine._cash_runway(f, D).result == "not_evaluated"
 
 
 def test_runway_with_operating_cash_flow_missing_is_not_evaluated():
@@ -294,37 +385,52 @@ def test_runway_does_not_apply_when_free_cash_flow_is_not_negative():
 
 
 # --------------------------------------------------------------------------- #
-# leverage warning
+# highly leveraged: net debt / EBITDA above 6, OR cash flow over debt below 12%; both readings printed
 # --------------------------------------------------------------------------- #
-def _lev(debt, cash, ebit, da):
-    return _f(total_debt=debt, total_cash=cash, ebit=[ebit], depreciation_amortization_annual=[da])
+def _lev(debt, cash, ebit, da, ocf=500.0, dwc=0.0):
+    return _f(total_debt=debt, total_cash=cash, ebit=[ebit], depreciation_amortization_annual=[da],
+              operating_cash_flow_annual=[ocf], change_in_working_capital_annual=[dwc])
 
 
-def test_leverage_above_six_times_warns():
-    r = engine._leverage(_lev(700.0, 0.0, 80.0, 20.0), D)            # 700 / 100 = 7.0
-    assert r.result == "warn" and r.value == pytest.approx(7.0)
+def test_net_debt_over_ebitda_above_six_warns_and_both_readings_are_printed():
+    r = engine._highly_leveraged(_lev(700.0, 0.0, 80.0, 20.0), D)        # 7.0 times; cash flow 500/700 = 71%
+    assert r.result == "warn"
+    assert "7.0 times" in r.reading and "cash flow over debt 71.4%" in r.reading
 
 
-def test_leverage_of_exactly_six_times_does_not_warn():
-    assert engine._leverage(_lev(600.0, 0.0, 80.0, 20.0), D).result == "pass"
+def test_net_debt_over_ebitda_of_exactly_six_does_not_warn():
+    assert engine._highly_leveraged(_lev(600.0, 0.0, 80.0, 20.0), D).result == "pass"
 
 
-def test_net_cash_is_a_pass_not_a_division():
-    r = engine._leverage(_lev(100.0, 500.0, 80.0, 20.0), D)
+def test_cash_flow_under_twelve_percent_of_debt_warns_even_when_ebitda_cover_is_fine():
+    r = engine._highly_leveraged(_lev(1000.0, 0.0, 400.0, 100.0, ocf=90.0), D)   # 2.0 times; 9%
+    assert r.result == "warn" and "9.0%" in r.reading and "2.0 times" in r.reading
+
+
+def test_cash_flow_of_exactly_twelve_percent_of_debt_does_not_warn():
+    assert engine._highly_leveraged(_lev(1000.0, 0.0, 400.0, 100.0, ocf=120.0), D).result == "pass"
+
+
+def test_net_cash_is_a_pass_and_both_readings_say_so():
+    r = engine._highly_leveraged(_lev(100.0, 500.0, 80.0, 20.0, ocf=-20.0), D)
     assert r.result == "pass" and "net cash" in r.reading
 
 
-def test_ebitda_at_or_below_zero_is_not_evaluated_never_a_pass():
-    for ebit, da in ((-50.0, 10.0), (-10.0, 10.0)):
-        assert engine._leverage(_lev(700.0, 0.0, ebit, da), D).result == "not_evaluated"
+def test_ebitda_at_or_below_zero_is_not_evaluated_but_the_cash_flow_reading_can_still_decide():
+    r = engine._highly_leveraged(_lev(1000.0, 0.0, -50.0, 10.0, ocf=300.0), D)
+    assert "net debt / EBITDA not evaluated" in r.reading and r.result == "pass"      # 30% of debt
+    r2 = engine._highly_leveraged(_lev(1000.0, 0.0, -50.0, 10.0, ocf=60.0), D)       # 6% of debt
+    assert r2.result == "warn"
 
 
-def test_leverage_without_depreciation_is_not_evaluated():
-    assert engine._leverage(_f(total_debt=700.0, total_cash=0.0, ebit=[80.0]), D).result == "not_evaluated"
+def test_a_loss_maker_has_no_cash_flow_over_debt_reading_and_neither_is_a_pass_by_default():
+    r = engine._highly_leveraged(_lev(1000.0, 0.0, -50.0, 10.0, ocf=-30.0), D)
+    assert r.result == "not_evaluated" and "loss-maker" in r.reading
 
 
-def test_leverage_without_debt_or_cash_is_not_evaluated():
-    assert engine._leverage(_f(ebit=[80.0], depreciation_amortization_annual=[20.0]), D).result == "not_evaluated"
+def test_leverage_without_depreciation_or_debt_is_not_evaluated():
+    assert gr.leverage(_f(total_debt=700.0, total_cash=0.0, ebit=[80.0])).value is None
+    assert gr.leverage(_f(ebit=[80.0], depreciation_amortization_annual=[20.0])).value is None
 
 
 def test_leverage_reads_the_newest_period_scalars_when_the_provider_gives_no_balance_sheet_scalars():
@@ -401,39 +507,74 @@ def test_any_failed_exclusion_excludes_and_names_the_rule_and_the_figure():
     assert "Earnings quality" in g.reason and "excluded above" in g.reason
 
 
-def test_two_failures_are_both_named():
-    f = replace(msft(), net_income=[500_000 * M, 1.0],
-                shareholders_equity=[-900_000 * M, 1.0])            # distress as well
+def test_a_solvency_exclusion_names_its_percentage():
+    f = replace(msft(), total_debt=4_000_000 * M, total_cash=1.0, operating_cash_flow_annual=[182_935 * M],
+                change_in_working_capital_annual=[-4_895 * M])     # 187,830 / 4,000,000 = 4.7%
     g = evaluate_gate(f, D)
-    assert g.state == EXCLUDED and "Earnings quality" in g.reason and "Distress" in g.reason
+    assert g.state == EXCLUDED and "Solvency" in g.reason and "4.7%" in g.reason
+
+
+def test_two_failures_are_both_named():
+    f = replace(msft(), net_income=[500_000 * M, 1.0], total_debt=4_000_000 * M, total_cash=1.0)
+    g = evaluate_gate(f, D)
+    assert g.state == EXCLUDED and "Earnings quality" in g.reason and "Solvency" in g.reason
 
 
 def test_warnings_never_change_the_state():
-    f = replace(msft(), dividends_paid=900_000 * M, total_debt=5e12)
+    f = replace(msft(), dividends_paid=900_000 * M, total_debt=5e12, total_cash=1.0,
+                operating_cash_flow_annual=[5e12], change_in_working_capital_annual=[0.0])
     g = evaluate_gate(f, D)
     assert g.state == QUALIFIES
-    assert {w.key for w in g.warnings if w.result == "warn"} == {"leverage", "dividend_cover"}
+    assert {w.key for w in g.warnings if w.result == "warn"} >= {"highly_leveraged", "dividend_cover"}
     assert "Warnings:" in g.reason
 
 
-def test_qualifies_needs_z_double_prime_and_the_accrual_ratio_both_evaluated():
-    no_z = replace(msft(), shareholders_equity=[])
-    g = evaluate_gate(no_z, D)
-    assert g.state == NOT_ENOUGH_DATA and any("Z''" in m for m in g.missing)
-    no_acc = replace(msft(), net_income=[])
-    g2 = evaluate_gate(no_acc, D)
-    assert g2.state == NOT_ENOUGH_DATA and any("accrual" in m for m in g2.missing)
+def test_qualifies_needs_the_accrual_ratio_evaluated():
+    g = evaluate_gate(replace(msft(), net_income=[]), D)
+    assert g.state == NOT_ENOUGH_DATA and any("accrual" in m for m in g.missing)
+
+
+def test_qualifies_needs_solvency_evaluated_when_it_is_missing_data_not_a_loss_maker():
+    g = evaluate_gate(replace(msft(), total_debt=None), D)
+    assert g.state == NOT_ENOUGH_DATA and any("solvency" in m for m in g.missing)
+    g2 = evaluate_gate(replace(msft(), total_debt=60_000 * M, total_cash=1.0,
+                               change_in_working_capital_annual=[]), D)
+    assert g2.state == NOT_ENOUGH_DATA and any("solvency" in m for m in g2.missing)
+
+
+def _loss_maker(**over):
+    base = dict(operating_cash_flow_annual=[-80 * M], change_in_working_capital_annual=[0.0],
+                free_cash_flow_annual=[-100 * M], total_debt=500 * M, total_cash=300 * M,
+                net_income=[-50 * M, -40 * M, -30 * M])
+    base.update(over)
+    return replace(msft(), **base)
+
+
+def test_a_loss_maker_is_settled_by_the_runway_and_qualifies_when_the_runway_passes():
+    g = evaluate_gate(_loss_maker(), D)                                 # 36 months
+    by = {r.key: r for r in g.rules}
+    assert by["solvency"].result == "not_evaluated" and by["solvency"].note == "loss-maker, see runway"
+    assert by["cash_runway"].result == "pass" and g.state == QUALIFIES
+
+
+def test_a_loss_maker_is_excluded_by_the_runway_when_it_is_short():
+    g = evaluate_gate(_loss_maker(total_cash=50 * M), D)               # 6 months
+    assert g.state == EXCLUDED and "Cash runway" in g.reason and "Solvency" not in g.reason
+
+
+def test_a_loss_maker_before_working_capital_whose_runway_does_not_apply_has_nothing_to_decide():
+    """Operating cash flow positive only because working capital released cash: cash flow before working
+    capital is negative (solvency not evaluated) and the runway does not apply, so neither can decide."""
+    f = replace(msft(), operating_cash_flow_annual=[20 * M], change_in_working_capital_annual=[60 * M],
+                total_debt=500 * M, total_cash=100 * M, net_income=[15 * M, 10 * M, 5 * M])
+    g = evaluate_gate(f, D)
+    assert g.state == NOT_ENOUGH_DATA and any("loss-maker" in m for m in g.missing)
 
 
 def test_a_withheld_f_score_does_not_block_qualifying():
     g = evaluate_gate(replace(msft(), gross_profit_annual=[]), D)
     assert g.state == QUALIFIES
     assert {r.key: r for r in g.rules}["accounting_health"].result == "not_evaluated"
-
-
-def test_a_runway_that_does_not_apply_does_not_block_qualifying():
-    g = evaluate_gate(msft(), D)
-    assert {r.key: r for r in g.rules}["cash_runway"].result == "not_applicable" and g.state == QUALIFIES
 
 
 def test_no_accounts_is_not_enough_data():
@@ -467,15 +608,18 @@ def test_abnormal_investment_needs_four_years_and_positive_sales():
 
 
 # --------------------------------------------------------------------------- #
-# the shipped gate file
+# the shipped gate files
 # --------------------------------------------------------------------------- #
-def test_the_gate_file_loads_with_every_threshold_the_design_names():
-    assert D.id == "absolute_gate_v1" and D.version == 1
-    assert D.z_exclude_below == 1.10 and D.z_grey_to == 2.60
+def test_the_gate_file_loads_with_every_threshold_the_owner_set():
+    assert D.id == "absolute_gate_v2" and D.version == 2 and D.frozen
+    assert D.accrual_exclude_above == 0.10
+    assert D.solvency_exclude_below == 0.05
+    assert D.leverage_warn_above == 6.0 and D.leverage_cash_flow_over_debt_below == 0.12
+    assert (D.z_warn_below, D.z_grey_to) == (1.10, 2.60)
     assert D.f_exclude_at_or_below == 1 and D.f_required_checks == 9
     assert (D.runway_exclude_below_months, D.runway_warn_below_months) == (12, 24)
-    assert D.leverage_warn_above == 6.0
     assert (D.cover_not_covered_below, D.cover_thin_below, D.cover_years) == (1.0, 1.5, 3)
+    assert D.intensity_warn_above == 0.2676                 # carried from version 1's calibration
 
 
 def test_every_rule_and_warning_carries_a_source_line():
@@ -484,31 +628,32 @@ def test_every_rule_and_warning_carries_a_source_line():
             assert str(rule.get("source") or "").strip(), key
 
 
+def test_version_one_stays_on_disk_unchanged_and_is_refused_by_the_loader():
+    """The frozen v1 file is the record of what version 1 measured: its measured boundary and its date."""
+    from aristos_council.gate.definition import GATES_DIR
+    text = (GATES_DIR / "absolute_gate_v1.yaml").read_text(encoding="utf-8")
+    assert "status: frozen" in text and "exclude_above: 0.0054" in text and "exclude_below: 1.10" in text
+    with pytest.raises(GateDefinitionError, match="version 1"):
+        load_gate("absolute_gate_v1")
+
+
 def test_a_missing_threshold_is_refused_at_load():
-    doc = {"id": "x", "version": 1, "status": "frozen", "rules": {}, "warnings": {}}
+    doc = {"id": "x", "version": 2, "status": "frozen", "rules": {}, "warnings": {}}
     with pytest.raises(GateDefinitionError):
         parse_gate(doc)
-
-
-def test_the_frozen_gate_file_records_its_measured_boundaries():
-    """Step 5: the 0.10 stand-in is replaced by the measured 90th percentile, with the calibration date."""
-    assert D.frozen and D.accrual_boundary_status == "measured"
-    assert D.accrual_exclude_above != 0.10
-    assert D.calibration.get("date") and D.calibration.get("universe_size")
-    assert D.intensity_warn_above is not None
 
 
 # --------------------------------------------------------------------------- #
 # the page section and the record
 # --------------------------------------------------------------------------- #
-def test_the_section_has_four_exclusions_and_two_warnings_in_plain_english():
+def test_the_section_has_four_exclusions_and_four_warnings_in_plain_english():
     g = evaluate_gate(msft(), D)
     rows = render.rows(g)
-    assert [r[1] for r in rows] == ["exclusion"] * 4 + ["warning"] * 2
+    assert [r[1] for r in rows] == ["exclusion"] * 4 + ["warning"] * 4
     text = "\n".join(render.text_lines(g))
     assert text.startswith(render.SECTION_TITLE.upper())
     assert "does not change the verdict yet" in text.lower() and "Gate result: Qualifies" in text
-    assert "Total Debt row" in text and "long-term operating lease line" in text
+    assert "four warnings" in text and "Total Debt row" in text and "long-term operating lease line" in text
     for banned in ("accrual_ratio", "altman_z", "piotroski_f_score", "min_f_score", "strategy_id"):
         assert banned not in text
 
@@ -522,8 +667,10 @@ def test_a_bank_section_has_no_table_and_says_not_covered():
 def test_the_gate_record_is_json_ready():
     import json
     d = evaluate_gate(msft(), D).as_dict()
-    assert json.loads(json.dumps(d))["state"] == QUALIFIES
-    assert [r["key"] for r in d["rules"]] == ["earnings_quality", "distress", "accounting_health", "cash_runway"]
+    assert json.loads(json.dumps(d))["state"] == QUALIFIES and d["definition"] == "absolute_gate_v2"
+    assert [r["key"] for r in d["rules"]] == ["earnings_quality", "solvency", "accounting_health", "cash_runway"]
+    assert [w["key"] for w in d["warnings"]] == ["highly_leveraged", "distress_score", "dividend_cover",
+                                                  "runway_warning"]
 
 
 @pytest.mark.min_group(3)
