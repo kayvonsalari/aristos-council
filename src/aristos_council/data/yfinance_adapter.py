@@ -221,6 +221,7 @@ class YFinanceAdapter(MarketDataAdapter):
         # amortisation, both at the same fiscal year-end as the lines above.
         _record_aligned("shareholders_equity", balance, "Stockholders Equity", "Total Stockholder Equity")
         _record_aligned("depreciation_amortization", cashflow, *_DA_LABELS)
+        _record_aligned("change_in_working_capital", cashflow, "Change In Working Capital")   # ABSOLUTE-GATE-2
         _record_aligned("cash", balance, "Cash And Cash Equivalents",
                         "Cash Cash Equivalents And Short Term Investments")
 
@@ -307,6 +308,7 @@ class YFinanceAdapter(MarketDataAdapter):
             capital_expenditure_annual=_cashflow_series(
                 cashflow, "Capital Expenditure", "Capital Expenditures"),
             depreciation_amortization_annual=_cashflow_series(cashflow, *_DA_LABELS),
+            change_in_working_capital_annual=_cashflow_series(cashflow, "Change In Working Capital"),
             # Annual series, newest-first, NaN/empty dropped (Sprint 4B).
             total_revenue=_annual_series(income, "Total Revenue"),
             operating_income=_annual_series(income, "Operating Income"),

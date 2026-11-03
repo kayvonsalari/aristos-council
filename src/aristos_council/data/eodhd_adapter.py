@@ -219,6 +219,7 @@ _PERIOD_LISTS = (
     ("operating_cash_flow_annual", "cashflow", "totalCashFromOperatingActivities"),
     ("capital_expenditure_annual", "cashflow", "capitalExpenditures"),
     ("depreciation_amortization_annual", "cashflow", "depreciation"),
+    ("change_in_working_capital_annual", "cashflow", "changeInWorkingCapital"),   # ABSOLUTE-GATE-2
 )
 
 

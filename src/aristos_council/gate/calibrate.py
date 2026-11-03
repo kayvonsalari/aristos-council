@@ -36,7 +36,7 @@ from .definition import GATES_DIR, DEFAULT_GATE_ID, load_gate
 _ROOT = Path(__file__).resolve().parents[3]
 COHORTS_DIR = _ROOT / "data" / "local" / "cohorts"
 STATE_DIR = _ROOT / "data" / "local" / "gate_calibration"
-OUT_JSON = _ROOT / "data" / "gate_calibration_v1.json"
+OUT_JSON = _ROOT / "data" / "gate_calibration_v2.json"
 OUT_MD = _ROOT / "docs" / "GATE_CALIBRATION.md"
 UNITS_PER_FUNDAMENTALS = 10
 THIN_INDUSTRY = 5                      # an industry under this many names is listed but never "excluded wholesale"
@@ -47,8 +47,13 @@ PERCENTILES = (5, 25, 50, 75, 90, 95)
 # own form. Found on the first calibration pass, where 343 names of exactly these four failed to read.
 EODHD_ONLY_SUFFIXES = frozenset({"LSE", "XETRA", "KO", "AU"})
 
-RULE_KEYS = ("earnings_quality", "distress", "accounting_health", "cash_runway")
-WARN_KEYS = ("leverage", "dividend_cover")
+# The owner's guardrail (ABSOLUTE-GATE-3, principle a): an exclusion rule that removes more than one name in
+# ten at calibration is the wrong instrument and becomes a mark until re-specified. The tool REPORTS the
+# breach; it never changes a rule.
+GUARDRAIL_MAX_SHARE = 0.10
+
+RULE_KEYS = ("earnings_quality", "solvency", "accounting_health", "cash_runway")
+WARN_KEYS = ("highly_leveraged", "distress_score", "dividend_cover", "runway_warning")
 
 
 class StopRun(Exception):
@@ -99,7 +104,7 @@ def load_universe(cohorts_dir: Path = COHORTS_DIR) -> list[dict]:
 def record_for(entry: dict, f, definition) -> dict:
     g = engine.evaluate_gate(f, definition)
     ai = gr.abnormal_investment(f)
-    rules = {r.key: {"result": r.result, "value": r.value} for r in g.rules}
+    rules = {r.key: {"result": r.result, "value": r.value, "note": r.note} for r in g.rules}
     warns = {w.key: {"result": w.result, "value": w.value} for w in g.warnings}
     return {"ticker": entry["ticker"], "industry": entry["industry"], "status": "ok",
             "sector": getattr(f, "sector", None), "state": g.state, "rules": rules,
@@ -116,35 +121,56 @@ def _read_records(state_file: Path) -> dict[str, dict]:
     return out
 
 
+BATCH_SIZE = 50          # names fetched, scored and written before the batch is dropped from memory
+
+
+def _rss_mb() -> Optional[float]:
+    try:
+        import psutil
+        return psutil.Process().memory_info().rss / 1e6
+    except Exception:                                                              # noqa: BLE001
+        return None
+
+
 def collect(universe: list[dict], *, adapter, definition, state_dir: Path, budget: Optional[int],
-            limit: Optional[int] = None, say=print, eodhd_form: frozenset = frozenset()) -> dict:
-    """Fetch and evaluate every name not already recorded. Stops cleanly at the budget or on a quota
-    refusal. ``adapter`` is a caching adapter whose ``misses`` count real provider calls."""
+            limit: Optional[int] = None, say=print, eodhd_form: frozenset = frozenset(),
+            batch_size: int = BATCH_SIZE, count_units: bool = True) -> dict:
+    """Fetch and evaluate every name not already recorded, in BATCHES: fetch a batch, score it, append its
+    per-name records to disk, add its units to the running count on disk, drop it from memory, then the
+    next. Only the set of recorded tickers is held. Stops cleanly at ``budget`` (units this run) or on a
+    quota refusal; a later run resumes from the file. ``adapter`` is a caching adapter whose ``misses``
+    count real provider calls."""
+    import gc
     state_dir.mkdir(parents=True, exist_ok=True)
     state_file = state_dir / "records.jsonl"
-    done = _read_records(state_file)
+    done = set(_read_records(state_file))
     todo = [e for e in universe if e["ticker"] not in done]
     if limit is not None:
         todo = todo[:limit]
     spent = 0
     consecutive_403 = 0
-    say(f"universe {len(universe)}; recorded {len(done)}; to do {len(todo)}; budget "
-        f"{'none' if budget is None else str(budget) + ' units'}")
     stopped = ""
-    with open(state_file, "a", encoding="utf-8") as fh:
-        for i, entry in enumerate(todo, 1):
-            if budget is not None and spent + UNITS_PER_FUNDAMENTALS > budget:
+    say(f"universe {len(universe)}; recorded {len(done)}; to do {len(todo)}; budget "
+        f"{'none' if budget is None else str(budget) + ' units'}; batches of {batch_size}")
+    peak = _rss_mb() or 0.0
+    for start in range(0, len(todo), batch_size):
+        batch = todo[start:start + batch_size]
+        batch_spent = 0
+        lines = []
+        for entry in batch:
+            if budget is not None and spent + batch_spent + UNITS_PER_FUNDAMENTALS > budget:
                 stopped = f"budget of {budget} units reached"
                 break
             before = adapter.misses
             try:
-                # EODHD's own symbol (BAS.XETRA, CRDA.LSE) for the names a first pass could not read in
-                # the Yahoo form (BAS.DE, CRDA.L): the provider answers 404 to a suffix it does not use
+                # EODHD's own symbol (BAS.XETRA, CRDA.LSE) for the exchanges whose Yahoo suffix (BAS.DE,
+                # CRDA.L) the provider answers 404 to
                 f = adapter.get_fundamentals(
                     entry["ticker"] if (entry["ticker"] in eodhd_form
                                         or entry["ticker"].rsplit(".", 1)[-1] in EODHD_ONLY_SUFFIXES)
                     else entry["yahoo"])
                 rec = record_for(entry, f, definition)
+                f = None
                 consecutive_403 = 0
             except Exception as exc:                                        # noqa: BLE001
                 msg = str(exc)
@@ -157,13 +183,25 @@ def collect(universe: list[dict], *, adapter, definition, state_dir: Path, budge
                 if consecutive_403 >= 5:
                     stopped = "five HTTP 403 refusals in a row (quota or plan)"
                     break
-            spent += UNITS_PER_FUNDAMENTALS if (adapter.misses > before or rec["status"] == "error") else 0
-            fh.write(json.dumps(rec) + "\n")
-            fh.flush()
-            done[entry["ticker"]] = rec
-            if i % 100 == 0:
-                say(f"  {i}/{len(todo)}  units this run {spent}")
-    return {"records": done, "units_this_run": spent, "stopped": stopped,
+            if count_units:
+                batch_spent += UNITS_PER_FUNDAMENTALS if (adapter.misses > before or rec["status"] == "error") else 0
+            lines.append(json.dumps(rec))
+            done.add(entry["ticker"])
+        # the batch is finished (or cut short): write its records and its units NOW, then drop it
+        if lines:
+            with open(state_file, "a", encoding="utf-8") as fh:
+                fh.write(chr(10).join(lines) + chr(10))
+        _add_units(state_dir, batch_spent)
+        spent += batch_spent
+        del batch, lines
+        gc.collect()
+        rss = _rss_mb()
+        peak = max(peak, rss or 0.0)
+        say(f"  {len(done)}/{len(universe)} recorded; units this run {spent}"
+            + (f"; process memory {rss:.0f} MB" if rss is not None else ""))
+        if stopped:
+            break
+    return {"units_this_run": spent, "stopped": stopped, "peak_mb": peak,
             "remaining": len([e for e in universe if e["ticker"] not in done])}
 
 
@@ -188,8 +226,15 @@ def rederive_state(rec: dict, accrual_boundary: float) -> str:
     other_fail = any(r["result"] == engine.FAIL for k, r in rules.items() if k != "earnings_quality")
     if acc_fail or other_fail:
         return engine.EXCLUDED
-    if acc["value"] is None or rules["distress"]["value"] is None:
+    if acc["value"] is None:
         return engine.NOT_ENOUGH_DATA
+    sol = rules["solvency"]
+    if sol["result"] == engine.NOT_EVALUATED:
+        # a loss-maker is settled by the runway (which must have passed); any other gap is missing data
+        if rules["cash_runway"]["result"] != engine.PASS:
+            return engine.NOT_ENOUGH_DATA
+        if sol.get("note") != engine.LOSS_MAKER_NOTE:
+            return engine.NOT_ENOUGH_DATA
     return engine.QUALIFIES
 
 
@@ -198,8 +243,9 @@ def aggregate(records: dict[str, dict], *, accrual_boundary: float, leverage_war
     errors = [r for r in records.values() if r["status"] != "ok"]
     accrual = [r["rules"]["earnings_quality"]["value"] for r in ok
                if r["rules"]["earnings_quality"]["value"] is not None]
-    leverage = [r["warnings"]["leverage"]["value"] for r in ok
-                if r["warnings"]["leverage"]["value"] is not None]
+    leverage = [r["warnings"]["highly_leveraged"]["value"] for r in ok
+                if r["warnings"]["highly_leveraged"]["value"] is not None]
+    solvency = [r["rules"]["solvency"]["value"] for r in ok if r["rules"]["solvency"]["value"] is not None]
     abn = [r["abnormal_investment"] for r in ok if r["abnormal_investment"] is not None]
 
     def dist(values):
@@ -224,8 +270,6 @@ def aggregate(records: dict[str, dict], *, accrual_boundary: float, leverage_war
             out["excluded_by"][k] = fails / n
             out["not_evaluated"][k] = sum(1 for r in rs if r["rules"][k]["result"] == engine.NOT_EVALUATED) / n
             out["not_applicable"][k] = sum(1 for r in rs if r["rules"][k]["result"] == engine.NOT_APPLICABLE) / n
-        out["warnings"]["cash_runway_warn"] = sum(1 for r in rs
-                                                  if r["rules"]["cash_runway"]["result"] == engine.WARN) / n
         for k in WARN_KEYS:
             out["warnings"][k] = sum(1 for r in rs if r["warnings"][k]["result"] == engine.WARN) / n
             out["not_evaluated"][k] = sum(1 for r in rs if r["warnings"][k]["result"] == engine.NOT_EVALUATED) / n
@@ -238,9 +282,14 @@ def aggregate(records: dict[str, dict], *, accrual_boundary: float, leverage_war
             rule = max(b["excluded_by"], key=lambda k: b["excluded_by"][k])
             wholesale.append({"industry": name, "n": b["n"], "share_excluded": b["state"][engine.EXCLUDED],
                               "rule": rule, "rule_share": b["excluded_by"][rule]})
+    guardrail = {k: {"share_excluded": block(ok)["excluded_by"][k] if ok else 0.0,
+                     "breaks_guardrail": bool(ok) and block(ok)["excluded_by"][k] > GUARDRAIL_MAX_SHARE}
+                 for k in RULE_KEYS}
     return {"names_with_data": len(ok), "names_without_data": len(errors),
+            "guardrail": {"max_share": GUARDRAIL_MAX_SHARE, "rules": guardrail},
             "overall": block(ok) if ok else {}, "industries": industries,
             "accrual_ratio": dist(accrual), "net_debt_to_ebitda": dist(leverage),
+            "cash_flow_over_debt": dist(solvency),
             "abnormal_investment": {**dist(abn), "p80": _pct(abn, INTENSITY_PERCENTILE)},
             "measured_accrual_boundary": _pct(accrual, ACCRUAL_PERCENTILE),
             "accrual_boundary_used": accrual_boundary,
@@ -268,18 +317,19 @@ def _share(x: float) -> str:
 def write_markdown(agg: dict, meta: dict, path: Path = OUT_MD) -> Path:
     o = agg["overall"]
     lines = [
-        "# Gate calibration (ABSOLUTE-GATE-1)", "",
+        f"# Gate calibration ({meta.get('gate', 'absolute_gate')})", "",
         f"Run on {meta['date']}. Universe: {meta['universe_size']} names (the union of the built "
         f"cohort members). Names with accounts: {agg['names_with_data']}; without: "
         f"{agg['names_without_data']}. EODHD units spent: {meta['units_spent']} "
         f"(10 units a fundamentals request). Aggregates only: no company is named on this page.", "",
-        "The gate has four rules that can exclude a company and two warnings that never do "
-        "(docs/DESIGN_absolute.md, section b). This page says how often each one fires on our names, so "
-        "the one threshold that is measured, not argued, can be frozen. It changes no vote and no verdict.", "",
-        "## The two measured boundaries", "",
-        f"- Accrual ratio, top tenth: the 90th percentile of the {agg['accrual_ratio']['n']} names with the "
-        f"ratio is **{_p(agg['measured_accrual_boundary'], 4)}**. Names above it are excluded. The stand-in "
-        f"was 0.10.",
+        "The gate has four rules that can exclude a company and four warnings that never do "
+        "(docs/DESIGN_absolute.md, section b). This page says how often each one fires on our names, tests "
+        "the owner's guardrail (an exclusion rule that removes more than one name in ten is mis-specified), "
+        "and lists any industry the rules exclude wholesale. It changes no threshold, no vote and no verdict.", "",
+        "## The measured boundaries", "",
+        f"- Accrual ratio: the 90th percentile of the {agg['accrual_ratio']['n']} names with the ratio is "
+        f"**{_p(agg['measured_accrual_boundary'], 4)}**. Gate version 1 froze that figure as its boundary; "
+        f"gate version 2 uses the owner's 0.10 and reports this one for information.",
         f"- Abnormal investment, top fifth: the 80th percentile of the {agg['abnormal_investment']['n']} names "
         f"with the measure is **{_p(agg['abnormal_investment']['p80'], 4)}**. Recorded for phase 2; nothing "
         "uses it yet.", "",
@@ -289,23 +339,40 @@ def write_markdown(agg: dict, meta: dict, path: Path = OUT_MD) -> Path:
     for key, label in ((engine.EXCLUDED, "Excluded"), (engine.QUALIFIES, "Qualifies"),
                        (engine.NOT_ENOUGH_DATA, "Not enough data"), (engine.NOT_COVERED, "Not covered")):
         lines.append(f"| {label} | {_share(o['state'][key])} |")
-    labels = {"earnings_quality": "Earnings quality (accrual ratio)", "distress": "Distress (Z'')",
+    labels = {"earnings_quality": "Earnings quality (accrual ratio)", "solvency": "Solvency (cash flow over debt)",
               "accounting_health": "Accounting health (F-score 0 or 1)", "cash_runway": "Cash runway under 12 months"}
     lines += ["", "## How often each rule fires", "",
               "| Rule | Excludes | Not evaluated | Does not apply |", "|---|---|---|---|"]
     for k in RULE_KEYS:
         lines.append(f"| {labels[k]} | {_share(o['excluded_by'][k])} | {_share(o['not_evaluated'][k])} | "
                      f"{_share(o['not_applicable'][k])} |")
+    g = agg["guardrail"]
+    broken = [labels[k] for k, v in g["rules"].items() if v["breaks_guardrail"]]
+    lines += ["", "## The owner's guardrail", "",
+              f"An exclusion rule that removes more than one name in {round(1 / g['max_share'])} at calibration is "
+              "the wrong instrument and becomes a mark until re-specified. This page reports; it changes no rule.", ""]
+    if broken:
+        lines.append("**Breached by:** " + "; ".join(
+            f"{labels[k]} ({_share(v['share_excluded'])})" for k, v in g["rules"].items()
+            if v["breaks_guardrail"]) + ".")
+    else:
+        lines.append("**No exclusion rule breaks it.** Largest share excluded by one rule: "
+                     f"{_share(max(v['share_excluded'] for v in g['rules'].values()))}.")
     lines += ["", "| Warning | Fires | Not evaluated |", "|---|---|---|",
-              f"| Cash runway 12 to 24 months | {_share(o['warnings']['cash_runway_warn'])} | |",
-              f"| Leverage above {agg['leverage_warn_above']:.0f} times | {_share(o['warnings']['leverage'])} | "
-              f"{_share(o['not_evaluated']['leverage'])} |",
-              f"| Dividend cover under 1.5 | {_share(o['warnings']['dividend_cover'])} | "
-              f"{_share(o['not_evaluated']['dividend_cover'])} |", "",
+              f"| Highly leveraged (above {agg['leverage_warn_above']:.0f} times net debt / EBITDA, or cash flow "
+              f"under 12% of debt) | {_share(o['warnings']['highly_leveraged'])} | "
+              f"{_share(o['not_evaluated']['highly_leveraged'])} |",
+              f"| Distress score low (Z'' under 1.10) | {_share(o['warnings']['distress_score'])} | "
+              f"{_share(o['not_evaluated']['distress_score'])} |",
+              f"| Dividend cover under 1.0 (not covered) | {_share(o['warnings']['dividend_cover'])} | "
+              f"{_share(o['not_evaluated']['dividend_cover'])} |",
+              f"| Cash runway 12 to 24 months | {_share(o['warnings']['runway_warning'])} | "
+              f"{_share(o['not_evaluated']['runway_warning'])} |", "",
               "## Distributions", "",
               "| Measure | Names | " + " | ".join(f"{p}th" for p in PERCENTILES) + " |",
               "|---|---|" + "---|" * len(PERCENTILES)]
     for key, label in (("accrual_ratio", "Accrual ratio"), ("net_debt_to_ebitda", "Net debt / EBITDA (times)"),
+                       ("cash_flow_over_debt", "Cash flow before working capital / total debt"),
                        ("abnormal_investment", "Abnormal investment")):
         d = agg[key]
         lines.append(f"| {label} | {d['n']} | " + " | ".join(_p(d[f"p{p}"]) for p in PERCENTILES) + " |")
@@ -321,14 +388,14 @@ def write_markdown(agg: dict, meta: dict, path: Path = OUT_MD) -> Path:
         lines.append(f"None. (An industry needs at least {THIN_INDUSTRY} names and more than half of them "
                      "excluded.)")
     lines += ["", "## By industry", "",
-              "| Industry | Names | Excluded | Accrual | Distress | F-score | Runway | Leverage warning | Cover warning | Not enough data |",
+              "| Industry | Names | Excluded | Accrual | Solvency | F-score | Runway | Highly leveraged | Cover warning | Not enough data |",
               "|---|---|---|---|---|---|---|---|---|---|"]
     for name, b in agg["industries"].items():
         lines.append(
             f"| {name}{' (thin)' if b['n'] < THIN_INDUSTRY else ''} | {b['n']} | {_share(b['state'][engine.EXCLUDED])} | "
-            f"{_share(b['excluded_by']['earnings_quality'])} | {_share(b['excluded_by']['distress'])} | "
+            f"{_share(b['excluded_by']['earnings_quality'])} | {_share(b['excluded_by']['solvency'])} | "
             f"{_share(b['excluded_by']['accounting_health'])} | {_share(b['excluded_by']['cash_runway'])} | "
-            f"{_share(b['warnings']['leverage'])} | {_share(b['warnings']['dividend_cover'])} | "
+            f"{_share(b['warnings']['highly_leveraged'])} | {_share(b['warnings']['dividend_cover'])} | "
             f"{_share(b['state'][engine.NOT_ENOUGH_DATA])} |")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -345,17 +412,14 @@ def _replace_once(text: str, old: str, new: str) -> str:
 
 
 def freeze_gate_file(agg: dict, meta: dict, gate_id: str = DEFAULT_GATE_ID, gates_dir: Path = GATES_DIR) -> Path:
+    """Write the calibration into the version 2 gate file: the re-measured investment-intensity 80th
+    percentile, the industries excluded wholesale (more than half of their names), and the calibration block.
+    The accrual boundary stays 0.10 by rule, and no threshold is touched."""
     path = Path(gates_dir) / f"{gate_id}.yaml"
     text = path.read_text(encoding="utf-8")
-    boundary = round(agg["measured_accrual_boundary"], 4)
     p80 = round(agg["abnormal_investment"]["p80"], 4)
-    text = _replace_once(text, "    exclude_above: 0.10\n", f"    exclude_above: {boundary}\n")
-    text = _replace_once(text, "    boundary_status: stand_in   # judgment until measured; replaced by the measured 90th percentile",
-                         f"    boundary_status: measured   # the 90th percentile of the accrual ratio, {meta['date']}")
-    text = _replace_once(text, "status: stand_in            # becomes `frozen` when the calibration boundaries are written in",
-                         "status: frozen")
-    text = _replace_once(text, "  warn_above: null            # the measured 80th percentile",
-                         f"  warn_above: {p80}            # the measured 80th percentile, {meta['date']}")
+    text = _replace_once(text, "  warn_above: 0.2676          # the measured 80th percentile, 2026-11-03 (version 1 calibration)",
+                         f"  warn_above: {p80}          # the measured 80th percentile, {meta['date']} (version 2 calibration)")
     wh = agg["wholesale_excluded_industries"]
     if wh:
         block = "not_covered_industries:\n" + "".join(
@@ -364,10 +428,20 @@ def freeze_gate_file(agg: dict, meta: dict, gate_id: str = DEFAULT_GATE_ID, gate
             f"    rule_share: {w['rule_share']:.3f}\n" for w in wh)
     else:
         block = "not_covered_industries: []\n"
+    text = _replace_once(
+        text, ("# Version 1's list was measured under version 1's rules and is not valid here. Version 2 has NOT been\n"
+               "# recalibrated (that refetches every name: python -m aristos_council.gate calibrate --redo). If a\n"
+               "# recalibration excludes industries wholesale, they enter as version 3, never as an edit to this file.\n"),
+        ("# Industries the version 2 rules exclude wholesale (more than half of their names), measured on the\n"
+         f"# calibration of {meta['date']}. The thresholds are never loosened to admit them.\n"))
     text = _replace_once(text, "not_covered_industries: []\n", block)
-    text = _replace_once(text, "  date: null\n  universe_size: null\n  units_spent: null\n",
+    text = _replace_once(text, "  date: null\n  universe_size: null\n  units_spent: null\n  file: null\n",
                          f"  date: {meta['date']}\n  universe_size: {meta['universe_size']}\n"
-                         f"  units_spent: {meta['units_spent']}\n")
+                         f"  units_spent: {meta['units_spent']}\n  file: data/gate_calibration_v1.json\n")
+    text = _replace_once(text, "# NOT YET RECALIBRATED: version 1's calibration (docs/GATE_CALIBRATION.md) measured the version 1 rules.",
+                         f"# Calibrated {meta['date']} on {meta['universe_size']} names (docs/GATE_CALIBRATION.md); the calibration\n"
+                         "# changed no threshold: it re-measured the investment-intensity boundary and listed the industries\n"
+                         "# the rules exclude wholesale.")
     path.write_text(text, encoding="utf-8")
     return path
 
@@ -375,10 +449,31 @@ def freeze_gate_file(agg: dict, meta: dict, gate_id: str = DEFAULT_GATE_ID, gate
 # --------------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------------- #
-def _default_adapter():
-    from ..data.backtest_feed import BacktestFeed
+def _default_adapter(cache_only: bool = False):
+    from ..data.backtest_feed import FUNDAMENTALS_KIND, BacktestFeed
     from ..data.cache import DEFAULT_CACHE_DIR, CachingAdapter
     from ..data.retry import RetryAdapter
+    if cache_only:
+        from ..data.adapter import DataUnavailable, MarketDataAdapter
+
+        class _NoFetch(MarketDataAdapter):
+            """Stands where the provider would: a name that is not in the day-cache is an error, never a request."""
+            name = "eodhd-dated"
+            dividend_streak_method = "per_payment_median"
+
+            def provider_for(self, data_kind):
+                return FUNDAMENTALS_KIND if data_kind == "fundamentals" else "none"
+
+            def get_fundamentals(self, ticker):
+                raise DataUnavailable("cache-only run: not in the day-cache, nothing fetched")
+
+            def get_price_history(self, ticker, *, start, end):
+                raise DataUnavailable("cache-only run")
+
+            def get_dividend_history(self, ticker, *, start, end):
+                raise DataUnavailable("cache-only run")
+
+        return CachingAdapter(_NoFetch(), cache_dir=DEFAULT_CACHE_DIR, today=date.today())
     return CachingAdapter(RetryAdapter(BacktestFeed()), cache_dir=DEFAULT_CACHE_DIR, today=date.today())
 
 
@@ -416,8 +511,15 @@ def cmd_calibrate(args) -> int:
         prev = STATE_DIR / "records.jsonl"
         if prev.exists():
             prev.replace(STATE_DIR / "records.previous.jsonl")
+        (STATE_DIR / "units.json").write_text(json.dumps({"units": 0}), encoding="utf-8")
+    if args.cache_only:
+        # Re-score every name from today's day-cache with the current code: no request, no units, and the
+        # running unit count is left alone. A name that is not cached becomes an error record.
+        prev = STATE_DIR / "records.jsonl"
+        if prev.exists():
+            prev.replace(STATE_DIR / "records.before_cache_only.jsonl")
     definition = load_gate()
-    adapter = _default_adapter()
+    adapter = _default_adapter(cache_only=args.cache_only)
     eodhd_form = frozenset()
     if args.retry_errors:
         # drop the names that failed to read and fetch them again in EODHD's own symbol form
@@ -430,16 +532,16 @@ def cmd_calibrate(args) -> int:
         eodhd_form = failed
         print(f"retrying {len(failed)} names that failed to read, in EODHD's own symbol form")
     out = collect(universe, adapter=adapter, definition=definition, state_dir=STATE_DIR,
-                  budget=args.budget, limit=args.limit, eodhd_form=eodhd_form)
-    _add_units(STATE_DIR, out["units_this_run"])
+                  budget=args.budget, limit=args.limit, eodhd_form=eodhd_form,
+                  count_units=not args.cache_only)
     meta = _meta(universe, STATE_DIR)
-    print(f"units this run {out['units_this_run']}; total {meta['units_spent']}; remaining names {out['remaining']}")
+    print(f"units this run {out['units_this_run']}; total {meta['units_spent']}; remaining names {out['remaining']}; "
+          f"peak process memory {out['peak_mb']:.0f} MB")
     if out["stopped"]:
         print("stopped:", out["stopped"], "- run again to resume")
     if out["remaining"] == 0 or args.finish:
-        agg = aggregate(out["records"], accrual_boundary=_pct(
-            [r["rules"]["earnings_quality"]["value"] for r in out["records"].values()
-             if r["status"] == "ok" and r["rules"]["earnings_quality"]["value"] is not None], ACCRUAL_PERCENTILE) or 0.10)
+        agg = aggregate(_read_records(STATE_DIR / "records.jsonl"), accrual_boundary=definition.accrual_exclude_above,
+                        leverage_warn=definition.leverage_warn_above)
         write_json(agg, meta)
         write_markdown(agg, meta)
         print("wrote", OUT_JSON.relative_to(_ROOT), "and", OUT_MD.relative_to(_ROOT))
@@ -447,6 +549,11 @@ def cmd_calibrate(args) -> int:
 
 
 def cmd_freeze(args) -> int:
+    definition = load_gate()
+    if definition.calibration.get("date"):
+        print(f"{definition.id} was already frozen from a calibration on {definition.calibration['date']}; "
+              "a new calibration is a new gate version, never an edit.")
+        return 0
     universe = load_universe(Path(args.cohorts))
     records = _read_records(STATE_DIR / "records.jsonl")
     missing = [e for e in universe if e["ticker"] not in records]
@@ -454,16 +561,15 @@ def cmd_freeze(args) -> int:
         print(f"STOP: {len(missing)} names are not yet recorded; finish `calibrate` first.")
         return 2
     meta = _meta(universe, STATE_DIR)
-    boundary = _pct([r["rules"]["earnings_quality"]["value"] for r in records.values()
-                     if r["status"] == "ok" and r["rules"]["earnings_quality"]["value"] is not None],
-                    ACCRUAL_PERCENTILE)
-    agg = aggregate(records, accrual_boundary=boundary)
+    agg = aggregate(records, accrual_boundary=definition.accrual_exclude_above,
+                    leverage_warn=definition.leverage_warn_above)
     freeze_gate_file(agg, meta)
-    agg = aggregate(records, accrual_boundary=round(boundary, 4))
     write_json(agg, meta)
     write_markdown(agg, meta)
-    print(f"frozen: accrual boundary {boundary:.4f}; abnormal investment p80 {agg['abnormal_investment']['p80']:.4f}; "
-          f"{len(agg['wholesale_excluded_industries'])} industries excluded wholesale")
+    breaches = [k for k, v in agg["guardrail"]["rules"].items() if v["breaks_guardrail"]]
+    print(f"frozen: investment-intensity p80 {agg['abnormal_investment']['p80']:.4f}; "
+          f"{len(agg['wholesale_excluded_industries'])} industries excluded wholesale; "
+          f"guardrail breached by: {', '.join(breaches) if breaches else 'no rule'}")
     return 0
 
 
@@ -477,6 +583,8 @@ def main(argv=None) -> int:
     c.add_argument("--finish", action="store_true", help="write the outputs even if names remain")
     c.add_argument("--retry-errors", action="store_true", dest="retry_errors",
                    help="fetch again, in EODHD's own symbol form, the names that failed to read")
+    c.add_argument("--cache-only", action="store_true", dest="cache_only",
+                   help="re-score every name from today's day-cache; fetches nothing, spends no units")
     c.add_argument("--redo", action="store_true",
                    help="re-evaluate every name with the current code (free from the day-cache)")
     c.set_defaults(fn=cmd_calibrate)
