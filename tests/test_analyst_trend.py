@@ -49,13 +49,13 @@ def test_the_current_year_is_the_latest_dated_0y_not_any_entry_labelled_0y():
     had when it was current. Only 2026-09-30 is the current fiscal year."""
     data = parse_trend(_load("aapl_us.json"), today=TODAY)
     assert data.available
-    assert data.current == TrendPeriod("2026-09-30", 8.8195, 8.7596, 39)
-    assert data.next_year == TrendPeriod("2027-09-30", 9.5815, 9.6826, 40)
+    assert data.current == TrendPeriod("2026-09-30", 8.8195, 8.7596, 39, year_ago_eps=7.46)
+    assert data.next_year == TrendPeriod("2027-09-30", 9.5815, 9.6826, 40, year_ago_eps=8.8195)
 
 
 def test_a_non_us_name_parses_the_same_way():
     data = parse_trend(_load("enr_xetra.json"), today=TODAY)
-    assert data.current == TrendPeriod("2026-09-30", 4.468, 4.3541, 19)
+    assert data.current == TrendPeriod("2026-09-30", 4.468, 4.3541, 19, year_ago_eps=1.5948)
     assert data.next_year.period_end == "2027-09-30"
 
 
@@ -393,7 +393,9 @@ def test_the_mark_changes_no_screen_gate_factor_or_verdict_whatever_it_says(whic
     off = _mu_check()
     on = _mu_check(with_analyst_trend=True, analyst_fetcher=_fetcher(_TRENDS[which]))
     assert on.analyst_trend is not None
-    assert dataclasses.replace(on, analyst_trend=None) == off
+    # ABSOLUTE-VALUE-1: the price-and-return section's consensus case rests on the same analyst figures by
+    # design, so that display-only block is the one other thing allowed to differ; everything else is equal
+    assert dataclasses.replace(on, analyst_trend=None, absolute=None) == dataclasses.replace(off, absolute=None)
     assert _without_analyst_block(format_company_check(on)) == format_company_check(off)
     assert "What analysts say" in format_company_check(on)
 

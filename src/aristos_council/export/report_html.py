@@ -1633,6 +1633,10 @@ def _story_html(report) -> str:
     if gate is not None:                                  # ABSOLUTE-GATE-1, after the story, before the table
         from ..gate import render as _gate_render
         out.append(_gate_render.html_section(gate, _esc, _table))
+    absolute = getattr(report.check, "absolute", None)
+    if absolute is not None:                              # ABSOLUTE-VALUE-1, directly after the gate section
+        from ..absolute_value import render as _value_render
+        out.append(_value_render.html_section(absolute, report.outside_tested_range, _esc, _table))
 
     table = [f'<section class="section" id="lenses"><h2>{_esc(SECTION_TABLE)}</h2>']
     table += [f'<p class="note">{_esc(line)}</p>' for line in page.tag]

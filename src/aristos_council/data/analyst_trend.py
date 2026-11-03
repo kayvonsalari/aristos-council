@@ -77,6 +77,7 @@ class TrendPeriod:
     now: Optional[float] = None           # epsTrendCurrent (else earningsEstimateAvg)
     ago_90d: Optional[float] = None       # epsTrend90daysAgo
     analysts: Optional[int] = None        # earningsEstimateNumberOfAnalysts
+    year_ago_eps: Optional[float] = None  # earningsEstimateYearAgoEps (ABSOLUTE-VALUE-1: kept, not yet used)
 
 
 @dataclass(frozen=True)
@@ -118,6 +119,9 @@ class TrendData:
     # ANALYST-RATINGS-1: the ratings block of the same response, or why there is none.
     ratings: Optional[AnalystRatings] = None
     ratings_note: str = ""
+    # ABSOLUTE-VALUE-2: the currency code of the listing the reply was asked for (General::CurrencyCode), the
+    # nearest thing the payload says about the currency of its per-share estimates. "" when not stated.
+    eps_currency: str = ""
 
     @property
     def available(self) -> bool:
@@ -149,6 +153,7 @@ def _period_of(entry: dict, end: date) -> TrendPeriod:
         now = _as_float(entry.get("earningsEstimateAvg"))
     return TrendPeriod(period_end=end.isoformat(), now=now,
                        ago_90d=_as_float(entry.get("epsTrend90daysAgo")),
+                       year_ago_eps=_as_float(entry.get("earningsEstimateYearAgoEps")),
                        analysts=int(analysts) if analysts is not None else None)
 
 
@@ -197,7 +202,7 @@ def parse_response(doc, *, today: date, symbol: str = "") -> TrendData:
     if not combined:
         return replace(data, ratings_note="EODHD's cached reply predates the ratings request")
     ratings, note = parse_ratings(ratings_block, currency, symbol=symbol)
-    return replace(data, ratings=ratings, ratings_note=note)
+    return replace(data, ratings=ratings, ratings_note=note, eps_currency=str(currency or "").strip())
 
 
 def parse_trend(doc, *, today: date) -> TrendData:

@@ -1426,6 +1426,10 @@ def report_record(report: CompanyReport) -> dict:
         # key above is unchanged. A reader reads it with .get("gate").
         **({"gate": report.check.gate.as_dict()}
            if getattr(report.check, "gate", None) is not None else {}),
+        # ABSOLUTE-VALUE-1 (phase 2): ADDITIVE and display-only, like the gate block. Every key above is
+        # unchanged. A reader reads it with .get("absolute").
+        **({"absolute": report.check.absolute.as_dict()}
+           if getattr(report.check, "absolute", None) is not None else {}),
     }
 
 
@@ -1456,7 +1460,7 @@ def save_company_report(report: CompanyReport, runs_dir) -> Path:
 # table both moved toward the end; price-and-cash and valuation-band swapped relative
 # order. The text export, the HTML export and the screen renderer (app.py) all follow
 # this SAME order — a test pins it across all three.
-SECTION_ORDER = ("answer", "story", "gate", "lens table", "council opinion", "workings",
+SECTION_ORDER = ("answer", "story", "gate", "absolute value", "lens table", "council opinion", "workings",
                  "valuation band", "price and cash", "absolute readings", "what analysts say",
                  "peers", "sources")
 
@@ -1616,6 +1620,11 @@ def story_text_lines(report: CompanyReport) -> list[str]:
         from .gate import render as _gate_render
         lines.append("")
         lines += _gate_render.text_lines(gate)
+    absolute = getattr(report.check, "absolute", None)
+    if absolute is not None:                              # ABSOLUTE-VALUE-1, directly after the gate section
+        from .absolute_value import render as _value_render
+        lines.append("")
+        lines += _value_render.text_lines(absolute, report.outside_tested_range)
     lines.append("")
     lines += list(page.tag)
     if page.no_vote:

@@ -33,7 +33,7 @@ _V2_NEW_KEYS = {"schema_version", "outside_tested_range", "smallcap_cohort",
 
 
 # ABSOLUTE-GATE-1 (phase 1): one additive, display-only key. Every key above keeps its name and value.
-_GATE_KEYS = {"gate"}
+_GATE_KEYS = {"gate", "absolute"}   # ABSOLUTE-VALUE-1 adds the second, additive and display-only
 
 
 def test_every_v1_key_is_still_present_unchanged(tmp_path):

@@ -156,6 +156,23 @@ def debt_and_cash_as_counted(f) -> tuple[Optional[float], Optional[float], str]:
     return debt, cash, ""
 
 
+def debt_definition_line(f) -> str:
+    """The ONE sentence for debt that every section mentioning it uses (ABSOLUTE-VALUE-1), with the date of
+    the balance sheet the figure comes from."""
+    from datetime import datetime
+
+    from ..abs_readings import _balance_sheet_date
+    _, _, source = debt_and_cash_as_counted(f)
+    when = _balance_sheet_date(f)
+    if when == "latest balance sheet" and source.startswith("balance sheet of "):
+        try:
+            when = "balance sheet of " + datetime.strptime(source[len("balance sheet of "):][:10],
+                                                           "%Y-%m-%d").strftime("%b %Y")
+        except ValueError:
+            pass
+    return f"Debt = borrowings plus the long-term operating lease line, from the {when}."
+
+
 def leverage(f) -> GateReading:
     """Net debt over EBITDA: how many years of operating cash profit it would take to repay the
     borrowing. Net cash reads as a NEGATIVE value (no debt to cover). EBITDA at or below zero is not

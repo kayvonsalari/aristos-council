@@ -258,6 +258,12 @@ class Fundamentals:
     # ABSOLUTE-GATE-2: the cash flow statement's change in working capital, NEWEST-FIRST (positive = cash
     # released). Cash from operations BEFORE working-capital changes = operating cash flow minus this.
     change_in_working_capital_annual: list[float] = field(default_factory=list)
+    # ABSOLUTE-VALUE-1: the income statement's DILUTED weighted-average share count, NEWEST-FIRST (yfinance
+    # "Diluted Average Shares"). Free cash flow per share divides by it. The EODHD income block carries no
+    # diluted count (probed on KO.US, 2026-09-21), so on that path this stays empty and the valuation
+    # reads ``shares_outstanding_annual`` (a basic count) and says "basic shares". cache._schema_marker
+    # folds the field name in, so older cache entries refetch by themselves.
+    diluted_shares_annual: list[float] = field(default_factory=list)
     # Consecutive years of dividend increases — the defining aristocrat test.
     # Most free providers DON'T supply this; see adapter notes.
     years_dividend_growth: int | None = None

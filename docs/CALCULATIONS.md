@@ -1041,7 +1041,7 @@ the balance sheet's own "Total Debt" row for the latest quarter (borrowings and 
 minus cash, cash equivalents and short-term investments** (yfinance `totalCash`). The provider's
 headline `totalDebt` also carries operating-lease liabilities (Microsoft, Jun 2026: $128.8bn headline
 against a $56.8bn row), so that excess is **not counted as debt**: where it exists the page adds one
-line, "leases add $72.0bn (not counted as debt above)" (`Fundamentals.lease_liabilities`, the headline
+line, "other lease liabilities of $72.0bn are not in that figure" (`Fundamentals.lease_liabilities`, the headline
 minus the row, shown only when it exceeds a rounding-size gap; Ford's two figures agree, so it shows
 none). With no statement row the headline is used and no lease figure is claimed. Microsoft's net
 position therefore reads "holds $20.0bn more cash than debt" ($56.8bn − $76.8bn), where under
@@ -1270,6 +1270,57 @@ units; the owner's guardrail (an exclusion rule that removes more than one name 
 tested and reported, and no rule is changed by the tool. The calibration re-measured abnormal investment
 (capital spending over sales, divided by its prior three-year average, minus 1; Titman, Wei and Xie) and
 wrote its 80th percentile into the gate file; nothing reads it yet.
+
+### 4.12 The price test and the return range (ABSOLUTE-VALUE-1, `absolute_value/`, `tools/absolute_math.py`, `data/bond_yield.py`)
+
+Phase 2 of `docs/DESIGN_absolute.md`. It prints as its own company-page section directly after the gate; it changes no vote, lens,
+strategy file, gate file or backtest result, and the verdict of record stays the old one until phase 3. The saved record gains an
+additive `absolute` block. Every number it uses is in `valuation/absolute_value_v1.yaml` (frozen; a change is a new version). All
+arithmetic is in `tools/absolute_math.py`; `absolute_value/engine.py` only orchestrates.
+
+**The base: free cash flow per share.** (operating cash flow minus capital spending) / diluted weighted-average shares, each fiscal
+year read at the same year end. The base is the lower of the latest year and the three-year average; both are printed and the chosen one
+is named. With fewer than three usable years the latest is used and the page says the average needs three. Diluted shares come from the
+yfinance income statement ("Diluted Average Shares"); the EODHD income block carries no diluted count, so that path uses the
+outstanding-shares history and the page says "basic shares". A base at or below zero reads "not valued: no positive free cash flow" and
+the verdict is not enough data. A latest year with negative operating cash flow and no capital-spending line is also "not valued",
+because capital spending can only lower free cash flow; with positive operating cash flow a missing line stays unknown.
+
+**The price** is the quoted price put into the currency of the statements. Same currency: as is. Pence and pounds: exact. Two currencies:
+the dated month-end rate the page already fetches, printed ("at 1 CNY = 1.1751 HKD, Nov 2026"). No rate: "not enough data: no exchange rate".
+
+**The hurdle** = the ten-year government bond yield of the reporting currency + 5.0 points. The currency-to-series table is
+`data/bond_series.yaml` (EODHD `/api/eod/<SYMBOL>.GBOND`, one unit a call, through the day-cache and the retry rule). A currency with no
+mapped series has no hurdle. The Hong Kong dollar maps to the US series (pegged). The Swiss ten-year is SW10Y (found in the GBOND symbol list; the
+first guess CH10Y is Chile). The last good yield is used for 7 days, then lapses. The
+bond name, its date, the yield, the margin and the hurdle are printed.
+
+**The two solvers** (one equation, `absolute_math.path_value`): price = sum for t = 1..10 of B x prod(1+g_i) / (1+d)^t, plus the year-10
+cash flow as a flat perpetuity at d, discounted ten years. *Implied growth* finds the constant g that makes the value at d = hurdle equal the
+price, by bisection between -10% and +40% a year ("not solvable" outside). *The return* finds the d that makes a growth path worth the price,
+between 0.01% and 60% a year (a result at a bound is printed as "above 60%" or "below 0.01%" and counts as that bound).
+
+**The four growth cases.** Own 5-year and own 10-year diluted earnings growth (the existing growth record; a case needs the full window of
+accounts and a positive start and end year). Consensus: two steps from the last reported fiscal year's diluted EPS to the second forecast
+year's consensus EPS, both years named, marked "not testable"; unavailable without both forecast years. Downside: years 1 and 2 at the
+consensus rate (the own 5-year rate when there is no consensus), then a straight line to the bond yield in year 10, flat after:
+rate(t) = fast + (bond - fast) x (t - 2) / 8 for t = 3..10. A rate above 18% a year carries the mark "few companies have grown faster than 18%
+a year for ten years" (Chan, Karceski and Lakonishok 2003, Table I).
+
+**The verdict.** Excluded and Not covered come from the gate. Not enough data: the gate could not finish, fewer than two cases exist, there
+is no hurdle, no price or no base. Qualifies, below hurdle: at least one available case returns less than the hurdle. Qualifies, clears
+hurdle: every available case, the downside included, returns at least the hurdle. The page always prints "n of N cases clear" and the range
+(lowest to highest). The backtest-form verdict uses own 5-year, own 10-year and the downside case with the own 5-year fallback (no consensus)
+and is printed beside it.
+
+**Context readings** (no vote): operating profit over enterprise value, earnings power value at 9% (labelled an enterprise value), capital
+spending over depreciation, and abnormal investment (capex/sales this year over the average of the previous three years, minus 1) with the
+warning "investment well above its own history" above the gate file's frozen 80th-percentile boundary. There is no size floor on this path:
+a company below the $5bn range is labelled "outside the tested range", never blocked.
+
+**Worked example (Microsoft, design section e/f):** base 8.99, price 521.91, bond 4.934%, hurdle 9.934%: implied growth 25.0%; returns
+own 5-year 17.2% -> 6.5%, consensus 16.0% -> 6.0%, own 10-year 21.2% -> 8.1%, downside -> 4.3%; backtest-form downside with 17.2% in years 1 and
+2 -> 4.6%. `tests/test_absolute_value.py` pins every figure.
 
 ## 5. Guards
 

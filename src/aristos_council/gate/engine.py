@@ -231,11 +231,7 @@ def _runway_warning(f, d: GateDefinition) -> RuleResult:
 # the combination
 # --------------------------------------------------------------------------- #
 def _debt_line(f) -> str:
-    from ..abs_readings import _balance_sheet_date
-    _, _, source = gr.debt_and_cash_as_counted(f)
-    when = source or _balance_sheet_date(f)
-    return ("Debt is counted as the tool counts it: the balance sheet's own Total Debt row "
-            f"(borrowings plus the long-term operating lease line), from the {when}.")
+    return gr.debt_definition_line(f)
 
 
 def page_gate(f) -> Optional[GateResult]:

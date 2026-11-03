@@ -727,7 +727,7 @@ def test_the_section_has_four_exclusions_and_four_warnings_in_plain_english():
     text = "\n".join(render.text_lines(g))
     assert text.startswith(render.SECTION_TITLE.upper())
     assert "does not change the verdict yet" in text.lower() and "Gate result: Qualifies" in text
-    assert "four warnings" in text and "Total Debt row" in text and "long-term operating lease line" in text
+    assert "four warnings" in text and "Debt = borrowings plus the long-term operating lease line" in text
     for banned in ("accrual_ratio", "altman_z", "piotroski_f_score", "min_f_score", "strategy_id"):
         assert banned not in text
 
@@ -778,4 +778,4 @@ def test_the_record_keys_are_the_v2_keys_plus_gate(tmp_path):
                     "track_record_caption", "track_record_summary", "lens_ranks", "sources", "seconds",
                     "cache", "summary_written", "council_opinion", "outside_tested_range",
                     "smallcap_cohort", "smallcap_floor_usd", "smallcap_band_note", "size_matched_peers",
-                    "price_and_cash", "gate"}
+                    "price_and_cash", "gate", "absolute"}

@@ -356,7 +356,7 @@ def debt_and_cash(f) -> DebtAndCash:
 
     leases = _num(getattr(f, "lease_liabilities", None))
     lease_reading = (Reading(value=leases, unit=currency,
-                             label=f"leases add {_money(leases, currency)} (not counted as debt above)")
+                             label=f"other lease liabilities of {_money(leases, currency)} are not in that figure")
                      if leases and leases > 0 and debt is not None else Reading())
 
     # -- net debt to operating cash flow ------------------------------------ #

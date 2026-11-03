@@ -1615,6 +1615,10 @@ _SERIES_ATTR: dict[str, str] = {
     "shareholders_equity": "shareholders_equity",
     "depreciation_amortization": "depreciation_amortization_annual",
     "change_in_working_capital": "change_in_working_capital_annual",   # ABSOLUTE-GATE-2
+    # ABSOLUTE-VALUE-1: free cash flow per share (dated reads of the three lines it needs).
+    "capital_expenditure": "capital_expenditure_annual",
+    "diluted_shares": "diluted_shares_annual",
+    "shares_outstanding": "shares_outstanding_annual",
 }
 
 

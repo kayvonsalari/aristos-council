@@ -123,6 +123,6 @@ def test_the_page_says_leases_add_and_does_not_count_them():
     dc = debt_and_cash(f)
     lines = dc.lines()
     assert lines[:4] == ["holds $20.0bn more cash than debt", "total debt $56.8bn",
-                         "cash and short-term investments $76.8bn", "leases add $72.0bn (not counted as debt above)"]
+                         "cash and short-term investments $76.8bn", "other lease liabilities of $72.0bn are not in that figure"]
     none = debt_and_cash(Fundamentals(ticker="F", financial_currency="USD", total_debt=163.3e9, total_cash=22.1e9))
-    assert not any("leases add" in ln for ln in none.lines())
+    assert not any("lease liabilities" in ln for ln in none.lines())

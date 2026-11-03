@@ -1,0 +1,52 @@
+# ABSOLUTE-VALUE-1 - which EODHD government-bond series is the hurdle's risk-free leg for each
+# reporting currency. Fetched through the end-of-day endpoint, /api/eod/<SYMBOL>.GBOND (1 unit a call).
+#
+# Probed once per symbol on 2026-11-04 (key read from the local environment file, not printed).
+# first / last = first and last dated row returned for a request from 1990-01-01. A currency with no
+# entry has NO hurdle ("not enough data: no hurdle"); it is never borrowed from a neighbour.
+#
+#   US10Y  answered  1990-01-08 .. 2026-11-03   (4.927 on the last row)
+#   DE10Y  answered  2007-03-28 .. 2026-11-03
+#   UK10Y  answered  2010-01-01 .. 2026-11-03
+#   JP10Y  answered  2007-05-24 .. 2026-11-02
+#   CA10Y  answered  2006-03-01 .. 2026-11-02
+#   AU10Y  answered  1990-01-02 .. 2026-11-03
+#   SE10Y  answered  2006-03-01 .. 2026-11-03
+#   NO10Y  answered  2006-03-01 .. 2026-11-03
+#   DK10Y  answered  1994-02-15 .. 2026-11-03
+#   KR10Y  answered  2000-10-26 .. 2026-11-03
+#   TW10Y  answered  2010-06-28 .. 2026-11-03
+#   CN10Y  answered  2002-12-03 .. 2026-11-03
+#   IN10Y  answered  2007-03-28 .. 2026-11-03
+#   BR10Y  answered  2007-03-28 .. 2026-10-30
+#   SG10Y  answered  2010-06-28 .. 2026-11-03
+#   HK10Y  answered  2016-11-24 .. 2026-11-03   (not used: HKD is pegged and maps to US10Y, by decision)
+#   SW10Y  answered  1994-02-02 .. 2026-11-03   (0.508 on the last row; negative 2015-2021, as the Swiss ten-year was)
+#          Found in the GBOND symbol list (268 symbols, queried once, 1 unit): "Switzerland Government Bond 10Y", CHF.
+#          The first probe guessed CH10Y; that is Chile (CLP) and is NOT used.
+#
+# Every mapped symbol was checked against that list: country and currency agree for all of them (SG10Y is listed
+# as "Singapore Government Bond 10Y" with no currency field).
+#
+# Currencies are the REPORTING currency of the statements (the hurdle is in the currency of the cash
+# flows). A pence code (GBX) is converted to its major unit (GBP) by the caller before it looks here.
+
+series:
+  USD: {symbol: US10Y, name: "US ten-year Treasury yield"}
+  EUR: {symbol: DE10Y, name: "German ten-year Bund yield"}
+  GBP: {symbol: UK10Y, name: "UK ten-year gilt yield"}
+  JPY: {symbol: JP10Y, name: "Japanese ten-year government bond yield"}
+  CAD: {symbol: CA10Y, name: "Canadian ten-year government bond yield"}
+  AUD: {symbol: AU10Y, name: "Australian ten-year government bond yield"}
+  SEK: {symbol: SE10Y, name: "Swedish ten-year government bond yield"}
+  NOK: {symbol: NO10Y, name: "Norwegian ten-year government bond yield"}
+  DKK: {symbol: DK10Y, name: "Danish ten-year government bond yield"}
+  KRW: {symbol: KR10Y, name: "South Korean ten-year government bond yield"}
+  TWD: {symbol: TW10Y, name: "Taiwanese ten-year government bond yield"}
+  CNY: {symbol: CN10Y, name: "Chinese ten-year government bond yield"}
+  INR: {symbol: IN10Y, name: "Indian ten-year government bond yield"}
+  BRL: {symbol: BR10Y, name: "Brazilian ten-year government bond yield"}
+  SGD: {symbol: SG10Y, name: "Singapore ten-year government bond yield"}
+  CHF: {symbol: SW10Y, name: "Swiss ten-year Confederation bond yield"}
+  HKD: {symbol: US10Y, name: "US ten-year Treasury yield", pegged_to: USD,
+        note: "the Hong Kong dollar is pegged to the US dollar, so the US ten-year is used"}
