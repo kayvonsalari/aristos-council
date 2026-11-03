@@ -378,27 +378,93 @@ def _steps(last_end: str, next_end: str) -> Optional[int]:
         return None
 
 
-def consensus_growth(f, history, trend) -> tuple[_Growth, str]:
-    """Two steps from the last reported fiscal year's diluted EPS to the second forecast year's
-    consensus EPS, as a compound yearly rate; both years named. Unavailable without both forecast years."""
+MISMATCH_STEP = 0.40
+MISMATCH_REASON = "unavailable: per-share basis mismatch suspected"
+
+
+def _minus_one_year(iso: str) -> str:
+    d = date.fromisoformat(iso[:10])
+    try:
+        return d.replace(year=d.year - 1).isoformat()
+    except ValueError:                                   # 29 Feb
+        return d.replace(year=d.year - 1, day=28).isoformat()
+
+
+def _estimate_divisor(eps_ccy: str, fin_ccy: str, fx_lookup) -> tuple[Optional[float], str]:
+    """``(divisor, how)`` to put an analyst estimate into the statements' currency, or ``(None, why)``.
+    Same currency (or either unstated): 1. Pence/pounds: exact. Two currencies: the tool's dated month-end
+    pair, said so. No rate: None - never a guess."""
+    from ..abs_readings import currency_relation
+    rel, unit = currency_relation(eps_ccy, fin_ccy)
+    if rel == "same":
+        return 1.0, ""
+    if rel == "unit":
+        return unit.rate, ""
+    fx = fx_lookup(fin_ccy, eps_ccy) if fx_lookup else None
+    if fx is None or not getattr(fx, "rate", None) or fx.rate <= 0:
+        return None, f"no exchange rate between {eps_ccy} and {fin_ccy}"
+    return fx.rate, f"analyst figures converted from {eps_ccy} to {fin_ccy} {fx.tag()}"
+
+
+def consensus_growth(f, history, trend, fx_lookup=None) -> tuple[_Growth, str]:
+    """The consensus growth case: a compound yearly rate from the last reported fiscal year's EPS to the
+    second forecast year's consensus EPS, both years named, the source of the starting figure printed.
+
+    Start: the analyst payload's OWN last-reported figure (the current year's "year ago" EPS) when it carries
+    one, so both ends share a source and a per-share basis. Only when it is missing, the statements' diluted
+    EPS - then the basis guard applies: the analyst figures are put into the statements' currency (the tool's
+    FX pair, said so; no rate is unavailable), and a first forecast year more than 40% above or below the
+    statement figure reads "unavailable: per-share basis mismatch suspected", both figures printed. A figure
+    is never scaled by a guessed ratio."""
     if trend is None:
         return _Growth(note="analyst data was not requested for this page"), ""
     cur, nxt = getattr(trend, "current", None), getattr(trend, "next_year", None)
     if cur is None or nxt is None or _num(cur.now) is None or _num(nxt.now) is None:
         return _Growth(note=getattr(trend, "note", "") or "analysts' forecasts for the next two fiscal years "
                                                           "are not both available"), ""
-    start, last_end, basis = last_reported_eps(f, history)
-    if start is None:
-        return _Growth(note="the last reported year's earnings per share is not available"), ""
-    steps = _steps(last_end, nxt.period_end)
+    ccy = (getattr(f, "financial_currency", None) or "").strip() or None
+    end_name = _month_label(nxt.period_end)
+    actual = _num(getattr(cur, "year_ago_eps", None))
+    if actual is not None:
+        start, how = actual, "start: the analyst data's own last reported figure"
+        steps = round((date.fromisoformat(nxt.period_end[:10]) - date.fromisoformat(cur.period_end[:10])).days
+                      / 365.25) + 1
+        start_name = f"the year to {_month_label(_minus_one_year(cur.period_end))}"
+        end_eps = nxt.now
+        eps_ccy = (getattr(trend, "eps_currency", "") or "").strip()
+        if eps_ccy and ccy and eps_ccy.upper() != ccy.upper():
+            # the payload names only the LISTING's currency, which is not proof of the currency of its
+            # per-share figures: print them bare rather than assert one
+            money = lambda v: f"{v:,.2f}"
+            how += " (currency of the analyst figures not stated by the source)"
+        else:
+            money = lambda v: format_money(v, ccy)
+    else:
+        start, last_end, _basis = last_reported_eps(f, history)
+        if start is None:
+            return _Growth(note="the last reported year's earnings per share is not available"), ""
+        steps = _steps(last_end, nxt.period_end)
+        start_name = f"the year to {_month_label(last_end)}" if len(last_end) >= 10 else f"{last_end}"
+        how = "start: the statements' diluted EPS (the analyst data carries no last reported figure)"
+        eps_ccy = (getattr(trend, "eps_currency", "") or "").strip()
+        divisor, conv = _estimate_divisor(eps_ccy, ccy or "", fx_lookup) if (eps_ccy and ccy) else (1.0, "")
+        if divisor is None:
+            return _Growth(note=f"{MISMATCH_REASON}: {conv}"), ""
+        first, end_eps = cur.now / divisor, nxt.now / divisor
+        if conv:
+            how += f"; {conv}"
+        step = first / start - 1.0 if start > 0 else None
+        if step is not None and abs(step) > MISMATCH_STEP:
+            return _Growth(note=(f"{MISMATCH_REASON}: statement EPS {format_money(start, ccy)} for {start_name}, "
+                                 f"first forecast year {format_money(first, ccy)} ({step:+.0%} in one year)"
+                                 + (f"; {conv}" if conv else "")),
+                           detail=how), ""
+        money = lambda v: format_money(v, ccy)
     if steps is None or not 1 <= steps <= 3:
         return _Growth(note="the forecast years do not follow the last reported year"), ""
-    rate = am.compound_rate(start, nxt.now, steps)
-    ccy = (getattr(f, "financial_currency", None) or "").strip() or None
-    last_name = (f"the year to {_month_label(last_end)}" if len(last_end) >= 10 else f"{last_end}")
+    rate = am.compound_rate(start, end_eps, steps)
     words = {1: "one step", 2: "two steps", 3: "three steps"}[steps]
-    detail = (f"{words} from {last_name} ({format_money(start, ccy)}) to the year to "
-              f"{_month_label(nxt.period_end)} ({format_money(nxt.now, ccy)})")
+    detail = (f"{words} from {start_name} ({money(start)}) to the year to {end_name} ({money(end_eps)}); {how}")
     if rate is None:
         return _Growth(note=f"consensus growth is not defined, earnings per share is at or below zero: {detail}"), detail
     return _Growth(rate=rate, detail=detail), detail
@@ -428,11 +494,11 @@ def _pct(v: float) -> str:
 
 
 def build_cases(base: BaseReading, price: PriceReading, hurdle: HurdleReading, record, f, history, trend,
-                definition: ValueDefinition) -> tuple[tuple, tuple]:
+                definition: ValueDefinition, fx_lookup=None) -> tuple[tuple, tuple]:
     """The four growth cases and the backtest-form three. Without a usable base or price, the cases
     are listed as unavailable with the reason; without a bond yield only the downside case is."""
     own5, own10 = _own_growth(record, definition.own_windows[0]), _own_growth(record, definition.own_windows[1])
-    cons, _ = consensus_growth(f, history, trend)
+    cons, _ = consensus_growth(f, history, trend, fx_lookup)
     ready = base.usable and price.available
     why_not = (NO_FCF if base.not_valued else base.note or "no free cash flow per share") if not base.usable \
         else (price.note or "no price")
@@ -506,7 +572,7 @@ def investment_context(f, warn_above: Optional[float]) -> dict:
 def build_absolute(f, *, gate, last_close: Optional[float], quote_fx=None, growth_record=None, history=None,
                    trend=None, today: Optional[date] = None, context: Optional[dict] = None,
                    definition: Optional[ValueDefinition] = None,
-                   bond_source: Optional[Callable] = None) -> Optional[AbsoluteValue]:
+                   bond_source: Optional[Callable] = None, fx_lookup: Optional[Callable] = None) -> Optional[AbsoluteValue]:
     """The price-and-return section for one company, or None when the definition cannot be loaded (a
     context section, never a crash). ``context`` carries the readings the caller already holds
     (EBIT over enterprise value, earnings power value) so this module need not rebuild factor inputs."""
@@ -543,7 +609,7 @@ def build_absolute(f, *, gate, last_close: Optional[float], quote_fx=None, growt
             implied_note = (f"not solvable: the price needs growth outside {definition.implied_growth_range[0]:.0%} "
                             f"to {definition.implied_growth_range[1]:+.0%} a year")
 
-    cases, backtest = build_cases(base, price, hurdle, growth_record, f, history, trend, definition)
+    cases, backtest = build_cases(base, price, hurdle, growth_record, f, history, trend, definition, fx_lookup)
     try:
         from ..gate.definition import load_gate
         boundary = load_gate().intensity_warn_above

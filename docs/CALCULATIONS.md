@@ -1291,8 +1291,8 @@ the dated month-end rate the page already fetches, printed ("at 1 CNY = 1.1751 H
 
 **The hurdle** = the ten-year government bond yield of the reporting currency + 5.0 points. The currency-to-series table is
 `data/bond_series.yaml` (EODHD `/api/eod/<SYMBOL>.GBOND`, one unit a call, through the day-cache and the retry rule). A currency with no
-mapped series has no hurdle. The Hong Kong dollar maps to the US series (pegged). The Swiss series CH10Y answers but is not a Swiss
-government yield (about 6% in every year since 2007), so CHF stays unmapped. The last good yield is used for 7 days, then lapses. The
+mapped series has no hurdle. The Hong Kong dollar maps to the US series (pegged). The Swiss ten-year is SW10Y (found in the GBOND symbol list; the
+first guess CH10Y is Chile). The last good yield is used for 7 days, then lapses. The
 bond name, its date, the yield, the margin and the hurdle are printed.
 
 **The two solvers** (one equation, `absolute_math.path_value`): price = sum for t = 1..10 of B x prod(1+g_i) / (1+d)^t, plus the year-10

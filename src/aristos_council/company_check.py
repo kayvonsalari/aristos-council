@@ -522,11 +522,13 @@ def run_company_check(
     # request (1 EODHD unit). After the analyst fetch so the consensus case can use it; never a crash, never
     # a vote. A bond yield that cannot be had is "no hurdle", stated on the page.
     try:
+        from .abs_readings import latest_accounts_fx as _latest_fx
         from .absolute_value.engine import build_absolute
         readings["absolute"] = build_absolute(
             f, gate=readings.get("gate"), last_close=fi.last_close,
             quote_fx=getattr(fi, "quote_fx", None), growth_record=readings.get("growth_record"),
-            history=_history, trend=trend_data, today=today, context=_value_context(fi))
+            history=_history, trend=trend_data, today=today, context=_value_context(fi),
+            fx_lookup=lambda frm, to: _latest_fx(adapter, frm, to, today))
     except Exception:                                    # noqa: BLE001
         readings["absolute"] = None
 

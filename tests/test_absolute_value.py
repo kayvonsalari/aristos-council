@@ -255,10 +255,12 @@ def test_a_pence_code_looks_up_its_major_currency():
 
 
 def test_a_currency_with_no_series_has_no_hurdle_and_says_so():
-    assert "CHF" not in by.load_series_map()                       # CH10Y answered, but is not a Swiss yield
-    res = by.bond_yield("CHF", today=TODAY, rows_fetcher=lambda s, t: rows())
-    assert not res.available and "no government bond series is mapped for CHF" in res.reason
-    av = run(bond_source=lambda ccy, *, today: by.bond_yield("CHF", today=today, rows_fetcher=lambda s, t: rows()))
+    table = by.load_series_map()
+    assert table["CHF"]["symbol"] == "SW10Y"                       # CH10Y is Chile, not Switzerland
+    assert "CLP" not in table and "ZAR" not in table
+    res = by.bond_yield("ZAR", today=TODAY, rows_fetcher=lambda s, t: rows())
+    assert not res.available and "no government bond series is mapped for ZAR" in res.reason
+    av = run(bond_source=lambda ccy, *, today: by.bond_yield("ZAR", today=today, rows_fetcher=lambda s, t: rows()))
     assert av.verdict.state == NOT_ENOUGH_DATA and "no hurdle" in av.verdict.reason
 
 
@@ -316,7 +318,7 @@ def test_a_transient_failure_is_retried_and_a_clean_refusal_is_not(tmp_path):
 def test_the_bond_file_maps_each_currency_once_to_a_symbol_ending_gbond_ready():
     table = by.load_series_map()
     assert {"USD", "EUR", "GBP", "JPY", "CAD", "AUD", "SEK", "NOK", "DKK", "KRW", "TWD", "CNY", "INR", "BRL",
-            "SGD", "HKD"} <= set(table)
+            "SGD", "HKD", "CHF"} <= set(table)
     assert all(re.fullmatch(r"[A-Z]{2}10Y", v["symbol"]) for v in table.values())
 
 
@@ -563,3 +565,81 @@ def test_a_negative_operating_cash_flow_with_no_capital_spending_line_is_still_n
     # ...but a missing capital-spending line with POSITIVE operating cash flow stays unknown
     unknown = {**msft().aligned_annual, "capital_expenditure": [None, -64_551 * M, -44_477 * M]}
     assert not free_cash_flow_base(msft(aligned_annual=unknown), DEF).not_valued
+
+
+# --------------------------------------------------------------------------- #
+# ABSOLUTE-VALUE-2: the consensus case starts and ends on the same per-share basis
+# --------------------------------------------------------------------------- #
+def payload(year_ago=66.25, first=110.55, second=149.18, ccy=""):
+    return TrendData(current=TrendPeriod(period_end="2026-12-31", now=first, analysts=30, year_ago_eps=year_ago),
+                     next_year=TrendPeriod(period_end="2027-12-31", now=second, analysts=28), eps_currency=ccy)
+
+
+def tw(**kw):   # statements 65.47 (diluted), a December year end
+    aligned = {**msft().aligned_annual, "diluted_eps": [65.47, 50.0, 40.0]}
+    ends = {**msft().aligned_period_ends, "diluted_eps": ["2025-12-31"] * 3}
+    return msft(aligned_annual=aligned, aligned_period_ends=ends, **kw)
+
+
+def cons(av):
+    return {c.key: c for c in av.cases}["consensus"]
+
+
+def test_the_start_is_the_analyst_payloads_own_last_reported_figure_and_the_source_is_printed():
+    c = cons(run(tw(), tr=payload()))
+    assert c.available and round(100 * c.growth, 1) == round(100 * ((149.18 / 66.25) ** 0.5 - 1), 1)
+    assert "start: the analyst data's own last reported figure" in c.note and "$66.25" in c.note
+    assert "the year to Dec 2025" in c.note and "the year to Dec 2027" in c.note and "two steps" in c.note
+
+
+def test_a_big_first_step_is_not_a_mismatch_when_both_ends_come_from_the_payload():
+    # 66.25 -> 110.55 is +67%, but the payload's own actual is the start, so there is no basis to doubt
+    assert cons(run(tw(), tr=payload())).available
+
+
+def test_the_statement_start_is_the_fallback_and_says_so():
+    c = cons(run(tw(), tr=payload(year_ago=None, first=70.0, second=80.0)))
+    assert c.available and "start: the statements' diluted EPS" in c.note and "$65.47" in c.note
+
+
+def test_a_first_forecast_year_over_40_percent_from_the_statement_is_a_suspected_basis_mismatch():
+    av = run(tw(), tr=payload(year_ago=None, first=130.0, second=150.0))
+    c = cons(av)
+    assert not c.available and c.reason.startswith("unavailable: per-share basis mismatch suspected")
+    assert "$65.47" in c.reason and "$130.00" in c.reason and "+99%" in c.reason
+    assert av.verdict.of == 3                                      # left out of the count
+    assert "own 5-year" in {x.key: x for x in av.cases}["downside"].growth_text   # and out of the downside
+    low = cons(run(tw(), tr=payload(year_ago=None, first=30.0, second=80.0)))
+    assert not low.available and "-54%" in low.reason
+
+
+def test_a_step_of_exactly_40_percent_passes():
+    assert cons(run(tw(), tr=payload(year_ago=None, first=65.47 * 1.4, second=120.0))).available
+
+
+def test_analyst_figures_in_another_currency_are_converted_with_the_fx_pair_and_it_is_said():
+    t = payload(year_ago=None, first=100.0, second=110.0, ccy="EUR")        # EUR figures, USD statements
+    fx = AccountsFx(from_ccy="USD", to_ccy="EUR", rate=0.9, as_of="2026-10", source="yfinance USDEUR=X")
+    c = cons(run(tw(), tr=t, fx_lookup=lambda frm, to: fx if (frm, to) == ("USD", "EUR") else None))
+    # 100 EUR / 0.9 = $111.11 against a $65.47 statement is +70%: converted, said so, and still a mismatch
+    assert not c.available and "$111.11" in c.reason and "converted from EUR to USD" in c.reason
+
+
+def test_a_converted_pair_that_agrees_is_used_and_one_without_a_rate_is_unavailable():
+    t = payload(year_ago=None, first=60.0, second=66.0, ccy="EUR")           # 60 EUR / 0.9 = $66.67 (+1.8%)
+    fx = AccountsFx(from_ccy="USD", to_ccy="EUR", rate=0.9, as_of="2026-10")
+    ok = cons(run(tw(), tr=t, fx_lookup=lambda frm, to: fx))
+    assert ok.available and "converted from EUR to USD" in ok.note
+    none = cons(run(tw(), tr=t, fx_lookup=lambda frm, to: None))
+    assert not none.available and "no exchange rate between EUR and USD" in none.reason
+
+
+def test_the_payload_start_needs_no_conversion_because_both_ends_share_a_currency():
+    c = cons(run(tw(), tr=payload(ccy="EUR")))                                # statements USD, payload EUR
+    assert c.available and "converted" not in c.note
+
+
+def test_a_payload_whose_listing_currency_differs_prints_its_figures_bare_not_in_a_guessed_currency():
+    c = cons(run(tw(), tr=payload(ccy="HKD")))
+    assert c.available and "66.25" in c.note and "$66.25" not in c.note and "HKD" not in c.note
+    assert "currency of the analyst figures not stated by the source" in c.note

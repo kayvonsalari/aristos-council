@@ -119,6 +119,9 @@ class TrendData:
     # ANALYST-RATINGS-1: the ratings block of the same response, or why there is none.
     ratings: Optional[AnalystRatings] = None
     ratings_note: str = ""
+    # ABSOLUTE-VALUE-2: the currency code of the listing the reply was asked for (General::CurrencyCode), the
+    # nearest thing the payload says about the currency of its per-share estimates. "" when not stated.
+    eps_currency: str = ""
 
     @property
     def available(self) -> bool:
@@ -199,7 +202,7 @@ def parse_response(doc, *, today: date, symbol: str = "") -> TrendData:
     if not combined:
         return replace(data, ratings_note="EODHD's cached reply predates the ratings request")
     ratings, note = parse_ratings(ratings_block, currency, symbol=symbol)
-    return replace(data, ratings=ratings, ratings_note=note)
+    return replace(data, ratings=ratings, ratings_note=note, eps_currency=str(currency or "").strip())
 
 
 def parse_trend(doc, *, today: date) -> TrendData:
