@@ -25,6 +25,8 @@ The gate asks one thing: can the accounts and the balance sheet be trusted, and 
 | Cash runway | For a company with negative operating cash flow: how long net cash lasts at last year's spending. | Excluded under 24 months. | The holding period is 3 to 5 years. A company that cannot fund two years of losses must raise money on someone else's terms. Judgment, not a published figure. | Applies only to cash-burning companies. Not evaluated when cash flow lines are missing. |
 | Dividend cover | Dividends paid divided by the average of three years of free cash flow. | Excluded above 100% for a company that pays a dividend. | A dividend the business does not cover is paid from debt or savings. Convention, not a published cut. | Applies only where a dividend is paid. Not evaluated when free cash flow is missing. |
 
+Source status: the author and year named in this table (Sloan 1996, Altman 1968, Piotroski 2000, and the rating agency remark) were written from memory in the first draft. None of those four papers was fetched for this page, and they are not in the Sources section. Verify each cut-off against the paper before phase 1 fixes it. Evidence that was fetched, about accruals and the F-Score, is in section o.
+
 How the rules combine:
 
 - Any one confirmed failure excludes the company, and the page names the rule and its figure.
@@ -173,11 +175,13 @@ Using the lowest case makes "clears" a strict test. Microsoft in the example abo
 - A growth case above 15% a year for ten years is marked "few companies have done this" and still shown.
 - No colour implies certainty: the two qualifying states use neutral and positive tones, never a "BUY" word.
 
+**What the figure is worth.** This figure shows what today's price requires. It is a question put to the reader, not an answer. Studies of company-level implied returns find that they rank future returns weakly, and the weakest measures are about as good as a constant (section o, "Implied returns"). The gate and the cash yield carry the evidence; this figure carries the question. Two details of the studies, so the line is not read as stronger than it is: the measure that came out at a slope of about 0.2 against realised returns, where 1.0 would be perfect, is one of three tested (the other two came out at about 0.6), and one study of 2017 finds the same measures useful for tracking expected returns through time.
+
 ## g. The hurdle
 
 Hurdle = ten-year government bond yield + a margin.
 
-**Margin.** Proposed 4.0 percentage points. Reason: long-run studies put the extra return stocks have paid over government bonds at roughly 4 to 5 points; the implied premium estimated from market prices in recent years (Damodaran, published monthly) has sat in a similar range. The lower end is chosen so that more names can clear, and so that the margin is not an arbitrary round number. To be checked against the current published figure at build, and fixed in the strategy file, not in code.
+**Margin.** Proposed 4.0 percentage points. This is a judgment, not a sourced figure: no source for the stock-over-bond premium was fetched for this page, so no study is cited. At build, set it from a published estimate of the premium (fetched and cited then), and fix it in the strategy file, not in code.
 
 **Which bond.** Options: the bond of the company's own currency, or one reference for all. Own-currency is more correct (a Brazilian real return should clear a real-denominated bond) but needs a bond yield series for every currency. One reference (the US ten-year) is simple but wrong for currencies with very different inflation.
 
@@ -226,10 +230,23 @@ The text download keeps every section.
 
 **Method, reusing what exists.**
 - Monthly rounds. At each month end, the gate and the trailing parts of the valuation run on accounts the company had already published, using the existing as-of reader.
-- Qualifying names (clears hurdle) are held equal-weight for 12 and for 36 months, with the existing 0.5% round-trip cost.
+- The names held depend on the form being tested (next block). Each form is held equal-weight for 12 and for 36 months, with the existing 0.5% round-trip cost.
 - Excess return is measured against each of the three comparisons separately.
 - The luck test is the existing one: 500 random baskets of the same size and turnover, drawn from the same industry pool, scored the same way. The drop-best check is the existing one: remove the best pick each round, only rounds with 4 or more names.
-- Pass bar, a first proposal: at least 2 points a year over the industry basket in at least 6 of 10 years for the 1-year hold, and the luck score under 5%. The 3-year hold has far fewer independent rounds and is reported without a pass or fail.
+- Pass bar: at least 2 points a year over the equal-weight industry basket over the full window, with the luck score under 5%. The count of winning years is reported, not required. Reason: cheapness works with long droughts. One fetched study measures a drawdown of 55% in value against growth from 2007 to mid-2020 (Arnott et al. 2021, section o), so a rule that demanded most years to win would reject a real effect. A figure for how often five-year windows lose was cited to a Swedroe article that could not be fetched; it is not used. This replaces the earlier bar of 6 winning years in 10.
+- The 3-year hold has far fewer independent rounds and is reported without a pass or fail.
+
+**Three forms, tested and reported separately.**
+
+1. **Gate alone.** Every name that passes the gate, equal-weight, against the three comparisons.
+2. **Gate plus relative cheapness.** Within each industry group, the cheapest third of the qualifying names on free cash flow yield (free cash flow divided by enterprise value). Cheapness is ranked inside the industry, never across industries, so no bet is placed on cheap industries.
+3. **Gate plus the absolute verdict.** Only names that read "qualifies, clears hurdle" (section f), using the two own-record growth cases, because consensus cannot be tested.
+
+What each form is for, stated plainly:
+
+- Form 2 is the form with published evidence: cheap-and-sound selections in Piotroski and So (2012), the cheap-plus-quality screen of Gray and Carlisle (reviewed by the CFA Institute), and the industry adjustment in Novy-Marx (2013). What was fetched on each is in section o. Piotroski and So's own return numbers could not be fetched and are not quoted.
+- Form 3 is the form that answers the owner's question, "will it make money over my holding period". It has no published evidence of its own: it is built from the implied-growth measure, which section o shows is weak at ranking stocks.
+- The page will show the gap between form 2 and form 3 in the same table. If form 3 does not beat form 2, the absolute verdict is adding a question, not evidence.
 
 **What can and cannot be tested.**
 - Testable: the gate, the trailing earnings yield, the EPV, and implied growth against the company's own 5- and 10-year records. All use accounts only.
@@ -326,6 +343,8 @@ Old judge records stay as they are, separate, labelled as answers to the old que
 9. **Judge pack:** should the judges see the hurdle and the three growth rates? Recommended: no; they see the same pack as now, so they stay independent of the maths.
 10. **Thresholds in section b that are judgment, not published** (accrual 0.10, debt 5 times, runway 24 months, cover 100%, capital spending 1.5 times): approve them as proposals, to be re-set from the measured distribution in phase 1, then frozen in a versioned file before any backtest. Recommended: yes.
 11. **Growth above 15% a year:** mark only, or cap? Recommended: mark only.
+12. **Keep the accrual rule in the gate?** The fetched evidence (section o) says the accruals anomaly stopped paying after 2002. Recommended: keep it as an accounting-quality check only, and drop it if the phase 1 calibration shows it removes companies without a matching rise in later losses.
+13. **Backtest bar:** 2 points a year over the equal-weight industry basket across the full window, luck under 5%, winning years reported not required. Recommended: yes (section j).
 
 ## n. Where this design disagrees with the plan
 
@@ -338,4 +357,103 @@ Old judge records stay as they are, separate, labelled as answers to the old que
 - **No fixed fallback hurdle.** The plan asks what happens without a bond series. The design returns "not enough data" rather than an invented rate.
 - **The consensus case is untestable and labelled so.** The plan already says consensus parts are untested; the design adds that the backtest range uses only the two own-record cases.
 - **Banks are "not covered" in the first release.** The plan allows either; this picks the cheaper and says so.
+- **The backtest tests three forms, not one, and the pass bar changes** (section j). Form 3 is the owner's question; form 2 has the published support; the page shows the gap. The 6-years-in-10 requirement is dropped and winning years are reported only.
+- **Four of the brief's evidence figures are corrected or left out** (section o and p): the 3.6 point tilt result is paired with about 4% tracking error, not 8%; the 0.2 implied-return slope is one of three models; the Lee, So and Wang finding holds for most individual measures in the cross section, not all; and the Swedroe, Research Affiliates, Morningstar, Piotroski and So and Greenblatt figures could not be fetched.
 - **ETF lenses stay.** The plan does not mention funds. They are left alone.
+
+## o. What the evidence says to expect
+
+Every figure in this section was read on the page or in the paper named beside it, in this pass. Where a figure from the brief could not be confirmed, it is left out and listed in section p. Where the brief's wording differed from the source, the source's wording is used and the difference is said.
+
+### Published rules fade, and some never held
+
+- McLean and Pontiff (2016) studied 97 variables shown to predict stock returns. Portfolio returns are 26% lower out of sample and 58% lower after publication.
+- Hou, Xue and Zhang (Review of Financial Studies, 2020): 65% of the 452 anomalies in their library fail the ordinary significance hurdle of an absolute t-value of 1.96, with microcaps mitigated by large-exchange breakpoints and value-weighted returns. At the stricter multiple-testing hurdle of 2.78 the failure rate is 82%. Their earlier 2017 NBER draft gives different counts (447 anomalies, 64%), so the published numbers are used.
+- The other side: Jensen, Kelly and Pedersen (2023) find a baseline replication rate of 56.9% on US returns, rising to 84.9% under their own method, across 153 factors in 93 countries. They say part of the gap to Hou, Xue and Zhang comes from weighting: capped value weights add 8.5 points to their rate. The two papers disagree on how much survives, so this page does not pick a single share.
+- Microcaps and equal weighting inflate published results. Hou, Xue and Zhang write that microcaps are on average only 3% of the market value of the US universe but about 60% of the number of stocks, and that "anomalies in microcaps are more apparent than real". Our cohort size floors of $1bn to $10bn and the $5bn tested-range limit on the company page keep the smallest companies out. Our backtest is still equal-weight, so this lowers the risk and does not remove it.
+- Accruals: Mohanram's 2011 draft (the file fetched is dated September 2011, not 2014) reports that the accruals anomaly produced excess returns consistently for over four decades until 2002 and since then has apparently disappeared. It credits part of the decline to analysts' cash flow forecasts. This weakens the case for the accrual rule as a source of return. It stays in the gate as an accounting-quality check, and open question 12 asks whether to keep it.
+
+### Quality and profitability hold up better
+
+- Asness, Frazzini and Pedersen (2019), quality minus junk: the factor delivers positive returns in 23 out of 24 countries studied, in a sample of 54,616 stocks from June 1957 to December 2016.
+- Walkshäusl (2020), Journal of Asset Management: over 2000 to 2018, high-FSCORE firms outperform low-FSCORE firms by about 10% per year across developed non-US and emerging countries (9.9% developed, 12.0% emerging in the body). The count of 35 markets in the brief was not found in the parts read and is not used. The paper also cites Piotroski and So (2012, Table 1) for 10.03% a year for the US F-Score premium.
+- Novy-Marx (2013): profitability, measured as gross profits over assets, has roughly the same power as book-to-market in predicting the cross-section of average returns, and controlling for it raises the performance of value strategies, especially among the largest, most liquid stocks.
+- Fama and French (2013 draft): profitability and investment add to the description of average returns, and the value factor is redundant in the five-factor model. In plain terms, cheapness alone explains less than its reputation suggests, which is one reason the gate comes first.
+
+### Cheapness works, with long droughts
+
+- Arnott, Harvey, Kalesnik and Linnainmaa (2021): value, as measured by the Fama-French book-to-market factor, has underperformed growth investing since 2007, producing a drawdown of 55% as of mid-2020. The brief said "lost 55% against growth"; the source says a drawdown of the factor.
+
+### Cheap plus quality, in backtests
+
+- Piotroski and So (2012) is the base paper for combining cheapness with strength of fundamentals. The abstract fetched carries no return figures. The 20.8% against 10.5% a year in the brief came from a page that could not be fetched, and is not used.
+- Gray and Carlisle, Quantitative Value, reviewed by the CFA Institute (16 May 2013): the full model generates a return of 17.68% a year. The review says the authors claim it outperformed the Magic Formula by 3.74% a year from 1974 through 2011. The comparison is the Magic Formula, not an index.
+- Carlisle, Latticework interview, 18 December 2024: "The way we tested, it was about 16.2% compound over the full dataset (1972 to 2017)", against an equal-weight S&P 500 total return of about 10.5%. The visible text does not say these are Magic Formula figures. The second retest in the brief (11.4% against 8.7%, 2003 to 2015) was not found there and is not used.
+
+### Live results
+
+- QVAL (Alpha Architect), factsheet through 30 September 2026, return at net asset value: 1 year 26.84%, 3 years 18.12% a year, 5 years 13.33% a year, 10 years 11.56% a year, since the fund began on 21 October 2014 9.09% a year. The market-price figures for 10 years and since inception are 11.54% and 9.11%.
+- iShares pages, 30 September 2026, 10-year annual return on the benchmark row: S&P 500 15.32%, and 11.42% for the Russell 1000 Value fund's benchmark row (the page fetched does not name the index).
+- So over ten years to 30 September 2026 the fund returned 11.56% against 15.32% for the S&P 500 and 11.42% for the value benchmark. It matched the value benchmark and lagged the market by about 3.8 points a year. That arithmetic is ours.
+- QVAL's process, from its investment case: start from the 1,500 largest US stocks, remove low-volume, red-flag, bad-price-action and extreme-valuation names, rank on EBIT over total enterprise value, then remove low financial-strength scores. That is close to form 2 in section j. The document is dated 31 March 2025 and shows a different start date, so none of its returns are used.
+- AAII's Magic Formula screen, as listed on 30 October 2026: 2022 minus 21.3%, 2023 13.5%, 2024 17.2%, 2025 17.9%, 2026 to date minus 13.5%, "Annualized Total" 6.4% (the window is not stated on the page). One screen as followers run it, not a fund.
+- Greenblatt's comparison of managed and self-managed accounts (84.1%, 59.4%, 62.7% in the brief) is not on the Validea page fetched and is not used.
+
+### Tilts in practice
+
+- Fitzgibbons and co-authors, "Long-Only Style Investing: Don't Just Mix, Integrate", as summarised by CXO Advisory (the AQR affiliation is not stated on the page): against the value-weighted MSCI World, February 1993 to December 2015, standalone value and momentum portfolios outperform by an average annualised net 1.7%, with tracking errors just under 8%. The mixed and integrated combinations outperform by an average net 2.5%, with tracking errors about 4%. The integrated combination is reported at 3.6%. The brief paired 3.6 with a tracking error near 8%; the page pairs 8% with the standalone portfolios and about 4% with the combinations.
+- The Research Affiliates 2017 finding that over half of the paper value return disappears in live funds could not be fetched. It is not used.
+
+### Implied returns
+
+- Li and Mohanram (the file fetched is dated 2013), regression of future realised returns on an implied-return measure, where 1 would be perfect: the HVZ model 0.209, 0.192 and 0.087 for years one, two and three ahead (the last not significant); the AR model 0.584, 0.498 and 0.576; the RIV model 0.652, 0.574 and 0.594. So "about 0.2" holds for the weakest of three models; the other two are about 0.5 to 0.65.
+- Lee, So and Wang (the June 2017 working paper; the published 2021 version in the Review of Financial Studies was not fetched): among the measures tested, only a composite and one other consistently perform better than a trivial estimate, that is, a fixed constant. Four of the five individual implied-cost-of-capital measures underperform a constant in the cross section, and three of the five outperform every non-implied measure in time series. The abstract says only that these measures are particularly useful in tracking time-series variations in expected returns. The wording "no better than a constant at ranking stocks" is supported for most individual measures in the cross section, not for all of them and not in time series.
+- Li, Ng and Swaminathan (2013): aggregate implied cost of capital strongly predicts future excess market returns at horizons ranging from one month to four years. That is a market-level, time-series result. It does not contradict the two papers above, and it is not evidence for ranking stocks.
+
+### Sector and industry
+
+- AAII (June 2022): Greenblatt also excludes financials and utilities because of their unique financial structures. This design already treats banks and insurers as "not covered" (section c). Utilities are not excluded here. The debt rule may remove many of them; check at calibration.
+- Novy-Marx (2013) uses variables demeaned by the 49 Fama-French industries and finds industry-adjusted gross profitability has more power than the straight measure. So comparisons are made within an industry, and no bet is placed on cheap industries.
+- The Morningstar 2017 figures on stock-level against industry-level value (2.36% and minus 0.32% in the brief) could not be fetched and are not used.
+
+### The realistic target
+
+One to three points a year over the equal-weight industry basket, over ten years, with droughts of several years. That range is a judgment built on the fetched figures above: net edges of 1.7 and 2.5 points for tilts against a market index, after a published rule has typically lost 26% of its return out of sample and 58% after publication. It is not itself a cited result.
+
+A backtest of ours showing far more than that is to be treated as an error until it is explained: look first for look-ahead, survivorship, microcaps, a data fault, or a single stock.
+
+## p. Sources
+
+Status is what happened in this pass. "Fetched" means the page or paper was read and the figures above were checked against it. Several documents were PDFs that the page-reading tool returned as raw bytes; their text was extracted from saved copies.
+
+Fetched and used:
+
+- Hou, Xue, Zhang 2020, Replicating Anomalies (abstract): https://ideas.repec.org/a/oup/rfinst/v33y2020i5p2019-2133..html ; 2017 NBER draft: https://www.nber.org/papers/w23394.pdf
+- McLean and Pontiff 2016: https://Www.Gwern.net/doc/economics/2016-mclean.pdf
+- Jensen, Kelly, Pedersen 2023 (NBER WP 28432): https://nber.org/system/files/working_papers/w28432/w28432.pdf
+- Fama and French five-factor (2013 draft): https://static1.squarespace.com/static/5e6033a4ea02d801f37e15bb/t/5f5a8f4912595c0d5f5af0f4/1599770442385/FF_Five_Factor.pdf
+- Novy-Marx 2013 (the file is dated June 2012): https://static1.squarespace.com/static/5e6033a4ea02d801f37e15bb/t/5f5a8f2dd418ba7246912fa0/1599770413829/Novy_marx_OSoV.pdf
+- Asness, Frazzini, Pedersen 2019, Quality Minus Junk: https://research-api.cbs.dk/ws/portalfiles/portal/60211462/lasse_heje_pedersen_et_al_quality_minus_junk_publishersversion.pdf
+- Mohanram, accruals (a September 2011 draft, "The Role of Analysts' Cash Flow Forecasts in the Decline of the Accruals Anomaly"): https://www.stern.nyu.edu/sites/default/files/assets/documents/con_033123.pdf
+- Arnott, Harvey, Kalesnik, Linnainmaa 2021 (abstract): https://ideas.repec.org/a/taf/ufajxx/v77y2021i1p44-67.html
+- Piotroski and So 2012 (abstract only, no return figures): https://ideas.repec.org/a/oup/rfinst/v25y2012i9p2841-2875.html
+- Walkshäusl 2020: https://epub.uni-regensburg.de/44019/1/Walksh%C3%A4usl2020_Article_PiotroskiSFSCOREInternationalE.pdf
+- Li and Mohanram, "Evaluating Cross-Sectional Forecasting Models for Implied Cost of Capital" (file dated 2013): https://accounting.unibocconi.eu/sites/default/files/files/media/attachments/Li%2520and%2520Mohanram%2520201320130717161038.pdf
+- Lee, So, Wang (June 2017 working paper, "Evaluating Firm-Level Expected-Return Proxies"): https://www.abfer.org/component/edocman/?task=document.viewdoc&id=256&Itemid=
+- Li, Ng, Swaminathan 2013, "Predicting Market Returns Using Aggregate Implied Cost of Capital": https://www.lsvasset.com/pdf/research-papers/LNS_agg_March2013.pdf
+- CFA Institute review of Quantitative Value (16 May 2013): https://blogs.cfainstitute.org/insideinvesting/2013/05/16/quant-magic-a-book-review-of-quantitative-value-by-wesley-gray-and-tobias-carlisle
+- QVAL factsheet (through 30 September 2026): https://funds.alphaarchitect.com/wp-content/uploads/compliance/etf/education/factsheet_qval.pdf ; QVAL process: https://funds.alphaarchitect.com/wp-content/uploads/2026/02/investment_case_qval.pdf
+- iShares S&P 500 (IVV) and Russell 1000 Value (IWD), benchmark rows, 30 September 2026: https://www.ishares.com/us/products/239726/ishares-core-sp-500-etf ; https://www.ishares.com/us/products/239708/ishares-russell-1000-value-etf
+- Carlisle interview, Latticework, 18 December 2024 (partly paywalled): https://www.latticework.com/p/how-the-billionaire-contrarians-of
+- AAII on Greenblatt's exclusions (29 June 2022): https://www.aaii.com/stockideas/article/17812-greenblatts-magic-formula-for-beating-the-market ; AAII screen performance (30 October 2026, secondary): https://www.aaii.com/stock-screens/performance
+- AQR long-only value and momentum, via CXO Advisory (2016, secondary; the summary tool, not the raw page, was read): https://www.cxoadvisory.com/value-premium/integrating-momentum-and-value-stock-exposures
+
+Listed in the brief but not usable, and why:
+
+- Alpha Architect, value premium, risk and mispricing (https://alphaarchitect.com/value-premium-risk-mispricing/): returned HTTP 403. The 20.8% and 10.5% figures are not used.
+- Validea reprint of Greenblatt (https://blog.validea.com/greenblatt-less-is-more-in-portfolio-management/): read through an archive copy, dated 31 January 2012 in its metadata. The figures 84.1, 59.4 and 62.7 are not on it.
+- Research Affiliates 2017 via Advisor Perspectives (https://www.advisorperspectives.com/commentaries/2017/04/13/the-incredible-shrinking-factor-return): HTTP 403.
+- Swedroe 2018 (https://www.advisorperspectives.com/articles/2018/06/14/in-defense-of-the-value-premium): HTTP 403. The 22% of five-year windows is not confirmed.
+- Morningstar 2017 (https://www.morningstar.co.uk/static/UploadManager/Assets/The_Impact_of_Industry_Tilts_on_Factor_Performance.pdf): redirected to a home page.
+
+Named in section b and written from memory in the first draft, not fetched: Sloan 1996, Altman 1968, Piotroski 2000, and the rating agency remark on borrowing.
