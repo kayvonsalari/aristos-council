@@ -1,0 +1,148 @@
+# ABSOLUTE-GATE-1 - the exclusion gate, version 1 (docs/DESIGN_absolute.md, section b, revision 3).
+#
+# Only accounting and solvency failures exclude. Four exclusion rules, two warnings. This file is
+# VERSIONED DATA, immutable once frozen (the same rule as strategy files): a change is a new
+# absolute_gate_v2.yaml, never an edit. Every threshold carries its source on the line beside it.
+#
+# STATUS: FROZEN on the calibration date below. The accrual boundary is the measured 90th percentile of
+# the cash-flow-form accrual ratio over the built cohort members (the 0.10 in the design page was only
+# the stand-in); the investment-intensity boundary is the measured 80th percentile; the industries the
+# rules excluded wholesale are listed under not_covered_industries. See docs/GATE_CALIBRATION.md.
+# That form of the ratio is mostly negative (depreciation is a non-cash add-back), so the boundary is
+# near zero: it marks the top tenth of OUR names, not a literature level.
+
+id: absolute_gate_v1
+version: 1
+status: frozen
+design: docs/DESIGN_absolute.md
+
+rules:
+  earnings_quality:
+    label: Earnings quality
+    measure: accrual ratio, cash-flow form = (net income minus operating cash flow) / average total assets
+    exclude_above: 0.0054
+    boundary_status: measured   # the 90th percentile of the accrual ratio, 2026-11-03
+    boundary_percentile: 90
+    source: >-
+      Sloan 1996 (Table 6: highest accrual tenth minus 5.5% size-adjusted the next year, lowest plus
+      4.9%); Hribar and Collins 2002 and Dechow and Schrand 2004 for the cash-flow form; Lev and Nissim
+      for average total assets. The top-tenth boundary is measured on our names and frozen.
+  distress:
+    label: Distress
+    measure: Altman Z'' = 6.56 X1 + 3.26 X2 + 6.72 X3 + 1.05 X4, book equity, no constant
+    exclude_below: 1.10
+    grey_to: 2.60
+    source: >-
+      Altman 2000 and 2002 (formula; "Z''-Scores below 1.10 indicate a distressed condition" in the
+      form without a constant). 2.60 = 5.85 minus the 3.25 constant, from the zones on Altman's 2017
+      Hofstra slides (4.35 and 5.85); a derivation, not a quotation.
+  accounting_health:
+    label: Accounting health
+    measure: Piotroski F-score, nine yes/no checks
+    exclude_at_or_below: 1
+    required_checks: 9
+    source: >-
+      Piotroski 2000, Table 3: low group 0 or 1, high group 8 or 9; one-year market-adjusted returns
+      0.134 high, minus 0.096 low. Counts only when all nine checks can be computed (his sample
+      design); fewer is "not evaluated" with the count shown. He tested high book-to-market stocks only.
+  cash_runway:
+    label: Cash runway
+    measure: (cash plus short-term investments) / yearly burn, months
+    applies_when: operating cash flow of the latest year is negative
+    burn: negative free cash flow of the latest year
+    exclude_below_months: 12
+    warn_below_months: 24
+    source: >-
+      FASB ASU 2014-15 (going concern looks one year after the statements are issued) for the 12.
+      The 24 is a judgment (BiopharmaWatch: many investors look for 18 to 24 months; RA Capital: the
+      convention is to raise by the time one year of cash is left).
+
+warnings:
+  leverage:
+    label: Leverage
+    measure: net debt / EBITDA, debt as the tool counts it (balance sheet Total Debt row)
+    warn_above: 6.0
+    source: >-
+      S&P Global Ratings: "highly leveraged" is Debt/EBITDA above 5 in the standard table (2009 Table 2;
+      2024 tables 17 to 19), above 5.5 in the medial-volatility table and above 6 in the low-volatility
+      table. 6 is the most lenient of the three, so a flagged company is highly leveraged on every table.
+  dividend_cover:
+    label: Dividend cover
+    measure: three-year average net income / dividends paid
+    years: 3
+    not_covered_below: 1.0
+    thin_below: 1.5
+    source: >-
+      Wall Street Prep (below 1.0 net income is insufficient; above 2.0 the minimum floor); Stockopedia
+      ("less than 1.5 may indicate a danger of a dividend cut"); AJ Bell (2.00 comfort, 1.22 "looks skinny").
+
+# Recorded here for phase 2 to use; nothing in phase 1 reads it. Filled by the calibration freeze.
+investment_intensity:
+  measure: capex/sales this year over the average of the prior three years, minus 1 (Titman, Wei and Xie)
+  warn_above: 0.2676            # the measured 80th percentile, 2026-11-03
+  boundary_percentile: 80
+
+# Industries the gate excludes wholesale (more than half of their names, on a measured rule).
+# The thresholds are never loosened to admit them (design section b). Filled by the calibration freeze.
+not_covered_industries:
+  - industry: "Airlines"
+    names: 23
+    share_excluded: 0.652
+    rule: distress
+    rule_share: 0.652
+  - industry: "Entertainment"
+    names: 21
+    share_excluded: 0.524
+    rule: distress
+    rule_share: 0.476
+  - industry: "Healthcare Plans"
+    names: 8
+    share_excluded: 0.625
+    rule: earnings_quality
+    rule_share: 0.375
+  - industry: "Lodging"
+    names: 10
+    share_excluded: 0.700
+    rule: distress
+    rule_share: 0.600
+  - industry: "Pollution & Treatment Controls"
+    names: 6
+    share_excluded: 0.667
+    rule: earnings_quality
+    rule_share: 0.333
+  - industry: "Residential Construction"
+    names: 22
+    share_excluded: 0.591
+    rule: earnings_quality
+    rule_share: 0.591
+  - industry: "Resorts & Casinos"
+    names: 17
+    share_excluded: 0.588
+    rule: distress
+    rule_share: 0.529
+  - industry: "Travel Services"
+    names: 12
+    share_excluded: 0.583
+    rule: distress
+    rule_share: 0.500
+  - industry: "Utilities - Independent Power Producers"
+    names: 13
+    share_excluded: 0.692
+    rule: distress
+    rule_share: 0.615
+  - industry: "Utilities - Regulated Electric"
+    names: 43
+    share_excluded: 0.674
+    rule: distress
+    rule_share: 0.628
+  - industry: "Utilities - Regulated Water"
+    names: 11
+    share_excluded: 0.545
+    rule: distress
+    rule_share: 0.545
+
+calibration:
+  date: 2026-11-03
+  universe_size: 2020
+  units_spent: 12080
+  file: data/gate_calibration_v1.json

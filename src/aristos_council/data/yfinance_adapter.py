@@ -217,6 +217,10 @@ class YFinanceAdapter(MarketDataAdapter):
         _record_aligned("total_liabilities", balance,
                         "Total Liabilities Net Minority Interest", "Total Liab")
         _record_aligned("total_debt", balance, "Total Debt")
+        # ABSOLUTE-GATE-1: Altman Z'' reads BOOK equity, and EBITDA needs depreciation and
+        # amortisation, both at the same fiscal year-end as the lines above.
+        _record_aligned("shareholders_equity", balance, "Stockholders Equity", "Total Stockholder Equity")
+        _record_aligned("depreciation_amortization", cashflow, *_DA_LABELS)
         _record_aligned("cash", balance, "Cash And Cash Equivalents",
                         "Cash Cash Equivalents And Short Term Investments")
 
@@ -302,6 +306,7 @@ class YFinanceAdapter(MarketDataAdapter):
                 cashflow, "Operating Cash Flow", "Total Cash From Operating Activities"),
             capital_expenditure_annual=_cashflow_series(
                 cashflow, "Capital Expenditure", "Capital Expenditures"),
+            depreciation_amortization_annual=_cashflow_series(cashflow, *_DA_LABELS),
             # Annual series, newest-first, NaN/empty dropped (Sprint 4B).
             total_revenue=_annual_series(income, "Total Revenue"),
             operating_income=_annual_series(income, "Operating Income"),
@@ -731,6 +736,11 @@ def _first_present(series, fallback):
         if value is not None:
             return value
     return fallback
+
+
+# ABSOLUTE-GATE-1: the cash flow statement rows that carry depreciation and amortisation, in order of
+# preference (alias-tolerant: yfinance renames rows between versions).
+_DA_LABELS = ("Depreciation And Amortization", "Depreciation Amortization Depletion", "Depreciation")
 
 
 def _cashflow_series(df: object, *labels: str) -> list[float]:

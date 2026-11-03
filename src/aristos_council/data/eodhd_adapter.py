@@ -218,6 +218,7 @@ _PERIOD_LISTS = (
     ("free_cash_flow_annual", "cashflow", "freeCashFlow"),
     ("operating_cash_flow_annual", "cashflow", "totalCashFromOperatingActivities"),
     ("capital_expenditure_annual", "cashflow", "capitalExpenditures"),
+    ("depreciation_amortization_annual", "cashflow", "depreciation"),
 )
 
 

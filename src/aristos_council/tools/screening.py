@@ -1611,6 +1611,9 @@ _SERIES_ATTR: dict[str, str] = {
     "operating_income": "operating_income",
     "retained_earnings": "retained_earnings_annual",
     "total_liabilities": "total_liabilities_annual",
+    # ABSOLUTE-GATE-1: book equity for Altman Z'' and depreciation for EBITDA.
+    "shareholders_equity": "shareholders_equity",
+    "depreciation_amortization": "depreciation_amortization_annual",
 }
 
 

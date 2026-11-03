@@ -170,6 +170,9 @@ class CompanyCheckResult:
     # FORENSIC-PACK-1 - the date and currency of the accounts the absolute readings rest on
     # (``abs_readings.accounts_context``): a dict, or None when there were no fundamentals.
     accounts: object = None
+    # ABSOLUTE-GATE-1: the exclusion gate (``gate.engine.GateResult``) over the accounts already fetched,
+    # or None for an unrateable name. Display only in phase 1: it changes no vote and no verdict.
+    gate: object = None
 
     @property
     def display(self) -> str:
@@ -330,6 +333,12 @@ def run_company_check(
         readings["accounts"] = _accounts_context(f) or None
     except Exception:                                    # noqa: BLE001 - a context line, never a crash
         readings["accounts"] = None
+    # ABSOLUTE-GATE-1: pure arithmetic over the same fundamentals; never a crash, never a vote.
+    try:
+        from .gate.engine import page_gate as _page_gate
+        readings["gate"] = _page_gate(f)
+    except Exception:                                    # noqa: BLE001
+        readings["gate"] = None
 
     providers = _providers_used(adapter, fi, today)
     di = DataIntegrity(

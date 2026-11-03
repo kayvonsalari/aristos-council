@@ -57,6 +57,11 @@ def company_report_markdown(report) -> str:
     if page.note:
         out += [f"*{page.note}*", ""]
 
+    gate = getattr(c, "gate", None)
+    if gate is not None:                                  # ABSOLUTE-GATE-1, after the story, before the table
+        from .gate import render as _gate_render
+        out += _gate_render.markdown_lines(gate)
+
     out += [f"## {SECTION_TABLE}", ""]
     for line in page.tag:
         out += [f"*{line}*", ""]

@@ -3435,6 +3435,17 @@ def _render_company_report(report) -> None:
     if page.note:
         st.caption(page.note)
 
+    _gate = getattr(check, "gate", None)
+    if _gate is not None:                                   # ABSOLUTE-GATE-1, after the story, before the table
+        from aristos_council.gate import render as _gate_render
+        st.subheader(_gate_render.SECTION_TITLE)
+        st.caption(_gate_render.CAPTION)
+        if _gate_render.has_rows(_gate):
+            st.markdown(_gate_render.markdown_text(_gate))
+        st.markdown(f"**{_gate_render.state_line(_gate)}**")
+        if _gate.debt_line and _gate_render.has_rows(_gate):
+            st.caption(_gate.debt_line)
+
     st.subheader(SECTION_TABLE)
     for line in page.tag:
         st.caption(line)

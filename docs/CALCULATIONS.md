@@ -1223,6 +1223,44 @@ EPV lens and the valuation band take operating income, EBIT and price series, no
 the statement that an impossible number is never printed, and the next provider gets the
 same treatment.
 
+### 4.11 The exclusion gate (ABSOLUTE-GATE-1, `gate/`, `tools/gate_readings.py`)
+
+Phase 1 of `docs/DESIGN_absolute.md` (section b). Four rules can exclude a company and two warnings never
+do. It changes no vote and no verdict; it prints as its own section on the company page, and the saved
+record gains an additive `gate` block. Thresholds live in `gates/absolute_gate_v1.yaml`, each with its
+source on the line beside it; once frozen the file is immutable (a change is a new version). All
+arithmetic is in `tools/gate_readings.py`; `gate/engine.py` only compares readings with thresholds.
+
+A ratio whose bottom number is zero or negative is never a pass. A missing input is *not evaluated*, never
+a failure (house rule 3). The state is one of excluded, qualifies, not enough data, not covered.
+
+| Rule | Formula | Excludes | Sign and missing-data cases |
+|---|---|---|---|
+| Earnings quality | accrual ratio = (net income - operating cash flow) / mean(this year's, last year's total assets); the one implementation the Forensic lens also uses | above the frozen boundary (the measured 90th percentile of our names; 0.10 was the stand-in) | negative accruals pass; total assets at or below zero, or a missing input: not evaluated; no prior-year assets: this year's assets alone, disclosed as "single-year assets" |
+| Distress | Z'' = 6.56 X1 + 3.26 X2 + 6.72 X3 + 1.05 X4; X1 = (current assets - current liabilities) / total assets, X2 = retained earnings / total assets, X3 = EBIT / total assets, X4 = book equity / total liabilities; no constant | below 1.10; 1.10 to 2.60 is a grey zone that passes with a note | total assets or total liabilities at or below zero: not evaluated; negative equity is computed (it lowers X4); a missing line, or statements the provider says are in more than one currency: not evaluated. Every input is a statement line, so an ADR evaluates where the 1968 Z-Score (which mixes in market cap) abstains. The 1968 Z-Score is untouched |
+| Accounting health | F-score, nine yes/no checks | a score of 0 or 1, only when all nine checks can be computed | fewer than nine: not evaluated, shown as "x of 9 checks computable" |
+| Cash runway | (cash plus short-term investments) / yearly burn x 12, months; burn = the negative free cash flow of the latest year | under 12 months; 12 to 24 passes with the warning "will need to raise money within the holding period" | applies only when the latest operating cash flow is negative (otherwise "does not apply"); free cash flow missing falls back to operating cash flow minus capital spending; cash missing: not evaluated |
+
+| Warning | Formula | Fires | Sign and missing-data cases |
+|---|---|---|---|
+| Leverage | net debt / EBITDA; EBITDA = EBIT + depreciation and amortisation at the same year end; debt is the balance sheet's own Total Debt row (borrowings plus the long-term operating lease line), cash is cash plus short-term investments | above 6 times | net cash reads "net cash (no debt to cover)" and passes; EBITDA at or below zero: not evaluated; depreciation, debt or cash missing: not evaluated |
+| Dividend cover | mean net income of up to three years / dividends paid in the latest year | below 1.0 reads "not covered"; 1.0 to 1.5 reads "thin" | no dividend: does not apply; mean net income at or below zero with a dividend paid: "not covered", never a pass; net income missing: not evaluated |
+
+Combination: any failed exclusion excludes, naming the rule and its figure. "Qualifies" needs Z'' and the
+accrual ratio both evaluated; the F-score counts when nine checks exist; the runway counts when it applies;
+otherwise "not enough data" with the missing inputs listed. Banks and insurers return "not covered"; the
+test is `Fundamentals.sector` being a confirmed financial sector, the rule every absolute reading uses (a
+missing sector is never a bank).
+
+Depreciation and amortisation is a new adapter field read from the cash flow statement on both providers
+(yfinance row "Depreciation And Amortization"; EODHD `Cash_Flow` key `depreciation`).
+
+Calibration: `python -m aristos_council.gate calibrate` runs the gate over the union of the built cohort
+members (10 EODHD units a name) and writes aggregates only to `data/gate_calibration_v1.json` and
+`docs/GATE_CALIBRATION.md`; `freeze` writes the measured accrual boundary and the 80th percentile of the
+abnormal-investment measure (capital spending over sales, divided by its prior three-year average, minus 1;
+Titman, Wei and Xie) into the gate file. Nothing in phase 1 reads the investment measure.
+
 ## 5. Guards
 
 - **UNRATEABLE** — a ticker with failed fundamentals *and* no usable price history (a

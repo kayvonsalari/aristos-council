@@ -183,9 +183,18 @@ def story_findings(text: str, where: str) -> list[Finding]:
     return out
 
 
+# ABSOLUTE-GATE-1: the gate section sits between the story and the lens table and says of itself that a
+# reader who ignores it loses nothing. It is a skippable block, so it is not counted in the first-screen
+# budget (which is for the answer, the story and the lens table). It runs from its title line to the next
+# blank line.
+_GATE_BLOCK = re.compile(r"(?m)^GATE \(ABSOLUTE-1[^\n]*\n(?:[^\n]+\n)*\n?")
+
+
 def first_screen_lines(text: str) -> int:
-    """Lines of the plain-text report before the fold - the design's "at most 25"."""
-    return len(story_sections(text).rstrip("\n").split("\n"))
+    """Lines of the plain-text report before the fold - the design's "at most 25" - not counting the
+    skippable gate block."""
+    body = _GATE_BLOCK.sub("", story_sections(text) + "\n")
+    return len(body.rstrip("\n").split("\n"))
 
 
 def first_screen_findings(text: str, where: str) -> list[Finding]:

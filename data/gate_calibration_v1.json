@@ -1,0 +1,3182 @@
+{
+ "meta": {
+  "date": "2026-11-03",
+  "universe_size": 2020,
+  "units_spent": 12080,
+  "gate": "absolute_gate_v1"
+ },
+ "names_with_data": 2018,
+ "names_without_data": 2,
+ "overall": {
+  "n": 2018,
+  "state": {
+   "excluded": 0.29286422200198214,
+   "qualifies": 0.7046580773042617,
+   "not_enough_data": 0.002477700693756194,
+   "not_covered": 0.0
+  },
+  "excluded_by": {
+   "earnings_quality": 0.10009910802775025,
+   "distress": 0.20168483647175423,
+   "accounting_health": 0.0014866204162537165,
+   "cash_runway": 0.011892963330029732
+  },
+  "not_evaluated": {
+   "earnings_quality": 0.0,
+   "distress": 0.002477700693756194,
+   "accounting_health": 0.03369672943508424,
+   "cash_runway": 0.0,
+   "leverage": 0.055004955401387515,
+   "dividend_cover": 0.0009910802775024777
+  },
+  "warnings": {
+   "cash_runway_warn": 0.00842418235877106,
+   "leverage": 0.05450941526263627,
+   "dividend_cover": 0.34390485629335976
+  },
+  "not_applicable": {
+   "earnings_quality": 0.0,
+   "distress": 0.0,
+   "accounting_health": 0.0,
+   "cash_runway": 0.9464816650148662
+  }
+ },
+ "industries": {
+  "Advertising Agencies": {
+   "n": 7,
+   "state": {
+    "excluded": 0.42857142857142855,
+    "qualifies": 0.5714285714285714,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.42857142857142855,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.14285714285714285,
+    "dividend_cover": 0.2857142857142857
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Aerospace & Defense": {
+   "n": 38,
+   "state": {
+    "excluded": 0.23684210526315788,
+    "qualifies": 0.7631578947368421,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.15789473684210525,
+    "distress": 0.10526315789473684,
+    "accounting_health": 0.0,
+    "cash_runway": 0.02631578947368421
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.05263157894736842,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.23684210526315788
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.8947368421052632
+   }
+  },
+  "Agricultural Inputs": {
+   "n": 9,
+   "state": {
+    "excluded": 0.0,
+    "qualifies": 1.0,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.1111111111111111,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.3333333333333333
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Airlines": {
+   "n": 23,
+   "state": {
+    "excluded": 0.6521739130434783,
+    "qualifies": 0.34782608695652173,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.6521739130434783,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.08695652173913043,
+    "dividend_cover": 0.34782608695652173
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Airports & Air Services": {
+   "n": 11,
+   "state": {
+    "excluded": 0.18181818181818182,
+    "qualifies": 0.8181818181818182,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.18181818181818182,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.09090909090909091,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.09090909090909091,
+    "dividend_cover": 0.45454545454545453
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9090909090909091
+   }
+  },
+  "Aluminum": {
+   "n": 9,
+   "state": {
+    "excluded": 0.1111111111111111,
+    "qualifies": 0.8888888888888888,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.1111111111111111,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.1111111111111111,
+    "dividend_cover": 0.3333333333333333
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Apparel Manufacturing": {
+   "n": 15,
+   "state": {
+    "excluded": 0.06666666666666667,
+    "qualifies": 0.9333333333333333,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.06666666666666667,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.06666666666666667,
+    "cash_runway": 0.0,
+    "leverage": 0.06666666666666667,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.06666666666666667,
+    "leverage": 0.06666666666666667,
+    "dividend_cover": 0.3333333333333333
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9333333333333333
+   }
+  },
+  "Apparel Retail": {
+   "n": 14,
+   "state": {
+    "excluded": 0.0,
+    "qualifies": 1.0,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.07142857142857142,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.07142857142857142
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Auto Manufacturers": {
+   "n": 29,
+   "state": {
+    "excluded": 0.4827586206896552,
+    "qualifies": 0.5172413793103449,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.20689655172413793,
+    "distress": 0.3103448275862069,
+    "accounting_health": 0.0,
+    "cash_runway": 0.10344827586206896
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.034482758620689655,
+    "cash_runway": 0.0,
+    "leverage": 0.27586206896551724,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.034482758620689655,
+    "leverage": 0.06896551724137931,
+    "dividend_cover": 0.27586206896551724
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.7241379310344828
+   }
+  },
+  "Auto Parts": {
+   "n": 35,
+   "state": {
+    "excluded": 0.22857142857142856,
+    "qualifies": 0.7714285714285715,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.05714285714285714,
+    "distress": 0.17142857142857143,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.05714285714285714,
+    "cash_runway": 0.0,
+    "leverage": 0.05714285714285714,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.05714285714285714,
+    "dividend_cover": 0.3142857142857143
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9142857142857143
+   }
+  },
+  "Beverages - Brewers": {
+   "n": 13,
+   "state": {
+    "excluded": 0.15384615384615385,
+    "qualifies": 0.8461538461538461,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.15384615384615385,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.07692307692307693,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.6153846153846154
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Beverages - Non-Alcoholic": {
+   "n": 14,
+   "state": {
+    "excluded": 0.21428571428571427,
+    "qualifies": 0.7857142857142857,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.07142857142857142,
+    "distress": 0.14285714285714285,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.07142857142857142,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.42857142857142855
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Beverages - Wineries & Distilleries": {
+   "n": 6,
+   "state": {
+    "excluded": 0.16666666666666666,
+    "qualifies": 0.8333333333333334,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.16666666666666666,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.6666666666666666
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Biotechnology": {
+   "n": 35,
+   "state": {
+    "excluded": 0.4,
+    "qualifies": 0.6,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.14285714285714285,
+    "distress": 0.2571428571428571,
+    "accounting_health": 0.02857142857142857,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.08571428571428572,
+    "cash_runway": 0.0,
+    "leverage": 0.34285714285714286,
+    "dividend_cover": 0.02857142857142857
+   },
+   "warnings": {
+    "cash_runway_warn": 0.05714285714285714,
+    "leverage": 0.02857142857142857,
+    "dividend_cover": 0.14285714285714285
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.7142857142857143
+   }
+  },
+  "Broadcasting": {
+   "n": 3,
+   "state": {
+    "excluded": 0.3333333333333333,
+    "qualifies": 0.6666666666666666,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.3333333333333333,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.6666666666666666
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Building Materials": {
+   "n": 26,
+   "state": {
+    "excluded": 0.15384615384615385,
+    "qualifies": 0.8461538461538461,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.07692307692307693,
+    "distress": 0.07692307692307693,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.07692307692307693,
+    "dividend_cover": 0.3076923076923077
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Building Products & Equipment": {
+   "n": 31,
+   "state": {
+    "excluded": 0.12903225806451613,
+    "qualifies": 0.8709677419354839,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.06451612903225806,
+    "distress": 0.06451612903225806,
+    "accounting_health": 0.0,
+    "cash_runway": 0.03225806451612903
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.03225806451612903,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.12903225806451613
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.967741935483871
+   }
+  },
+  "Chemicals": {
+   "n": 15,
+   "state": {
+    "excluded": 0.13333333333333333,
+    "qualifies": 0.8666666666666667,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.06666666666666667,
+    "distress": 0.06666666666666667,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.06666666666666667,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.13333333333333333,
+    "dividend_cover": 0.5333333333333333
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Communication Equipment": {
+   "n": 27,
+   "state": {
+    "excluded": 0.2962962962962963,
+    "qualifies": 0.7037037037037037,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.1111111111111111,
+    "distress": 0.18518518518518517,
+    "accounting_health": 0.0,
+    "cash_runway": 0.07407407407407407
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.18518518518518517,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.037037037037037035,
+    "dividend_cover": 0.37037037037037035
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.8518518518518519
+   }
+  },
+  "Computer Hardware": {
+   "n": 34,
+   "state": {
+    "excluded": 0.5,
+    "qualifies": 0.5,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.38235294117647056,
+    "distress": 0.11764705882352941,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.08823529411764706,
+    "cash_runway": 0.0,
+    "leverage": 0.11764705882352941,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.058823529411764705,
+    "leverage": 0.0,
+    "dividend_cover": 0.5
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.7058823529411765
+   }
+  },
+  "Confectioners": {
+   "n": 6,
+   "state": {
+    "excluded": 0.5,
+    "qualifies": 0.5,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.5,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.8333333333333334
+   }
+  },
+  "Consumer Electronics": {
+   "n": 9,
+   "state": {
+    "excluded": 0.3333333333333333,
+    "qualifies": 0.6666666666666666,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.2222222222222222,
+    "distress": 0.1111111111111111,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.1111111111111111
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Copper": {
+   "n": 19,
+   "state": {
+    "excluded": 0.21052631578947367,
+    "qualifies": 0.7894736842105263,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.15789473684210525,
+    "distress": 0.10526315789473684,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.05263157894736842,
+    "cash_runway": 0.0,
+    "leverage": 0.05263157894736842,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.05263157894736842,
+    "leverage": 0.0,
+    "dividend_cover": 0.2631578947368421
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.8947368421052632
+   }
+  },
+  "Department Stores": {
+   "n": 3,
+   "state": {
+    "excluded": 0.0,
+    "qualifies": 1.0,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.3333333333333333
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Diagnostics & Research": {
+   "n": 36,
+   "state": {
+    "excluded": 0.2777777777777778,
+    "qualifies": 0.7222222222222222,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.027777777777777776,
+    "distress": 0.25,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.19444444444444445,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.027777777777777776,
+    "leverage": 0.027777777777777776,
+    "dividend_cover": 0.3055555555555556
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.8888888888888888
+   }
+  },
+  "Discount Stores": {
+   "n": 13,
+   "state": {
+    "excluded": 0.3076923076923077,
+    "qualifies": 0.6923076923076923,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.3076923076923077,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.3076923076923077
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Drug Manufacturers - General": {
+   "n": 21,
+   "state": {
+    "excluded": 0.38095238095238093,
+    "qualifies": 0.6190476190476191,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.23809523809523808,
+    "distress": 0.14285714285714285,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.09523809523809523,
+    "dividend_cover": 0.47619047619047616
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9523809523809523
+   }
+  },
+  "Drug Manufacturers - Specialty & Generic": {
+   "n": 29,
+   "state": {
+    "excluded": 0.27586206896551724,
+    "qualifies": 0.7241379310344828,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.1724137931034483,
+    "distress": 0.13793103448275862,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.06896551724137931,
+    "cash_runway": 0.0,
+    "leverage": 0.06896551724137931,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.20689655172413793
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9310344827586207
+   }
+  },
+  "Electrical Equipment & Parts": {
+   "n": 36,
+   "state": {
+    "excluded": 0.3333333333333333,
+    "qualifies": 0.6666666666666666,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.2222222222222222,
+    "distress": 0.1111111111111111,
+    "accounting_health": 0.0,
+    "cash_runway": 0.08333333333333333
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.027777777777777776,
+    "cash_runway": 0.0,
+    "leverage": 0.08333333333333333,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.027777777777777776,
+    "leverage": 0.05555555555555555,
+    "dividend_cover": 0.25
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.8611111111111112
+   }
+  },
+  "Electronic Components": {
+   "n": 45,
+   "state": {
+    "excluded": 0.2,
+    "qualifies": 0.8,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.2,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.022222222222222223,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.17777777777777778
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Electronic Gaming & Multimedia": {
+   "n": 9,
+   "state": {
+    "excluded": 0.3333333333333333,
+    "qualifies": 0.6666666666666666,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.1111111111111111,
+    "distress": 0.2222222222222222,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.1111111111111111,
+    "dividend_cover": 0.1111111111111111
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.3333333333333333
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Engineering & Construction": {
+   "n": 42,
+   "state": {
+    "excluded": 0.47619047619047616,
+    "qualifies": 0.5238095238095238,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.21428571428571427,
+    "distress": 0.3333333333333333,
+    "accounting_health": 0.023809523809523808,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.07142857142857142,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.023809523809523808,
+    "leverage": 0.047619047619047616,
+    "dividend_cover": 0.23809523809523808
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.8809523809523809
+   }
+  },
+  "Entertainment": {
+   "n": 21,
+   "state": {
+    "excluded": 0.5238095238095238,
+    "qualifies": 0.47619047619047616,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.047619047619047616,
+    "distress": 0.47619047619047616,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.09523809523809523,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.19047619047619047,
+    "dividend_cover": 0.3333333333333333
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Farm & Heavy Construction Machinery": {
+   "n": 28,
+   "state": {
+    "excluded": 0.10714285714285714,
+    "qualifies": 0.8928571428571429,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.07142857142857142,
+    "distress": 0.07142857142857142,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.03571428571428571,
+    "dividend_cover": 0.10714285714285714
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Footwear & Accessories": {
+   "n": 12,
+   "state": {
+    "excluded": 0.25,
+    "qualifies": 0.75,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.16666666666666666,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.08333333333333333
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.16666666666666666,
+    "cash_runway": 0.0,
+    "leverage": 0.16666666666666666,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.08333333333333333,
+    "dividend_cover": 0.3333333333333333
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.8333333333333334
+   }
+  },
+  "Gambling": {
+   "n": 9,
+   "state": {
+    "excluded": 0.4444444444444444,
+    "qualifies": 0.5555555555555556,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.4444444444444444,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.1111111111111111,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.5555555555555556
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Gold": {
+   "n": 51,
+   "state": {
+    "excluded": 0.1568627450980392,
+    "qualifies": 0.8431372549019608,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0784313725490196,
+    "distress": 0.058823529411764705,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0392156862745098
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0784313725490196,
+    "cash_runway": 0.0,
+    "leverage": 0.058823529411764705,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.1568627450980392
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9411764705882353
+   }
+  },
+  "Grocery Stores": {
+   "n": 22,
+   "state": {
+    "excluded": 0.5,
+    "qualifies": 0.45454545454545453,
+    "not_enough_data": 0.045454545454545456,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.045454545454545456,
+    "distress": 0.5,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.045454545454545456,
+    "accounting_health": 0.045454545454545456,
+    "cash_runway": 0.0,
+    "leverage": 0.045454545454545456,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.045454545454545456,
+    "dividend_cover": 0.3181818181818182
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Health Information Services": {
+   "n": 4,
+   "state": {
+    "excluded": 0.25,
+    "qualifies": 0.75,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.25,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.25,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Healthcare Plans": {
+   "n": 8,
+   "state": {
+    "excluded": 0.625,
+    "qualifies": 0.375,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.375,
+    "distress": 0.25,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.25,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.125,
+    "dividend_cover": 0.25
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.875
+   }
+  },
+  "Home Improvement Retail": {
+   "n": 5,
+   "state": {
+    "excluded": 0.2,
+    "qualifies": 0.8,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.2,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.2,
+    "dividend_cover": 0.4
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Household & Personal Products": {
+   "n": 27,
+   "state": {
+    "excluded": 0.25925925925925924,
+    "qualifies": 0.7407407407407407,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.1111111111111111,
+    "distress": 0.18518518518518517,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.037037037037037035,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.1111111111111111,
+    "dividend_cover": 0.4444444444444444
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9629629629629629
+   }
+  },
+  "Information Technology Services": {
+   "n": 40,
+   "state": {
+    "excluded": 0.175,
+    "qualifies": 0.825,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.05,
+    "distress": 0.1,
+    "accounting_health": 0.025,
+    "cash_runway": 0.025
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.075,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.025,
+    "leverage": 0.025,
+    "dividend_cover": 0.225
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.925
+   }
+  },
+  "Integrated Freight & Logistics": {
+   "n": 20,
+   "state": {
+    "excluded": 0.25,
+    "qualifies": 0.75,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.25,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.05,
+    "dividend_cover": 0.25
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Internet Content & Information": {
+   "n": 28,
+   "state": {
+    "excluded": 0.2857142857142857,
+    "qualifies": 0.7142857142857143,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.14285714285714285,
+    "distress": 0.14285714285714285,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.07142857142857142,
+    "cash_runway": 0.0,
+    "leverage": 0.07142857142857142,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.35714285714285715
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.8928571428571429
+   }
+  },
+  "Internet Retail": {
+   "n": 22,
+   "state": {
+    "excluded": 0.4090909090909091,
+    "qualifies": 0.5909090909090909,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.09090909090909091,
+    "distress": 0.3181818181818182,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.18181818181818182,
+    "cash_runway": 0.0,
+    "leverage": 0.045454545454545456,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.09090909090909091,
+    "dividend_cover": 0.13636363636363635
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9090909090909091
+   }
+  },
+  "Leisure": {
+   "n": 15,
+   "state": {
+    "excluded": 0.26666666666666666,
+    "qualifies": 0.7333333333333333,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.06666666666666667,
+    "distress": 0.2,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.06666666666666667,
+    "dividend_cover": 0.3333333333333333
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Lodging": {
+   "n": 10,
+   "state": {
+    "excluded": 0.7,
+    "qualifies": 0.3,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.1,
+    "distress": 0.6,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.1,
+    "dividend_cover": 0.1
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Luxury Goods": {
+   "n": 13,
+   "state": {
+    "excluded": 0.07692307692307693,
+    "qualifies": 0.9230769230769231,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.07692307692307693,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.23076923076923078
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Marine Shipping": {
+   "n": 27,
+   "state": {
+    "excluded": 0.037037037037037035,
+    "qualifies": 0.9259259259259259,
+    "not_enough_data": 0.037037037037037035,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.037037037037037035,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.037037037037037035,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.37037037037037035
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Medical Care Facilities": {
+   "n": 14,
+   "state": {
+    "excluded": 0.2857142857142857,
+    "qualifies": 0.7142857142857143,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.2857142857142857,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.07142857142857142,
+    "dividend_cover": 0.07142857142857142
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Medical Devices": {
+   "n": 23,
+   "state": {
+    "excluded": 0.08695652173913043,
+    "qualifies": 0.9130434782608695,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.043478260869565216,
+    "distress": 0.043478260869565216,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.043478260869565216,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.30434782608695654
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9565217391304348
+   }
+  },
+  "Medical Distribution": {
+   "n": 8,
+   "state": {
+    "excluded": 0.5,
+    "qualifies": 0.5,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.125,
+    "distress": 0.375,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.25
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Medical Instruments & Supplies": {
+   "n": 22,
+   "state": {
+    "excluded": 0.0,
+    "qualifies": 1.0,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.13636363636363635,
+    "dividend_cover": 0.3181818181818182
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Oil & Gas Drilling": {
+   "n": 6,
+   "state": {
+    "excluded": 0.3333333333333333,
+    "qualifies": 0.6666666666666666,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.16666666666666666,
+    "distress": 0.16666666666666666,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.16666666666666666,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.5
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Oil & Gas E&P": {
+   "n": 38,
+   "state": {
+    "excluded": 0.13157894736842105,
+    "qualifies": 0.868421052631579,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.05263157894736842,
+    "distress": 0.07894736842105263,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.39473684210526316
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Oil & Gas Equipment & Services": {
+   "n": 26,
+   "state": {
+    "excluded": 0.19230769230769232,
+    "qualifies": 0.8076923076923077,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.038461538461538464,
+    "distress": 0.15384615384615385,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.38461538461538464
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Oil & Gas Integrated": {
+   "n": 19,
+   "state": {
+    "excluded": 0.10526315789473684,
+    "qualifies": 0.8421052631578947,
+    "not_enough_data": 0.05263157894736842,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.05263157894736842,
+    "distress": 0.05263157894736842,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.05263157894736842,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.2631578947368421
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Oil & Gas Midstream": {
+   "n": 37,
+   "state": {
+    "excluded": 0.43243243243243246,
+    "qualifies": 0.5675675675675675,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.05405405405405406,
+    "distress": 0.3783783783783784,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.02702702702702703,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.05405405405405406,
+    "dividend_cover": 0.5945945945945946
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Oil & Gas Refining & Marketing": {
+   "n": 23,
+   "state": {
+    "excluded": 0.30434782608695654,
+    "qualifies": 0.6956521739130435,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.2608695652173913,
+    "accounting_health": 0.0,
+    "cash_runway": 0.043478260869565216
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.08695652173913043,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.13043478260869565,
+    "dividend_cover": 0.391304347826087
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9130434782608695
+   }
+  },
+  "Other Industrial Metals & Mining": {
+   "n": 23,
+   "state": {
+    "excluded": 0.2608695652173913,
+    "qualifies": 0.7391304347826086,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.17391304347826086,
+    "distress": 0.08695652173913043,
+    "accounting_health": 0.0,
+    "cash_runway": 0.043478260869565216
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.13043478260869565,
+    "cash_runway": 0.0,
+    "leverage": 0.13043478260869565,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.043478260869565216,
+    "leverage": 0.0,
+    "dividend_cover": 0.43478260869565216
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.7391304347826086
+   }
+  },
+  "Packaged Foods": {
+   "n": 32,
+   "state": {
+    "excluded": 0.3125,
+    "qualifies": 0.6875,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.125,
+    "distress": 0.1875,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.03125,
+    "cash_runway": 0.0,
+    "leverage": 0.0625,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.03125,
+    "dividend_cover": 0.5625
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Packaging & Containers": {
+   "n": 28,
+   "state": {
+    "excluded": 0.14285714285714285,
+    "qualifies": 0.8571428571428571,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.03571428571428571,
+    "distress": 0.10714285714285714,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.03571428571428571,
+    "cash_runway": 0.0,
+    "leverage": 0.03571428571428571,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.03571428571428571,
+    "dividend_cover": 0.5357142857142857
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Paper & Paper Products": {
+   "n": 10,
+   "state": {
+    "excluded": 0.0,
+    "qualifies": 1.0,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.3,
+    "dividend_cover": 0.4
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Pollution & Treatment Controls": {
+   "n": 6,
+   "state": {
+    "excluded": 0.6666666666666666,
+    "qualifies": 0.3333333333333333,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.3333333333333333,
+    "distress": 0.3333333333333333,
+    "accounting_health": 0.0,
+    "cash_runway": 0.16666666666666666
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.16666666666666666,
+    "cash_runway": 0.0,
+    "leverage": 0.3333333333333333,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.16666666666666666,
+    "dividend_cover": 0.16666666666666666
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.6666666666666666
+   }
+  },
+  "Publishing": {
+   "n": 3,
+   "state": {
+    "excluded": 0.3333333333333333,
+    "qualifies": 0.6666666666666666,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.3333333333333333,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.3333333333333333
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Railroads": {
+   "n": 23,
+   "state": {
+    "excluded": 0.30434782608695654,
+    "qualifies": 0.6956521739130435,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.17391304347826086,
+    "distress": 0.17391304347826086,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.043478260869565216,
+    "leverage": 0.0,
+    "dividend_cover": 0.21739130434782608
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9130434782608695
+   }
+  },
+  "Residential Construction": {
+   "n": 22,
+   "state": {
+    "excluded": 0.5909090909090909,
+    "qualifies": 0.4090909090909091,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.5909090909090909,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.045454545454545456
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.045454545454545456,
+    "leverage": 0.045454545454545456,
+    "dividend_cover": 0.2727272727272727
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9090909090909091
+   }
+  },
+  "Resorts & Casinos": {
+   "n": 17,
+   "state": {
+    "excluded": 0.5882352941176471,
+    "qualifies": 0.4117647058823529,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.058823529411764705,
+    "distress": 0.5294117647058824,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.29411764705882354,
+    "dividend_cover": 0.4117647058823529
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Restaurants": {
+   "n": 27,
+   "state": {
+    "excluded": 0.48148148148148145,
+    "qualifies": 0.5185185185185185,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.037037037037037035,
+    "distress": 0.48148148148148145,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.037037037037037035,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.1111111111111111,
+    "dividend_cover": 0.25925925925925924
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Semiconductor Equipment & Materials": {
+   "n": 40,
+   "state": {
+    "excluded": 0.15,
+    "qualifies": 0.85,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.15,
+    "distress": 0.025,
+    "accounting_health": 0.0,
+    "cash_runway": 0.025
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.1,
+    "cash_runway": 0.0,
+    "leverage": 0.175,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.025,
+    "dividend_cover": 0.3
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9
+   }
+  },
+  "Semiconductors": {
+   "n": 54,
+   "state": {
+    "excluded": 0.14814814814814814,
+    "qualifies": 0.8518518518518519,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.1111111111111111,
+    "distress": 0.037037037037037035,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.07407407407407407,
+    "cash_runway": 0.0,
+    "leverage": 0.05555555555555555,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.05555555555555555,
+    "dividend_cover": 0.48148148148148145
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9814814814814815
+   }
+  },
+  "Software - Application": {
+   "n": 51,
+   "state": {
+    "excluded": 0.3137254901960784,
+    "qualifies": 0.6862745098039216,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.058823529411764705,
+    "distress": 0.2549019607843137,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0392156862745098
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.09803921568627451,
+    "cash_runway": 0.0,
+    "leverage": 0.0196078431372549,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.19607843137254902
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9607843137254902
+   }
+  },
+  "Software - Infrastructure": {
+   "n": 43,
+   "state": {
+    "excluded": 0.3488372093023256,
+    "qualifies": 0.6511627906976745,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.023255813953488372,
+    "distress": 0.3488372093023256,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.13953488372093023,
+    "cash_runway": 0.0,
+    "leverage": 0.06976744186046512,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.023255813953488372,
+    "dividend_cover": 0.32558139534883723
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Specialty Chemicals": {
+   "n": 49,
+   "state": {
+    "excluded": 0.061224489795918366,
+    "qualifies": 0.9387755102040817,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.061224489795918366,
+    "accounting_health": 0.0,
+    "cash_runway": 0.02040816326530612
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.061224489795918366,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.10204081632653061,
+    "dividend_cover": 0.46938775510204084
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9795918367346939
+   }
+  },
+  "Specialty Industrial Machinery": {
+   "n": 71,
+   "state": {
+    "excluded": 0.23943661971830985,
+    "qualifies": 0.7605633802816901,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.1267605633802817,
+    "distress": 0.15492957746478872,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.014084507042253521,
+    "cash_runway": 0.0,
+    "leverage": 0.014084507042253521,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.014084507042253521,
+    "leverage": 0.014084507042253521,
+    "dividend_cover": 0.23943661971830985
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9859154929577465
+   }
+  },
+  "Specialty Retail": {
+   "n": 17,
+   "state": {
+    "excluded": 0.11764705882352941,
+    "qualifies": 0.8823529411764706,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.11764705882352941,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.11764705882352941,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.29411764705882354
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Steel": {
+   "n": 35,
+   "state": {
+    "excluded": 0.2571428571428571,
+    "qualifies": 0.7428571428571429,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.11428571428571428,
+    "distress": 0.17142857142857143,
+    "accounting_health": 0.0,
+    "cash_runway": 0.05714285714285714
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.02857142857142857,
+    "cash_runway": 0.0,
+    "leverage": 0.08571428571428572,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.08571428571428572,
+    "dividend_cover": 0.5428571428571428
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9142857142857143
+   }
+  },
+  "Telecom Services": {
+   "n": 58,
+   "state": {
+    "excluded": 0.4827586206896552,
+    "qualifies": 0.5172413793103449,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.05172413793103448,
+    "distress": 0.43103448275862066,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.017241379310344827,
+    "cash_runway": 0.0,
+    "leverage": 0.034482758620689655,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.017241379310344827,
+    "leverage": 0.034482758620689655,
+    "dividend_cover": 0.7068965517241379
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9827586206896551
+   }
+  },
+  "Tobacco": {
+   "n": 8,
+   "state": {
+    "excluded": 0.5,
+    "qualifies": 0.5,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.375,
+    "distress": 0.125,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.125,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.5
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Travel Services": {
+   "n": 12,
+   "state": {
+    "excluded": 0.5833333333333334,
+    "qualifies": 0.4166666666666667,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.08333333333333333,
+    "distress": 0.5,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.16666666666666666
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Trucking": {
+   "n": 8,
+   "state": {
+    "excluded": 0.0,
+    "qualifies": 1.0,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.375
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Utilities - Diversified": {
+   "n": 16,
+   "state": {
+    "excluded": 0.4375,
+    "qualifies": 0.5625,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0625,
+    "distress": 0.4375,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0625,
+    "leverage": 0.1875,
+    "dividend_cover": 0.4375
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9375
+   }
+  },
+  "Utilities - Independent Power Producers": {
+   "n": 13,
+   "state": {
+    "excluded": 0.6923076923076923,
+    "qualifies": 0.3076923076923077,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.07692307692307693,
+    "distress": 0.6153846153846154,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.07692307692307693,
+    "cash_runway": 0.0,
+    "leverage": 0.07692307692307693,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.15384615384615385,
+    "dividend_cover": 0.46153846153846156
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9230769230769231
+   }
+  },
+  "Utilities - Regulated Electric": {
+   "n": 43,
+   "state": {
+    "excluded": 0.6744186046511628,
+    "qualifies": 0.32558139534883723,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.06976744186046512,
+    "distress": 0.627906976744186,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.20930232558139536,
+    "dividend_cover": 0.5581395348837209
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Utilities - Regulated Gas": {
+   "n": 21,
+   "state": {
+    "excluded": 0.47619047619047616,
+    "qualifies": 0.5238095238095238,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.09523809523809523,
+    "distress": 0.42857142857142855,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.09523809523809523,
+    "dividend_cover": 0.5714285714285714
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.9523809523809523
+   }
+  },
+  "Utilities - Regulated Water": {
+   "n": 11,
+   "state": {
+    "excluded": 0.5454545454545454,
+    "qualifies": 0.45454545454545453,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0,
+    "distress": 0.5454545454545454,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.45454545454545453,
+    "dividend_cover": 0.36363636363636365
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Utilities - Renewable": {
+   "n": 21,
+   "state": {
+    "excluded": 0.3333333333333333,
+    "qualifies": 0.5714285714285714,
+    "not_enough_data": 0.09523809523809523,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.047619047619047616,
+    "distress": 0.2857142857142857,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.09523809523809523,
+    "accounting_health": 0.09523809523809523,
+    "cash_runway": 0.0,
+    "leverage": 0.09523809523809523,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.3333333333333333,
+    "dividend_cover": 0.6666666666666666
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  },
+  "Waste Management": {
+   "n": 16,
+   "state": {
+    "excluded": 0.25,
+    "qualifies": 0.75,
+    "not_enough_data": 0.0,
+    "not_covered": 0.0
+   },
+   "excluded_by": {
+    "earnings_quality": 0.0625,
+    "distress": 0.25,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0
+   },
+   "not_evaluated": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 0.0,
+    "leverage": 0.0,
+    "dividend_cover": 0.0
+   },
+   "warnings": {
+    "cash_runway_warn": 0.0,
+    "leverage": 0.0625,
+    "dividend_cover": 0.3125
+   },
+   "not_applicable": {
+    "earnings_quality": 0.0,
+    "distress": 0.0,
+    "accounting_health": 0.0,
+    "cash_runway": 1.0
+   }
+  }
+ },
+ "accrual_ratio": {
+  "n": 2018,
+  "p5": -0.1608237493207159,
+  "p25": -0.08054064695985028,
+  "p50": -0.04887067899707243,
+  "p75": -0.023687247742721136,
+  "p90": 0.005445365870626571,
+  "p95": 0.03477788992416393
+ },
+ "net_debt_to_ebitda": {
+  "n": 1907,
+  "p5": -3.117525207122017,
+  "p25": -0.2577262087474187,
+  "p50": 1.2393176548526001,
+  "p75": 2.83803743593123,
+  "p90": 4.919013874025013,
+  "p95": 6.404764822485784
+ },
+ "abnormal_investment": {
+  "n": 1992,
+  "p5": -0.7035199329989507,
+  "p25": -0.29791030080055914,
+  "p50": -0.06518653271550517,
+  "p75": 0.18113010173687272,
+  "p90": 0.5446319318754348,
+  "p95": 0.9205945649053549,
+  "p80": 0.26758309580365924
+ },
+ "measured_accrual_boundary": 0.005445365870626571,
+ "accrual_boundary_used": 0.0054,
+ "leverage_warn_above": 6.0,
+ "wholesale_excluded_industries": [
+  {
+   "industry": "Airlines",
+   "n": 23,
+   "share_excluded": 0.6521739130434783,
+   "rule": "distress",
+   "rule_share": 0.6521739130434783
+  },
+  {
+   "industry": "Entertainment",
+   "n": 21,
+   "share_excluded": 0.5238095238095238,
+   "rule": "distress",
+   "rule_share": 0.47619047619047616
+  },
+  {
+   "industry": "Healthcare Plans",
+   "n": 8,
+   "share_excluded": 0.625,
+   "rule": "earnings_quality",
+   "rule_share": 0.375
+  },
+  {
+   "industry": "Lodging",
+   "n": 10,
+   "share_excluded": 0.7,
+   "rule": "distress",
+   "rule_share": 0.6
+  },
+  {
+   "industry": "Pollution & Treatment Controls",
+   "n": 6,
+   "share_excluded": 0.6666666666666666,
+   "rule": "earnings_quality",
+   "rule_share": 0.3333333333333333
+  },
+  {
+   "industry": "Residential Construction",
+   "n": 22,
+   "share_excluded": 0.5909090909090909,
+   "rule": "earnings_quality",
+   "rule_share": 0.5909090909090909
+  },
+  {
+   "industry": "Resorts & Casinos",
+   "n": 17,
+   "share_excluded": 0.5882352941176471,
+   "rule": "distress",
+   "rule_share": 0.5294117647058824
+  },
+  {
+   "industry": "Travel Services",
+   "n": 12,
+   "share_excluded": 0.5833333333333334,
+   "rule": "distress",
+   "rule_share": 0.5
+  },
+  {
+   "industry": "Utilities - Independent Power Producers",
+   "n": 13,
+   "share_excluded": 0.6923076923076923,
+   "rule": "distress",
+   "rule_share": 0.6153846153846154
+  },
+  {
+   "industry": "Utilities - Regulated Electric",
+   "n": 43,
+   "share_excluded": 0.6744186046511628,
+   "rule": "distress",
+   "rule_share": 0.627906976744186
+  },
+  {
+   "industry": "Utilities - Regulated Water",
+   "n": 11,
+   "share_excluded": 0.5454545454545454,
+   "rule": "distress",
+   "rule_share": 0.5454545454545454
+  }
+ ]
+}

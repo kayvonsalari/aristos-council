@@ -32,6 +32,10 @@ _V2_NEW_KEYS = {"schema_version", "outside_tested_range", "smallcap_cohort",
                "size_matched_peers"}          # SMALLCAP-BAND-GAP-1, additive
 
 
+# ABSOLUTE-GATE-1 (phase 1): one additive, display-only key. Every key above keeps its name and value.
+_GATE_KEYS = {"gate"}
+
+
 def test_every_v1_key_is_still_present_unchanged(tmp_path):
     report = _run([RAW], tmp_path=tmp_path, save=False)
     record = report_record(report)
@@ -50,7 +54,7 @@ def test_the_full_key_set_is_exactly_v1_plus_v2_nothing_else(tmp_path):
     sneaking in beside the ones this commit deliberately adds."""
     report = _run([RAW], tmp_path=tmp_path, save=False)
     record = report_record(report)
-    assert set(record) == _V1_KEYS | _V2_NEW_KEYS
+    assert set(record) == _V1_KEYS | _V2_NEW_KEYS | _GATE_KEYS
 
 
 def test_schema_version_is_2(tmp_path):
