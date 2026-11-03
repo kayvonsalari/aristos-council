@@ -25,6 +25,7 @@ from aristos_council.company_report import (SECTION_ORDER, LensVote, build_agree
 from aristos_council.data.adapter import (Fundamentals, MarketDataAdapter, PriceBar,
                                           PriceHistory)
 from aristos_council.export.report_html import company_report_html
+from aristos_council.absolute_value.render import SECTION_TITLE as VALUE_TITLE
 from aristos_council.gate.render import SECTION_TITLE as GATE_TITLE
 from aristos_council.market_index import SOURCE_EODHD_LISTING, IndexRow
 
@@ -411,21 +412,22 @@ def test_the_facts_pack_holds_only_what_the_page_prints(tmp_path):
 # page order, exports, the saved run
 # =========================================================================== #
 _TEXT_HEADS = {"answer": "\n\n", "story": "What this run asked.",
-               "gate": "GATE (ABSOLUTE-1", "lens table": "Vote or mark",
+               "gate": "GATE (ABSOLUTE-1", "absolute value": "PRICE TEST AND RETURN (ABSOLUTE-1",
+               "lens table": "Vote or mark",
                "council opinion": "COUNCIL OPINION",
                "workings": "SHOW THE WORKINGS", "peers": "PEERS", "price and cash": "PRICE AND CASH",
                "valuation band": "VALUATION BAND",
                "absolute readings": "ABSOLUTE READINGS", "what analysts say": "WHAT ANALYSTS SAY",
                "sources": "SOURCES"}
 _HTML_HEADS = {"answer": "<h2>The answer</h2>", "story": "<h2>Summary</h2>",
-               "gate": 'id="gate"',
+               "gate": 'id="gate"', "absolute value": 'id="absolute-value"',
                "lens table": "<h2>Lens by lens</h2>", "council opinion": "<h2>Council opinion</h2>",
                "workings": 'id="workings"', "peers": "<h2>Peers</h2>",
                "price and cash": "<h2>Price and cash</h2>",
                "valuation band": "<h2>Valuation band</h2>",
                "absolute readings": "<h2>Absolute readings</h2>",
                "what analysts say": "<h2>What analysts say</h2>", "sources": "<h2>Sources</h2>"}
-_MD_HEADS = {"answer": "## The answer", "story": "## Summary", "gate": "## Gate (ABSOLUTE-1",
+_MD_HEADS = {"answer": "## The answer", "story": "## Summary", "gate": "## Gate (ABSOLUTE-1", "absolute value": "## Price test and return (ABSOLUTE-1",
              "lens table": "## Lens by lens",
              "council opinion": "## Council opinion", "workings": "## Show the workings",
              "valuation band": "### Valuation band", "price and cash": "### Price and cash",
@@ -445,7 +447,8 @@ def test_the_page_order_is_the_same_in_the_text_and_the_html(tmp_path):
     report.council_opinion = CouncilOpinion(available=True, narrative="It ranked well.")
     # COMPANY-STORY-1 order: answer, story, one table, the council opinion above the fold, then
     # the workings (valuation band, price and cash, absolute readings, analysts, peers, sources).
-    assert SECTION_ORDER == ("answer", "story", "gate", "lens table", "council opinion", "workings",
+    assert SECTION_ORDER == ("answer", "story", "gate", "absolute value", "lens table", "council opinion",
+                             "workings",
                              "valuation band", "price and cash", "absolute readings",
                              "what analysts say", "peers", "sources")
     from aristos_council.company_markdown import company_report_markdown
@@ -579,7 +582,7 @@ def test_the_page_renders_the_whole_report_in_order_and_offers_both_downloads(tm
     # COMPANY-STORY-1 order (no council opinion here - not ticked): the answer, the model's summary
     # in place of the story, one table, then the workings.
     # ABSOLUTE-GATE-1: the gate section sits after the story and before the lens table.
-    assert heads[:4] == ["The answer", "Summary", GATE_TITLE, "Lens by lens"], heads
+    assert heads[:5] == ["The answer", "Summary", GATE_TITLE, VALUE_TITLE, "Lens by lens"], heads
     assert heads[-3:] == ["What analysts say", "Peers", "Sources"], heads
     assert "Price and cash" in heads and "Absolute readings" in heads
     assert "Valuation band" in heads

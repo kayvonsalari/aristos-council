@@ -1,0 +1,50 @@
+# ABSOLUTE-VALUE-1 (phase 2 of docs/DESIGN_absolute.md, revision 3) - the valuation definition, version 1.
+# Every number the price test, the hurdle, the four growth cases and the verdict use is on this page.
+# Immutable once merged: a change is absolute_value_v2.yaml, never an edit (the same rule as strategy
+# files and gate files).
+#
+# This path changes no vote, lens, strategy file, gate file or backtest result. The verdict of record
+# stays the old one until phase 3.
+
+id: absolute_value_v1
+version: 1
+status: frozen
+design: docs/DESIGN_absolute.md
+
+base:
+  measure: free cash flow per share = (operating cash flow minus capital spending) / diluted weighted-average shares
+  rule: lower_of_latest_and_three_year_average          # judgment (design section d, decision 14)
+  average_years: 3
+
+hurdle:
+  margin_points: 5.0              # Kroll 2026 US equity risk premium; Fernandez et al. 2025 (decision 15)
+  bond_series_file: data/bond_series.yaml
+  staleness_days: 7               # the last good yield is used for up to 7 days, then lapses
+
+solver:
+  horizon_years: 10               # decision 5: the ten-year equation
+  growth_after_horizon: 0.0       # flat after year 10, valued as a perpetuity
+  implied_growth_range: [-0.10, 0.40]
+  return_range: [0.0001, 0.60]    # 0.01% to 60%
+  iterations: 200
+
+cases:
+  own_5_year:  {window: 5,  label: "Own 5-year earnings growth"}
+  own_10_year: {window: 10, label: "Own 10-year earnings growth"}
+  consensus:
+    label: "Analyst consensus"
+    marked: not testable
+    note: two steps from the last reported fiscal year's diluted earnings per share to the second forecast year's consensus
+  downside:
+    label: "Downside"
+    rule: years 1 and 2 at the consensus rate (own 5-year rate if there is no consensus), then a straight line to the bond yield by year 10, flat after
+    fast_years: 2
+
+high_growth_mark: 0.18            # Chan, Karceski and Lakonishok 2003, Table I: the lowest of the three 90th percentiles
+
+verdict_states: [excluded, not_covered, not_enough_data, qualifies_below_hurdle, qualifies_clears_hurdle]
+
+# The abnormal-investment warning boundary lives in the gate file (it was measured at gate calibration)
+# and is READ from there, not repeated here.
+investment_intensity:
+  boundary_from: gates/absolute_gate_v2.yaml

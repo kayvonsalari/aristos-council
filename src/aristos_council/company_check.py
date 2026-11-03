@@ -173,6 +173,10 @@ class CompanyCheckResult:
     # ABSOLUTE-GATE-1: the exclusion gate (``gate.engine.GateResult``) over the accounts already fetched,
     # or None for an unrateable name. Display only in phase 1: it changes no vote and no verdict.
     gate: object = None
+    # ABSOLUTE-VALUE-1 (phase 2): the price test, hurdle, four growth cases, return range and the new
+    # verdict (``absolute_value.engine.AbsoluteValue``). Display only: no vote, no lens, no verdict of
+    # record reads it. None when the definition cannot be loaded.
+    absolute: object = None
 
     @property
     def display(self) -> str:
@@ -182,6 +186,31 @@ class CompanyCheckResult:
 # --------------------------------------------------------------------------- #
 # Reference-cohort lookup (latest frozen run, replayed — NEVER a fresh fetch)
 # --------------------------------------------------------------------------- #
+
+def _value_context(fi) -> dict:
+    """The context readings the price-and-return section prints beside the verdict (ABSOLUTE-VALUE-1):
+    operating profit over enterprise value and the earnings power value, both through the factor
+    functions the lenses already use. Each is omitted when it cannot be worked out."""
+    ctx: dict = {}
+    try:
+        from .factors import (SRC_EBIT_MCAP, SRC_EV, SRC_PE, _earnings_yield_outcome, epv_reading_for)
+        value, source = _earnings_yield_outcome(fi)
+        if value is not None:
+            ctx["ebit_over_ev"] = value
+            src = str(source or "")
+            ctx["ebit_over_ev_label"] = (
+                "Operating profit over market value (enterprise value not available)"
+                if src.startswith(SRC_EBIT_MCAP) else
+                "Earnings over price (from the price-earnings ratio)" if src.startswith(SRC_PE) else
+                "Operating profit over enterprise value")
+        epv = epv_reading_for(fi)
+        if epv is not None and getattr(epv, "epv", None) is not None:
+            ctx["epv"] = epv.epv
+            ctx["epv_enterprise_value"] = getattr(epv, "enterprise_value", None)
+    except Exception:                                    # noqa: BLE001 - context only
+        pass
+    return ctx
+
 def _latest_reference_run(runs_dir: Path, rank_strategy_id: str,
                           universe_tickers: list[str]) -> Optional[tuple[str, str]]:
     """(run_id, created) of the newest frozen run of ``rank_strategy_id`` whose frozen
@@ -468,6 +497,7 @@ def run_company_check(
     # factors and the verdict of record are all settled and read by none of them, and after the
     # UNRATEABLE return, so a name with no data never spends a request. The fetch never raises: no
     # data is an abstention with a reason, not a broken page.
+    trend_data = None
     if with_analyst_trend:
         from .abs_readings import analyst_trend as _analyst_trend
         from .company_story import short_company_name as _story_short_name
@@ -487,6 +517,18 @@ def run_company_check(
             # REPEATS-NAMES-1: the same short name the story uses ("Coca-Cola", "Ford", "JPMorgan")
             company=_story_short_name(ticker, company_name),
             price=price, price_currency=price_ccy, own_listing=own)
+
+    # ABSOLUTE-VALUE-1 (phase 2): pure arithmetic over what is already fetched, plus one cached bond-yield
+    # request (1 EODHD unit). After the analyst fetch so the consensus case can use it; never a crash, never
+    # a vote. A bond yield that cannot be had is "no hurdle", stated on the page.
+    try:
+        from .absolute_value.engine import build_absolute
+        readings["absolute"] = build_absolute(
+            f, gate=readings.get("gate"), last_close=fi.last_close,
+            quote_fx=getattr(fi, "quote_fx", None), growth_record=readings.get("growth_record"),
+            history=_history, trend=trend_data, today=today, context=_value_context(fi))
+    except Exception:                                    # noqa: BLE001
+        readings["absolute"] = None
 
     # COMPANY-FACTS-TABLE-1 (Batch 15 item 1) — opt-in for the same reason analyst trend is:
     # a cohort run, the watcher and the existing tests get exactly the output they had.

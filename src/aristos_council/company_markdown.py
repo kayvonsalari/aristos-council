@@ -61,6 +61,10 @@ def company_report_markdown(report) -> str:
     if gate is not None:                                  # ABSOLUTE-GATE-1, after the story, before the table
         from .gate import render as _gate_render
         out += _gate_render.markdown_lines(gate)
+    absolute = getattr(c, "absolute", None)
+    if absolute is not None:                              # ABSOLUTE-VALUE-1, directly after the gate section
+        from .absolute_value import render as _value_render
+        out += _value_render.markdown_lines(absolute, report.outside_tested_range)
 
     out += [f"## {SECTION_TABLE}", ""]
     for line in page.tag:

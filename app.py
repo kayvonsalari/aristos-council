@@ -3446,6 +3446,23 @@ def _render_company_report(report) -> None:
         if _gate.debt_line and _gate_render.has_rows(_gate):
             st.caption(_gate.debt_line)
 
+    _absolute = getattr(check, "absolute", None)
+    if _absolute is not None:                               # ABSOLUTE-VALUE-1, directly after the gate section
+        from aristos_council.absolute_value import render as _value_render
+        st.subheader(_value_render.SECTION_TITLE)
+        st.caption(_value_render.CAPTION)
+        for _b in _value_render.blocks(_absolute, report.outside_tested_range):
+            if _b[0] == "head":
+                st.markdown(f"**{_b[1]}**")
+            elif _b[0] == "note":
+                st.caption(_b[1])
+            elif _b[0] == "strong":
+                st.markdown(f"**{_b[1]}**")
+            elif _b[0] == "table":
+                st.markdown(_value_render.markdown_block(_b))
+            else:
+                st.markdown(_b[1])
+
     st.subheader(SECTION_TABLE)
     for line in page.tag:
         st.caption(line)

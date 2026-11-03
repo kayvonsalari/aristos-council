@@ -187,7 +187,8 @@ def story_findings(text: str, where: str) -> list[Finding]:
 # reader who ignores it loses nothing. It is a skippable block, so it is not counted in the first-screen
 # budget (which is for the answer, the story and the lens table). It runs from its title line to the next
 # blank line.
-_GATE_BLOCK = re.compile(r"(?m)^GATE \(ABSOLUTE-1[^\n]*\n(?:[^\n]+\n)*\n?")
+# ABSOLUTE-VALUE-1: the price-and-return section is skippable in the same way and is counted the same way.
+_GATE_BLOCK = re.compile(r"(?m)^(?:GATE|PRICE TEST AND RETURN) \(ABSOLUTE-1[^\n]*\n(?:[^\n]+\n)*\n?")
 
 
 def first_screen_lines(text: str) -> int:

@@ -222,6 +222,10 @@ class YFinanceAdapter(MarketDataAdapter):
         _record_aligned("shareholders_equity", balance, "Stockholders Equity", "Total Stockholder Equity")
         _record_aligned("depreciation_amortization", cashflow, *_DA_LABELS)
         _record_aligned("change_in_working_capital", cashflow, "Change In Working Capital")   # ABSOLUTE-GATE-2
+        # ABSOLUTE-VALUE-1: free cash flow PER SHARE needs the diluted weighted-average share count and the
+        # capital spending line at the SAME fiscal year-end as operating cash flow (dated, holes kept).
+        _record_aligned("diluted_shares", income, "Diluted Average Shares")
+        _record_aligned("capital_expenditure", cashflow, "Capital Expenditure", "Capital Expenditures")
         _record_aligned("cash", balance, "Cash And Cash Equivalents",
                         "Cash Cash Equivalents And Short Term Investments")
 
@@ -309,6 +313,7 @@ class YFinanceAdapter(MarketDataAdapter):
                 cashflow, "Capital Expenditure", "Capital Expenditures"),
             depreciation_amortization_annual=_cashflow_series(cashflow, *_DA_LABELS),
             change_in_working_capital_annual=_cashflow_series(cashflow, "Change In Working Capital"),
+            diluted_shares_annual=_annual_series(income, "Diluted Average Shares"),      # ABSOLUTE-VALUE-1
             # Annual series, newest-first, NaN/empty dropped (Sprint 4B).
             total_revenue=_annual_series(income, "Total Revenue"),
             operating_income=_annual_series(income, "Operating Income"),

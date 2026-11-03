@@ -77,6 +77,7 @@ class TrendPeriod:
     now: Optional[float] = None           # epsTrendCurrent (else earningsEstimateAvg)
     ago_90d: Optional[float] = None       # epsTrend90daysAgo
     analysts: Optional[int] = None        # earningsEstimateNumberOfAnalysts
+    year_ago_eps: Optional[float] = None  # earningsEstimateYearAgoEps (ABSOLUTE-VALUE-1: kept, not yet used)
 
 
 @dataclass(frozen=True)
@@ -149,6 +150,7 @@ def _period_of(entry: dict, end: date) -> TrendPeriod:
         now = _as_float(entry.get("earningsEstimateAvg"))
     return TrendPeriod(period_end=end.isoformat(), now=now,
                        ago_90d=_as_float(entry.get("epsTrend90daysAgo")),
+                       year_ago_eps=_as_float(entry.get("earningsEstimateYearAgoEps")),
                        analysts=int(analysts) if analysts is not None else None)
 
 

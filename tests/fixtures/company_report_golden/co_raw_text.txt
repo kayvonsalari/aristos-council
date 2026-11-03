@@ -23,7 +23,39 @@ Four checks that can exclude a company, and four warnings that never do. Only ac
   Dividend cover     warning    no dividend paid                                                                                                                          below 1.0 the dividend is not covered; 1.5 to 2.0 is the range sources call thin to comfortable  does not apply (no dividend paid)
   Cash runway        warning    not evaluated                                                                                                                             warning under 24 months                                                                          not evaluated (operating cash flow missing)
 Gate result: Not enough data: accrual ratio (net income and operating cash flow missing); solvency (operating cash flow missing).
-Debt is counted as the tool counts it: the balance sheet's own Total Debt row (borrowings plus the long-term operating lease line), from the latest balance sheet.
+Debt = borrowings plus the long-term operating lease line, from the latest balance sheet.
+
+PRICE TEST AND RETURN (ABSOLUTE-1 PHASE 2; BECOMES THE VERDICT IN PHASE 3)
+What today's price asks of the business, and what a buyer would earn each year if the stated growth holds. This section changes no vote and no verdict yet.
+The base:
+  Year              Free cash flow per share
+  ----------------  --------------------------------------------------------------------------
+  the latest year   not available (operating cash flow, capital spending, share count missing)
+  the year before   not available (operating cash flow, capital spending, share count missing)
+  two years before  not available (operating cash flow, capital spending, share count missing)
+Base: not enough data: operating cash flow, capital spending, share count missing for the latest year.
+Price: $264.45 a share.
+The price test:
+Implied growth: not enough data: operating cash flow, capital spending, share count missing for the latest year.
+  Record                            Growth a year  Note
+  --------------------------------  -------------  -----------------------------------------------------------------------------
+  Own 5-year earnings growth        not available  only 0 years of earnings per share reported; a compound rate needs at least 3
+  Own 10-year earnings growth       not available  only 0 years of earnings per share reported; a compound rate needs at least 3
+  Analyst consensus (not testable)  not available  EODHD_API_KEY is not set, so no analyst data was asked for
+Operating profit over enterprise value: 0.0%.
+The return:
+  Growth case                       Growth         Long-run owner's return if the growth holds                                                    Against the hurdle
+  --------------------------------  -------------  ---------------------------------------------------------------------------------------------  ------------------
+  Own 5-year earnings growth        not available  not available (only 0 years of earnings per share reported; a compound rate needs at least 3)
+  Own 10-year earnings growth       not available  not available (only 0 years of earnings per share reported; a compound rate needs at least 3)
+  Analyst consensus (not testable)  not available  not available (EODHD_API_KEY is not set, so no analyst data was asked for)
+  Downside                          not available  not available (no own 5-year rate to start from)
+Hurdle: not enough data: no hurdle (EODHD_API_KEY is not set, so the US10Y yield was not asked for).
+Verdict: Not enough data: accrual ratio (net income and operating cash flow missing); solvency (operating cash flow missing).
+Backtest form (own 5-year, own 10-year and the downside case with own 5-year growth in its first years; no analyst figures): Not enough data: accrual ratio (net income and operating cash flow missing); solvency (operating cash flow missing).
+These are what the price returns if the stated growth repeats. They are not forecasts. Past growth may not repeat. Forecasts can be wrong. The model's narration cannot change them.
+This figure shows what today's price requires. Studies of company-level implied returns find they rank future returns only partly: where 1 would be perfect, the weakest model scores about 0.2 and the better ones 0.5 to 0.65, and four of five measures do no better than a fixed constant in the cross section. So the figure is a question put to the reader and not an answer. The gate and the cash yield carry the evidence; this figure carries the question.
+Debt = borrowings plus the long-term operating lease line, from the latest balance sheet.
 
 Lens               Vote or mark       Track record              Reason
 Magic Formula RAW  HOLD - 10th of 14  behind random picks here  return on invested capital 14th of 14 against 12-month price momentum 1st of 14
