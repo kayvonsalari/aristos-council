@@ -1,0 +1,57 @@
+CHECK: 'old' reproduces the published 12-month excess to within 0.0000 points
+SUBSET: comms_interactive_media_gaming, consumer_auto_parts, consumer_luxury_apparel_footwear, industrials_grid_electrical_machinery, materials_copper_aluminum, materials_diversified_mining, materials_packaging_paper, utilities_gas_water_multi_utilities, materials_gold, utilities_electric, tech_communications_equipment, consumer_restaurants
+UNAVAILABLE (not cached, skipped and counted): 0 of 418 members had no accounts, 2 no prices
+
+FORM 1, 12-month hold. Excess over the industry basket in points a year / luck % / median names held (basket size)
+industry                                                     old          split only           cost only                both  both-old  bar old->new
+comms_interactive_media_gaming                  -0.32/ 35.6/30.0    -0.32/ 35.6/30.0    +0.18/ 32.8/30.0    +0.18/ 32.8/30.0     +0.50  no -> no
+consumer_auto_parts                             -0.28/ 19.8/30.0    -0.28/ 19.8/30.0    +0.22/ 17.0/30.0    +0.22/ 17.0/30.0     +0.50  no -> no
+consumer_luxury_apparel_footwear                -0.67/ 85.6/31.0    -0.67/ 85.6/31.0    -0.17/ 77.0/31.0    -0.17/ 77.0/31.0     +0.50  no -> no
+industrials_grid_electrical_machinery           +0.97/  2.4/15.0    +0.97/  2.4/15.0    +1.47/  2.0/15.0    +1.47/  2.0/15.0     +0.50  no -> no
+materials_copper_aluminum                       -1.12/ 97.2/20.0    -1.12/ 97.2/20.0    -0.62/ 99.6/20.0    -0.62/ 99.6/20.0     +0.50  no -> no
+materials_diversified_mining                    -0.68/ 66.2/15.0    -0.68/ 66.2/15.0    -0.18/ 62.4/15.0    -0.18/ 62.4/15.0     +0.50  no -> no
+materials_packaging_paper                       -0.62/ 78.4/31.0    -0.62/ 78.4/31.0    -0.12/ 80.8/31.0    -0.12/ 80.8/31.0     +0.50  no -> no
+utilities_gas_water_multi_utilities             -0.18/  0.4/43.0    -0.18/  0.4/43.0    +0.32/  0.4/43.0    +0.32/  0.4/43.0     +0.50  no -> no
+materials_gold                                  +0.12/ 11.8/19.0    +0.12/ 11.8/19.0    +0.62/  2.2/19.0    +0.62/  2.2/19.0     +0.50  no -> no
+utilities_electric                              -0.58/ 75.0/40.0    -0.58/ 75.0/40.0    -0.08/ 73.8/40.0    -0.08/ 73.8/40.0     +0.50  no -> no
+tech_communications_equipment                   -3.45/ 99.8/17.0    -3.45/ 99.8/17.0    -2.95/ 99.8/17.0    -2.95/ 99.8/17.0     +0.50  no -> no
+consumer_restaurants                            -0.49/ 51.6/23.0    -0.49/ 51.6/23.0    +0.01/ 46.4/23.0    +0.01/ 46.4/23.0     +0.50  no -> no
+POOLED over the subset                          -0.61/ 82.2/26.5    -0.61/ 82.2/26.5    -0.11/ 80.8/26.5    -0.11/ 80.8/26.5     +0.50
+  of which: split fix                            +0.00   cost + luck centring: +0.50
+  industries whose pass/fail changes: none
+
+FORM 2, 12-month hold. Excess over the industry basket in points a year / luck % / median names held (basket size)
+industry                                                     old          split only           cost only                both  both-old  bar old->new
+comms_interactive_media_gaming                  +6.97/  4.4/ 8.0    +6.97/  4.4/ 8.0    +7.47/  3.2/ 8.0    +7.47/  3.2/ 8.0     +0.50  PASS -> PASS
+consumer_auto_parts                             +2.70/  2.6/ 9.0    +2.70/  2.6/ 9.0    +3.20/  6.6/ 9.0    +3.20/  6.6/ 9.0     +0.50  PASS -> no
+consumer_luxury_apparel_footwear                +4.24/  1.8/10.0    +4.24/  1.8/10.0    +4.74/  2.4/10.0    +4.74/  2.4/10.0     +0.50  PASS -> PASS
+industrials_grid_electrical_machinery          +13.77/  0.6/ 3.0   +13.77/  0.6/ 3.0   +14.27/  0.4/ 3.0   +14.27/  0.4/ 3.0     +0.50  PASS -> PASS
+materials_copper_aluminum                      +14.86/  0.0/ 5.0   +14.58/  0.0/ 5.0   +15.36/  0.0/ 5.0   +15.08/  0.0/ 5.0     +0.23  PASS -> PASS
+materials_diversified_mining                   +15.42/  4.0/ 3.0   +15.42/  4.0/ 3.0   +15.92/  4.8/ 3.0   +15.92/  4.8/ 3.0     +0.50  PASS -> PASS
+materials_packaging_paper                       +5.46/  0.0/ 8.0    +5.03/  0.2/ 8.0    +5.96/  0.0/ 8.0    +5.53/  0.2/ 8.0     +0.07  PASS -> PASS
+utilities_gas_water_multi_utilities             +3.59/  2.0/ 8.0    +3.58/  2.2/ 8.0    +4.09/  1.0/ 8.0    +4.08/  2.0/ 8.0     +0.49  PASS -> PASS
+materials_gold                                  +3.11/ 21.8/ 4.0    +3.80/ 15.0/ 4.0    +3.61/ 22.0/ 4.0    +4.30/ 15.0/ 4.0     +1.19  no -> no
+utilities_electric                              +0.63/ 26.2/ 4.0    +0.63/ 26.2/ 4.0    +1.13/ 28.6/ 4.0    +1.13/ 28.6/ 4.0     +0.50  no -> no
+tech_communications_equipment                  -11.01/ 90.2/ 4.0   -11.01/ 90.2/ 4.0   -10.51/ 87.6/ 4.0   -10.51/ 87.6/ 4.0     +0.50  no -> no
+consumer_restaurants                            -1.56/ 62.8/ 7.0    -1.61/ 68.4/ 7.0    -1.06/ 65.4/ 7.0    -1.11/ 68.4/ 7.0     +0.45  no -> no
+POOLED over the subset                          +4.39/  0.0/ 6.0    +4.35/  0.0/ 6.0    +4.89/  0.0/ 6.0    +4.85/  0.0/ 6.0     +0.46
+  of which: split fix                            -0.04   cost + luck centring: +0.50
+  industries whose pass/fail changes: ['consumer_auto_parts']
+
+FORM 3, 12-month hold. Excess over the industry basket in points a year / luck % / median names held (basket size)
+industry                                                     old          split only           cost only                both  both-old  bar old->new
+comms_interactive_media_gaming                  +1.32/ 34.6/ 7.0    +1.32/ 34.6/ 7.0    +1.82/ 29.8/ 7.0    +1.82/ 29.8/ 7.0     +0.50  no -> no
+consumer_auto_parts                             +3.75/  0.4/10.0    +3.75/  0.4/10.0    +4.25/  0.8/10.0    +4.25/  0.8/10.0     +0.50  PASS -> PASS
+consumer_luxury_apparel_footwear                -0.64/ 41.8/10.0    -0.64/ 41.8/10.0    -0.14/ 51.8/10.0    -0.14/ 51.8/10.0     +0.50  no -> no
+industrials_grid_electrical_machinery          +11.60/  3.4/ 3.0   +11.60/  3.4/ 3.0   +12.10/  2.8/ 3.0   +12.10/  2.8/ 3.0     +0.50  PASS -> PASS
+materials_copper_aluminum                       +0.15/ 45.6/ 3.0    -1.74/ 64.0/ 4.0    +0.65/ 41.0/ 3.0    -1.24/ 52.6/ 4.0     -1.40  no -> no
+materials_diversified_mining                    -6.37/ 74.2/ 2.0    -6.37/ 74.2/ 2.0    -5.87/ 77.6/ 2.0    -5.87/ 77.6/ 2.0     +0.50  no -> no
+materials_packaging_paper                       +0.52/ 27.0/ 9.0    +0.52/ 27.0/ 9.0    +1.02/ 28.6/ 9.0    +1.02/ 28.6/ 9.0     +0.50  no -> no
+utilities_gas_water_multi_utilities             -1.25/ 66.6/ 6.0    -1.25/ 66.6/ 6.0    -0.75/ 63.0/ 6.0    -0.75/ 63.0/ 6.0     +0.50  no -> no
+materials_gold                                  +0.04/ 39.6/ 1.0    +0.04/ 39.6/ 1.0    +0.54/ 45.4/ 1.0    +0.54/ 45.4/ 1.0     +0.50  no -> no
+utilities_electric                              -3.80/ 76.8/ 1.0    -3.80/ 76.8/ 1.0    -3.30/ 76.8/ 1.0    -3.30/ 76.8/ 1.0     +0.50  no -> no
+tech_communications_equipment                   -6.07/ 59.4/ 4.0    -6.07/ 59.4/ 4.0    -5.57/ 57.2/ 4.0    -5.57/ 57.2/ 4.0     +0.50  no -> no
+consumer_restaurants                            -2.72/ 75.8/ 4.0    -2.72/ 75.8/ 4.0    -2.22/ 76.2/ 4.0    -2.22/ 76.2/ 4.0     +0.50  no -> no
+POOLED over the subset                          +0.25/ 34.4/ 4.0    +0.10/ 39.0/ 4.0    +0.75/ 32.8/ 4.0    +0.60/ 33.8/ 4.0     +0.35
+  of which: split fix                            -0.15   cost + luck centring: +0.50
+  industries whose pass/fail changes: none

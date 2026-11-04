@@ -42,11 +42,21 @@ in years 1 and 2). The company page shows those parts for today; no number in th
   in it, and a test that removes failing companies is flattered most by their absence. The gate in particular can never be
   called proven by this test. Read every result as "no edge shown in a test that cannot see failures", never as proof.
 - **Restatement.** Accounts are the provider's restated record, not the figures first published.
-- **Filing-date coverage.** Only 44% of names (40% of decisions) had real filing dates (EODHD accounts). The rest used
+- **Filing-date coverage.** Only 44% of names (40% of decisions) had real filing dates (EODHD accounts); in practice these are the
+  US names, and every other market used the fallback. The rest used
   period end plus 90 days, a rule of thumb that can let the test see numbers early.
 - **Few names.** Form 2 held a median of about 6.5 names and form 3 about 6; in about a third of form-3 rounds fewer than 4.
   Small baskets move on one stock.
 - **Prices** come from yfinance, adjusted for splits and dividends.
+
+## Independent review (ABSOLUTE-BACKTEST-REVIEW, ABSOLUTE-BACKTEST-RECHECK)
+
+`ABSOLUTE_BACKTEST_REVIEW.md` reviews this run and cuts it three ways. Read the tables above with three things in mind: the
+results **predate the split fix** (names that split after a round date were kept out of forms 2 and 3); the **industry basket
+paid no cost** while the forms paid 0.5%, which lowers every 12-month excess by exactly 0.5 points; and the **luck scores are
+too kind** (the random baskets sit about 0.35 points below the pool). A recheck on 12 industries with all three corrected moved
+form 2 by +0.46 and form 3 by +0.35 points pooled and took one industry (Consumer - Auto Parts, form 2) off the pass list; a full
+re-run is needed before these tables are quoted as final. Nothing in the review shows an edge.
 
 ## Results, all industries
 

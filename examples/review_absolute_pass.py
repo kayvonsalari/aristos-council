@@ -27,7 +27,7 @@ END = date(2026, 10, 31)
 
 
 def work(args):
-    slug, out_dir = args
+    slug, out_dir, fixed = args
     from aristos_council.absolute_backtest import evaluate, runner
     from aristos_council.absolute_backtest.market import HistoricalBonds, Tape
     from aristos_council.absolute_value.definition import load_definition
@@ -36,7 +36,8 @@ def work(args):
     from aristos_council.gate.definition import load_gate
     from aristos_council.gate.engine import QUALIFIES, evaluate_gate
 
-    evaluate.later_split_factor = lambda f, full: None                       # the rule the result files were made with
+    if not fixed:
+        evaluate.later_split_factor = lambda f, full: None                   # the rule the result files were made with
     real, current = {}, [None]
     orig_gate, orig_name = evaluate.evaluate_gate, evaluate.evaluate_name
 
@@ -82,7 +83,9 @@ def work(args):
     out = Path(out_dir) / f"{slug}.json.gz"
     out.parent.mkdir(parents=True, exist_ok=True)
     with gzip.open(out, "wt", encoding="utf-8") as fh:
-        json.dump({"slug": slug, "floor": floor, "rounds": rounds}, fh)
+        json.dump({"slug": slug, "floor": floor, "rounds": rounds, "members": len(members),
+                   "no_accounts": [t for t in members if fulls.get(t) is None],
+                   "unpriced": [t for t in members if tapes.get(t) is None]}, fh)
     return slug, sum(len(v) for v in rounds.values())
 
 
@@ -91,10 +94,11 @@ def main(argv):
     ap.add_argument("out_dir")
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--only", nargs="*")
+    ap.add_argument("--fixed", action="store_true", help="keep the later-split restatement (the code as it stands)")
     a = ap.parse_args(argv)
     from aristos_council.absolute_backtest.runner import list_industries
     slugs = [s for s, _ in list_industries() if not a.only or s in a.only]
-    todo = [(s, a.out_dir) for s in slugs if not (Path(a.out_dir) / f"{s}.json.gz").exists()]
+    todo = [(s, a.out_dir, a.fixed) for s in slugs if not (Path(a.out_dir) / f"{s}.json.gz").exists()]
     with Pool(a.workers) as pool:
         for slug, n in pool.imap_unordered(work, todo):
             print(f"done {slug}: {n} name-rounds", flush=True)

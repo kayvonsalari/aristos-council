@@ -272,3 +272,73 @@ it was built to avoid (A.7); what it shows is only that on survivors, in this un
 `examples/review_absolute_pass.py`, `_cuts.py`, `_luck_check.py`, `_lag_split.py`, `_rerun.py`, `_handcheck.py`;
 `backtests_absolute/cuts/`; fix in `src/aristos_council/absolute_backtest/evaluate.py` with two tests in
 `tests/test_absolute_backtest.py`.
+
+## Recheck on a subset of 12 industries (ABSOLUTE-BACKTEST-RECHECK)
+
+**Verdict: full re-run needed.** The pooled change is +0.46 points for form 2 and +0.35 for form 3 (both over the 0.3 line), and
+one industry (Consumer - Auto Parts, form 2) changes pass/fail. Estimated effect of a full re-run: every 12-month excess rises by
+exactly 0.5 points from the cost correction (arithmetic, all 58 industries); the split fix moves the pooled figure by about
+-0.2 to 0 on this subset and an industry by up to 1.9 points either way (Copper & Aluminum form 3 -1.9, Gold form 2 +0.7); the
+luck scores move by several points either way, so the pass lists change at the margin. Pooled over 58, form 2 would read about
++0.06 and form 3 about -0.5 against the basket, and no form would clear the bar pooled.
+
+Setup. Subset: the 8 form-2 passers, Gold, and 3 drawn at random (`random.Random(20261104).sample` of the other 49):
+Utilities - Electric, Tech - Communications Equipment, Consumer - Restaurants. 12-month hold, same window and code, day cache
+only, `EODHD_API_KEY` blank so nothing could be fetched: 0 of 418 members lacked accounts, 2 lacked prices (skipped, counted).
+Corrections: **split** = the fix on this branch; **cost** = the industry basket pays the same 0.5% round trip as the forms (on a
+12-month hold this adds exactly 0.5 points to every excess), together with a **luck baseline re-centred** on the pool (each
+year's 500 random series keep their spread, their mean is set to the unbiased value; this is what makes the luck scores
+comparable once the basket pays the cost). The "old" column reproduces the published numbers to 0.0000 points. Scripts:
+`examples/review_absolute_pass.py --fixed`, `examples/recheck_absolute_subset.py`; output `backtests_absolute/cuts/recheck/`.
+
+Pooled over the 12 (excess / luck / median names; old, split only, cost + centring only, both):
+
+| Form | Old | Split only | Cost + centring only | Both | Both minus old |
+|---|---|---|---|---|---|
+| 1 | -0.61 / 82% | -0.61 / 82% | -0.11 / 81% | -0.11 / 81% | +0.50 |
+| 2 | +4.39 / 0.0% | +4.35 / 0.0% | +4.89 / 0.0% | +4.85 / 0.0% | +0.46 |
+| 3 | +0.25 / 34% | +0.10 / 39% | +0.75 / 33% | +0.60 / 34% | +0.35 |
+
+(The subset holds the form-2 passers, so its form 2 figure is far above the all-industry one; compare old with new, not with
+the 58-industry table.) Basket size is unchanged everywhere except that the split fix changes the form 3 basket of Copper & Aluminum from 3 to 4 names.
+
+**Form 2** (excess over the basket, points a year / luck % / median names held)
+
+| Industry | Old (published) | Split fix only | Cost + luck centring only | Both | Both minus old | Bar old to new |
+|---|---|---|---|---|---|---|
+| comms_interactive_media_gaming | +6.97 / 4.4% / 8 | +6.97 / 4.4% / 8 | +7.47 / 3.2% / 8 | +7.47 / 3.2% / 8 | +0.50 | PASS to PASS |
+| consumer_auto_parts | +2.70 / 2.6% / 9 | +2.70 / 2.6% / 9 | +3.20 / 6.6% / 9 | +3.20 / 6.6% / 9 | +0.50 | PASS to no |
+| consumer_luxury_apparel_footwear | +4.24 / 1.8% / 10 | +4.24 / 1.8% / 10 | +4.74 / 2.4% / 10 | +4.74 / 2.4% / 10 | +0.50 | PASS to PASS |
+| industrials_grid_electrical_machinery | +13.77 / 0.6% / 3 | +13.77 / 0.6% / 3 | +14.27 / 0.4% / 3 | +14.27 / 0.4% / 3 | +0.50 | PASS to PASS |
+| materials_copper_aluminum | +14.86 / 0.0% / 5 | +14.58 / 0.0% / 5 | +15.36 / 0.0% / 5 | +15.08 / 0.0% / 5 | +0.23 | PASS to PASS |
+| materials_diversified_mining | +15.42 / 4.0% / 3 | +15.42 / 4.0% / 3 | +15.92 / 4.8% / 3 | +15.92 / 4.8% / 3 | +0.50 | PASS to PASS |
+| materials_packaging_paper | +5.46 / 0.0% / 8 | +5.03 / 0.2% / 8 | +5.96 / 0.0% / 8 | +5.53 / 0.2% / 8 | +0.07 | PASS to PASS |
+| utilities_gas_water_multi_utilities | +3.59 / 2.0% / 8 | +3.58 / 2.2% / 8 | +4.09 / 1.0% / 8 | +4.08 / 2.0% / 8 | +0.49 | PASS to PASS |
+| materials_gold | +3.11 / 21.8% / 4 | +3.80 / 15.0% / 4 | +3.61 / 22.0% / 4 | +4.30 / 15.0% / 4 | +1.19 | no to no |
+| utilities_electric | +0.63 / 26.2% / 4 | +0.63 / 26.2% / 4 | +1.13 / 28.6% / 4 | +1.13 / 28.6% / 4 | +0.50 | no to no |
+| tech_communications_equipment | -11.01 / 90.2% / 4 | -11.01 / 90.2% / 4 | -10.51 / 87.6% / 4 | -10.51 / 87.6% / 4 | +0.50 | no to no |
+| consumer_restaurants | -1.56 / 62.8% / 7 | -1.61 / 68.4% / 7 | -1.06 / 65.4% / 7 | -1.11 / 68.4% / 7 | +0.45 | no to no |
+
+**Form 3** (excess over the basket, points a year / luck % / median names held)
+
+| Industry | Old (published) | Split fix only | Cost + luck centring only | Both | Both minus old | Bar old to new |
+|---|---|---|---|---|---|---|
+| comms_interactive_media_gaming | +1.32 / 34.6% / 7 | +1.32 / 34.6% / 7 | +1.82 / 29.8% / 7 | +1.82 / 29.8% / 7 | +0.50 | no to no |
+| consumer_auto_parts | +3.75 / 0.4% / 10 | +3.75 / 0.4% / 10 | +4.25 / 0.8% / 10 | +4.25 / 0.8% / 10 | +0.50 | PASS to PASS |
+| consumer_luxury_apparel_footwear | -0.64 / 41.8% / 10 | -0.64 / 41.8% / 10 | -0.14 / 51.8% / 10 | -0.14 / 51.8% / 10 | +0.50 | no to no |
+| industrials_grid_electrical_machinery | +11.60 / 3.4% / 3 | +11.60 / 3.4% / 3 | +12.10 / 2.8% / 3 | +12.10 / 2.8% / 3 | +0.50 | PASS to PASS |
+| materials_copper_aluminum | +0.15 / 45.6% / 3 | -1.74 / 64.0% / 4 | +0.65 / 41.0% / 3 | -1.24 / 52.6% / 4 | -1.40 | no to no |
+| materials_diversified_mining | -6.37 / 74.2% / 2 | -6.37 / 74.2% / 2 | -5.87 / 77.6% / 2 | -5.87 / 77.6% / 2 | +0.50 | no to no |
+| materials_packaging_paper | +0.52 / 27.0% / 9 | +0.52 / 27.0% / 9 | +1.02 / 28.6% / 9 | +1.02 / 28.6% / 9 | +0.50 | no to no |
+| utilities_gas_water_multi_utilities | -1.25 / 66.6% / 6 | -1.25 / 66.6% / 6 | -0.75 / 63.0% / 6 | -0.75 / 63.0% / 6 | +0.50 | no to no |
+| materials_gold | +0.04 / 39.6% / 1 | +0.04 / 39.6% / 1 | +0.54 / 45.4% / 1 | +0.54 / 45.4% / 1 | +0.50 | no to no |
+| utilities_electric | -3.80 / 76.8% / 1 | -3.80 / 76.8% / 1 | -3.30 / 76.8% / 1 | -3.30 / 76.8% / 1 | +0.50 | no to no |
+| tech_communications_equipment | -6.07 / 59.4% / 4 | -6.07 / 59.4% / 4 | -5.57 / 57.2% / 4 | -5.57 / 57.2% / 4 | +0.50 | no to no |
+| consumer_restaurants | -2.72 / 75.8% / 4 | -2.72 / 75.8% / 4 | -2.22 / 76.2% / 4 | -2.22 / 76.2% / 4 | +0.50 | no to no |
+
+What drove what. The **cost** correction is +0.50 everywhere and is the whole of the change except in four cases. The **split fix**
+changes Copper & Aluminum (form 2 -0.28, form 3 -1.89), Packaging & Paper (form 2 -0.43), Gold (form 2 +0.69) and Restaurants
+(form 2 -0.05), and nothing else; it is small pooled (-0.04 form 2, -0.15 form 3) and mixed in sign, so the review's bound of
+0.46 for a random picker overstated it for these cheapness-based forms. The **luck re-centring** moves luck
+by a few points in either direction (Auto Parts form 2 2.6% to 6.6%, which takes it off the pass list; Grid & Electrical Machinery form 2 0.6% to 0.4%). Of the 8 form-2 passers, 7 keep their
+pass; Gold stays a "no" (+4.30, luck 15%). Form 3 keeps its two passers in the subset (Auto Parts, Grid & Electrical Machinery).
