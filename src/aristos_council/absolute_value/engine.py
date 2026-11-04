@@ -20,7 +20,7 @@ from ..tools import absolute_math as am
 from ..tools import gate_readings as gr
 from ..tools.price_context import format_money
 from ..tools.screening import period_matched
-from .definition import ValueDefinition, ValueDefinitionError, load_definition
+from .definition import LOWER_OF_CONSENSUS_AND_OWN_5, ValueDefinition, ValueDefinitionError, load_definition
 
 EXCLUDED, NOT_COVERED = gate_engine.EXCLUDED, gate_engine.NOT_COVERED
 NOT_ENOUGH_DATA = gate_engine.NOT_ENOUGH_DATA
@@ -526,9 +526,15 @@ def build_cases(base: BaseReading, price: PriceReading, hurdle: HurdleReading, r
                 f"then falling to {100.0 * hurdle.bond_yield:.2f}%")
         return _case(key, _Growth(fast.rate), path, base.base, price.price, definition, growth_text=text)
 
+    if definition.downside_fast_rule == LOWER_OF_CONSENSUS_AND_OWN_5:
+        # version 2: when analysts forecast 50% a year, two years at that rate is not a downside - start at the
+        # LOWER of the consensus rate and the own 5-year rate (whichever exists if one is missing)
+        have = [(g, name) for g, name in ((cons, "consensus"), (own5, "own 5-year")) if g.rate is not None]
+        fast, fast_name = min(have, key=lambda t: t[0].rate) if have else (own5, "own 5-year")
+    else:                                               # version 1
+        fast, fast_name = (cons, "consensus") if cons.rate is not None else (own5, "own 5-year")
     cases = (constant(OWN_5, own5), constant(OWN_10, own10), constant(CONSENSUS, cons, True),
-             downside(cons if cons.rate is not None else own5,
-                      "consensus" if cons.rate is not None else "own 5-year"))
+             downside(fast, fast_name))
     backtest = (cases[0], cases[1], downside(own5, "own 5-year"))
     return cases, backtest
 

@@ -17,8 +17,8 @@ plus 5 points a year? That bar is the **hurdle**. Two steps answer it, and both 
   base, finds the growth a year the price needs for ten years to earn exactly the hurdle (**implied growth**), and
   then works out what a buyer would earn each year under **four growth cases**: the company's own 5-year growth,
   its own 10-year growth (both **records** of its past), the analysts' consensus (a **forecast**, which no past
-  data can test), and a **downside case** (the first two years at the consensus rate, then a straight fade to the
-  bond yield). The answer is a range of yearly returns against the hurdle. If every case clears the hurdle the
+  data can test), and a **downside case** (the first two years at the lower of the consensus rate and the company's own
+  5-year rate, then a straight fade to the bond yield). The answer is a range of yearly returns against the hurdle. If every case clears the hurdle the
   company **qualifies, clears hurdle**; if any case falls short it **qualifies, below hurdle**. The pack says
   how many cases clear.
 

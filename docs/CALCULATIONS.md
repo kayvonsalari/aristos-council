@@ -1277,7 +1277,7 @@ Phase 2 of `docs/DESIGN_absolute.md`, and since ABSOLUTE-PAGE-1 (phase 3) the **
 company-page sections directly after the gate ("The price test" and "The return range", the phase labels removed); it changes no strategy
 file, gate file or backtest result, and the Analyse tab's list and cohort runs keep their lenses and votes. The saved record gains an
 additive `absolute` block, and (phase 3) `verdict_of_record`, `relative` and `design_version` keys beside it; every key older records
-carry keeps its shape, and a saved file is never rewritten. Every number it uses is in `valuation/absolute_value_v1.yaml` (frozen; a change is a new version). All
+carry keeps its shape, and a saved file is never rewritten. Every number it uses is in `valuation/absolute_value_v2.yaml` (frozen; version 1 stays on disk as the record; a change is a new version). All
 arithmetic is in `tools/absolute_math.py`; `absolute_value/engine.py` only orchestrates.
 
 **The base: free cash flow per share.** (operating cash flow minus capital spending) / diluted weighted-average shares, each fiscal
@@ -1305,8 +1305,10 @@ between 0.01% and 60% a year (a result at a bound is printed as "above 60%" or "
 **The four growth cases.** Own 5-year and own 10-year diluted earnings growth (the existing growth record; a case needs the full window of
 accounts and a positive start and end year). Consensus: two steps from the last reported fiscal year's diluted EPS to the second forecast
 year's consensus EPS, both years named, marked "not testable"; unavailable without both forecast years. Downside: years 1 and 2 at the
-consensus rate (the own 5-year rate when there is no consensus), then a straight line to the bond yield in year 10, flat after:
-rate(t) = fast + (bond - fast) x (t - 2) / 8 for t = 3..10. A rate above 18% a year carries the mark "few companies have grown faster than 18%
+LOWER of the consensus rate and the own 5-year rate (whichever exists if one is missing), then a straight line to the bond yield in year
+10, flat after: rate(t) = fast + (bond - fast) x (t - 2) / 8 for t = 3..10. (Definition version 2, `valuation/absolute_value_v2.yaml`; version 1
+started the downside at the consensus rate, so a company the analysts forecast at 50% a year had a "downside" above its own record:
+ASML read 11.3% and TSMC 9.5%, against 8.1% and 8.7% on their own 5-year growth.) A rate above 18% a year carries the mark "few companies have grown faster than 18%
 a year for ten years" (Chan, Karceski and Lakonishok 2003, Table I).
 
 **The verdict.** Excluded and Not covered come from the gate. Not enough data: the gate could not finish, fewer than two cases exist, there

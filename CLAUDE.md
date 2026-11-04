@@ -108,7 +108,7 @@ Docs: `README.md` (start here), `docs/COUNCIL_EXPLAINER.md`, `docs/CALCULATIONS.
   freezes the raw payloads of a run under `runs/<run_id>/` so it replays offline.
 - **The absolute path and the company page (ABSOLUTE-1, phases 1 to 3; `docs/DESIGN_absolute.md`).** The company page's verdict of record is
   no longer a lens vote. `gate/` (+ `gates/absolute_gate_v2.yaml`, `tools/gate_readings.py`) is the exclusion gate: four exclusions (accrual
-  ratio, solvency, F-score, cash runway) and four warnings, versioned and immutable. `absolute_value/` (+ `valuation/absolute_value_v1.yaml`,
+  ratio, solvency, F-score, cash runway) and four warnings, versioned and immutable. `absolute_value/` (+ `valuation/absolute_value_v2.yaml`,
   `tools/absolute_math.py`) works out free cash flow per share, the price test, implied growth, four growth cases, the return range and the verdict
   (excluded / not covered / not enough data / qualifies below hurdle / qualifies clears hurdle); the hurdle is the reporting currency's ten-year bond
   yield plus 5.0 points (`data/bond_yield.py`, `data/bond_series.yaml`, EODHD `.GBOND`). `company_page.py` writes the answer, the story and the

@@ -198,7 +198,7 @@ Two conventions it rests on. A ten-year horizon sits inside the range of years t
 1. Own 5-year diluted earnings per share growth.
 2. Own 10-year diluted earnings per share growth.
 3. Consensus (marked "not testable").
-4. The downside case: years 1 and 2 at the consensus rate (own 5-year rate if there is no consensus), then a straight line to the bond yield by year 10, flat after. The reasons are Chan et al.'s result that growth does not persist beyond chance, Damodaran's stable-growth rule, and Mauboussin's horizon. The straight-line shape is a judgment.
+4. The downside case: years 1 and 2 at the consensus rate (own 5-year rate if there is no consensus), then a straight line to the bond yield by year 10, flat after. **Revised in definition version 2 (decision 17): years 1 and 2 use the lower of the consensus rate and the own 5-year rate.** The reasons are Chan et al.'s result that growth does not persist beyond chance, Damodaran's stable-growth rule, and Mauboussin's horizon. The straight-line shape is a judgment.
 
 The range runs from the lowest to the highest of the available cases. Fewer than two available means "not enough data".
 

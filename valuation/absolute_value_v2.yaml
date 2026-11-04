@@ -1,0 +1,58 @@
+# ABSOLUTE-PAGE-1, last commit - the valuation definition, version 2. It SUPERSEDES absolute_value_v1.yaml, which stays on
+# disk as the record of the first version (a changed definition is a new version, never an edit).
+# Every number the price test, the hurdle, the four growth cases and the verdict use is on this page.
+# Immutable once merged: a change is absolute_value_v3.yaml, never an edit (the same rule as strategy files and gate files).
+#
+# ONE change from version 1, and nothing else: years 1 and 2 of the DOWNSIDE case use the LOWER of the consensus rate and
+# the own 5-year rate (whichever exists if one is missing).
+#
+# Why (docs/DESIGN_absolute.md decision 17): when analysts forecast 50% a year, two years at that rate is not a downside.
+# Version 1 started the downside at the consensus rate, so on ASML and TSMC (consensus about 50% a year) the "downside"
+# returned 11.3% and 9.5%, above their hurdles, while their own 5-year growth returned 8.1% and 8.7%. A downside case that
+# sits above the company's own record is not testing the downside. The lower of the two is the one that is.
+# The backtest form of the downside case (own 5-year rate in years 1 and 2) is unchanged.
+
+id: absolute_value_v2
+version: 2
+status: frozen
+supersedes: absolute_value_v1
+design: docs/DESIGN_absolute.md
+
+base:
+  measure: free cash flow per share = (operating cash flow minus capital spending) / diluted weighted-average shares
+  rule: lower_of_latest_and_three_year_average          # judgment (design section d, decision 14)
+  average_years: 3
+
+hurdle:
+  margin_points: 5.0              # Kroll 2026 US equity risk premium; Fernandez et al. 2025 (decision 15)
+  bond_series_file: data/bond_series.yaml
+  staleness_days: 7               # the last good yield is used for up to 7 days, then lapses
+
+solver:
+  horizon_years: 10               # decision 5: the ten-year equation
+  growth_after_horizon: 0.0       # flat after year 10, valued as a perpetuity
+  implied_growth_range: [-0.10, 0.40]
+  return_range: [0.0001, 0.60]    # 0.01% to 60%
+  iterations: 200
+
+cases:
+  own_5_year:  {window: 5,  label: "Own 5-year earnings growth"}
+  own_10_year: {window: 10, label: "Own 10-year earnings growth"}
+  consensus:
+    label: "Analyst consensus"
+    marked: not testable
+    note: two steps from the last reported fiscal year's diluted earnings per share to the second forecast year's consensus
+  downside:
+    label: "Downside"
+    rule: years 1 and 2 at the LOWER of the consensus rate and the own 5-year rate (whichever exists if one is missing), then a straight line to the bond yield by year 10, flat after
+    fast_rule: lower_of_consensus_and_own_5_year      # version 1: consensus_else_own_5_year
+    fast_years: 2
+
+high_growth_mark: 0.18            # Chan, Karceski and Lakonishok 2003, Table I: the lowest of the three 90th percentiles
+
+verdict_states: [excluded, not_covered, not_enough_data, qualifies_below_hurdle, qualifies_clears_hurdle]
+
+# The abnormal-investment warning boundary lives in the gate file (it was measured at gate calibration)
+# and is READ from there, not repeated here.
+investment_intensity:
+  boundary_from: gates/absolute_gate_v2.yaml
