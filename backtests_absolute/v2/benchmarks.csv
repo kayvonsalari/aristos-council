@@ -1,0 +1,357 @@
+# Survivorship and restatement limits: the company list is today's market index, so companies that were delisted, merged or went bankrupt are not in it, and a test that removes failing companies is flattered most by their absence. Accounts are the provider's restated record, not the figures first published. No edge shown in a test that cannot see failures; nothing here is proof.
+# ABSOLUTE-BACKTEST-2: 12-month hold, every basket and benchmark pays 0.5% round trip. Pooling: by calendar year of entry inside an industry, then across industries, then across years. Definitions were frozen in PREREGISTRATION.md before the run.
+industry,form,benchmark,excess,luck
+Chemicals,2,industry basket,-0.002203,0.542000
+Comms - Interactive Media & Gaming,2,industry basket,0.074737,0.032000
+Comms - Media & Entertainment,2,industry basket,-0.087800,0.990000
+Comms - Telecoms,2,industry basket,-0.007652,0.660000
+Consumer - Auto Manufacturers,2,industry basket,-0.026581,0.636000
+Consumer - Auto Parts,2,industry basket,0.031983,0.066000
+Consumer - Beverages & Tobacco,2,industry basket,-0.020756,0.838000
+Consumer - Discretionary Retail,2,industry basket,-0.015653,0.790000
+Consumer - Grocery & Discount Retailers,2,industry basket,0.001936,0.468000
+Consumer - Homebuilders,2,industry basket,-0.004042,0.560000
+"Consumer - Hotels, Resorts & Gaming",2,industry basket,-0.029013,0.806000
+Consumer - Household & Personal Products,2,industry basket,-0.043973,0.972000
+Consumer - Internet Retail,2,industry basket,0.025870,0.368000
+Consumer - Leisure & Travel,2,industry basket,-0.051364,0.844000
+"Consumer - Luxury, Apparel & Footwear",2,industry basket,0.047356,0.024000
+Consumer - Packaged Foods & Confectionery,2,industry basket,0.010824,0.254000
+Consumer - Restaurants,2,industry basket,-0.011144,0.684000
+Energy - Exploration & Production,2,industry basket,0.001544,0.486000
+Energy - Integrated Oil & Refining,2,industry basket,0.062181,0.226000
+Energy - Midstream & Pipelines,2,industry basket,0.017081,0.310000
+Energy - Oilfield Services & Equipment,2,industry basket,0.020433,0.250000
+Health - Biotechnology,2,industry basket,0.076064,0.102000
+Health - Large Pharma,2,industry basket,0.011119,0.348000
+Health - Life Science Tools & Diagnostics,2,industry basket,0.015283,0.318000
+Health - Medical Devices & Instruments,2,industry basket,-0.039328,0.988000
+Health - Services & Managed Care,2,industry basket,-0.005677,0.582000
+Health - Specialty & Generic Pharma,2,industry basket,-0.043861,0.884000
+Industrials - Aerospace & Defense (Europe + US),2,industry basket,-0.036299,0.876000
+Industrials - Airlines & Airports,2,industry basket,0.036693,0.074000
+Industrials - Building Products,2,industry basket,-0.021077,0.814000
+Industrials - Construction & Farm Machinery,2,industry basket,0.017533,0.236000
+Industrials - Electrical Equipment,2,industry basket,-0.081994,0.864000
+Industrials - Engineering & Construction,2,industry basket,-0.010071,0.528000
+Industrials - Grid & Electrical Machinery,2,industry basket,0.142680,0.004000
+Industrials - Industrial Machinery,2,industry basket,0.008348,0.242000
+Industrials - Logistics & Trucking,2,industry basket,0.008862,0.356000
+Industrials - Marine Shipping,2,industry basket,0.135451,0.096000
+Industrials - Railroads,2,industry basket,-0.015534,0.718000
+Industrials - Waste & Environmental,2,industry basket,0.047982,0.062000
+Materials - Building Materials,2,industry basket,0.014046,0.336000
+Materials - Commodity Chemicals & Agri Inputs,2,industry basket,-0.067377,0.946000
+Materials - Copper & Aluminum,2,industry basket,0.150841,0.000000
+Materials - Diversified Mining,2,industry basket,0.159161,0.048000
+Materials - Gold,2,industry basket,0.043031,0.150000
+Materials - Packaging & Paper,2,industry basket,0.055272,0.002000
+Materials - Specialty Chemicals,2,industry basket,0.001140,0.482000
+Materials - Steel,2,industry basket,-0.041356,0.930000
+Tech - Application Software,2,industry basket,-0.064989,0.996000
+Tech - Communications Equipment,2,industry basket,-0.105139,0.876000
+Tech - Electronic Components,2,industry basket,-0.026957,0.666000
+Tech - Hardware,2,industry basket,-0.052750,0.868000
+Tech - IT Services,2,industry basket,0.033142,0.084000
+Tech - Semiconductor Equipment,2,industry basket,0.037965,0.124000
+Tech - Semiconductors,2,industry basket,-0.084360,0.976000
+Tech - Systems Software,2,industry basket,-0.092168,0.990000
+Utilities - Electric,2,industry basket,0.011342,0.286000
+"Utilities - Gas, Water & Multi-Utilities",2,industry basket,0.040759,0.020000
+Utilities - Renewable & Independent Power,2,industry basket,0.006532,0.420000
+ALL INDUSTRIES,2,industry basket,0.000355,0.448000
+Chemicals,2,gate-passer basket,-0.002035,0.536000
+Comms - Interactive Media & Gaming,2,gate-passer basket,0.072930,0.038000
+Comms - Media & Entertainment,2,gate-passer basket,-0.081360,0.980000
+Comms - Telecoms,2,gate-passer basket,-0.004956,0.602000
+Consumer - Auto Manufacturers,2,gate-passer basket,-0.044392,0.718000
+Consumer - Auto Parts,2,gate-passer basket,0.029796,0.076000
+Consumer - Beverages & Tobacco,2,gate-passer basket,-0.018308,0.810000
+Consumer - Discretionary Retail,2,gate-passer basket,-0.017368,0.806000
+Consumer - Grocery & Discount Retailers,2,gate-passer basket,-0.000100,0.500000
+Consumer - Homebuilders,2,gate-passer basket,0.004785,0.424000
+"Consumer - Hotels, Resorts & Gaming",2,gate-passer basket,-0.031466,0.834000
+Consumer - Household & Personal Products,2,gate-passer basket,-0.041260,0.962000
+Consumer - Internet Retail,2,gate-passer basket,0.028509,0.350000
+Consumer - Leisure & Travel,2,gate-passer basket,-0.047728,0.824000
+"Consumer - Luxury, Apparel & Footwear",2,gate-passer basket,0.049041,0.018000
+Consumer - Packaged Foods & Confectionery,2,gate-passer basket,0.009635,0.266000
+Consumer - Restaurants,2,gate-passer basket,-0.011283,0.688000
+Energy - Exploration & Production,2,gate-passer basket,0.002127,0.482000
+Energy - Integrated Oil & Refining,2,gate-passer basket,0.153158,0.158000
+Energy - Midstream & Pipelines,2,gate-passer basket,0.020947,0.282000
+Energy - Oilfield Services & Equipment,2,gate-passer basket,0.021537,0.234000
+Health - Biotechnology,2,gate-passer basket,0.077941,0.092000
+Health - Large Pharma,2,gate-passer basket,0.007300,0.402000
+Health - Life Science Tools & Diagnostics,2,gate-passer basket,0.008705,0.394000
+Health - Medical Devices & Instruments,2,gate-passer basket,-0.043813,0.996000
+Health - Services & Managed Care,2,gate-passer basket,-0.005930,0.586000
+Health - Specialty & Generic Pharma,2,gate-passer basket,-0.039773,0.862000
+Industrials - Aerospace & Defense (Europe + US),2,gate-passer basket,-0.049969,0.942000
+Industrials - Airlines & Airports,2,gate-passer basket,0.030767,0.126000
+Industrials - Building Products,2,gate-passer basket,-0.017012,0.748000
+Industrials - Construction & Farm Machinery,2,gate-passer basket,0.013342,0.278000
+Industrials - Electrical Equipment,2,gate-passer basket,-0.057008,0.734000
+Industrials - Engineering & Construction,2,gate-passer basket,0.008638,0.350000
+Industrials - Grid & Electrical Machinery,2,gate-passer basket,0.127992,0.006000
+Industrials - Industrial Machinery,2,gate-passer basket,0.010471,0.186000
+Industrials - Logistics & Trucking,2,gate-passer basket,0.004803,0.402000
+Industrials - Marine Shipping,2,gate-passer basket,0.136684,0.096000
+Industrials - Railroads,2,gate-passer basket,-0.012753,0.684000
+Industrials - Waste & Environmental,2,gate-passer basket,0.035198,0.140000
+Materials - Building Materials,2,gate-passer basket,0.011560,0.360000
+Materials - Commodity Chemicals & Agri Inputs,2,gate-passer basket,-0.058746,0.912000
+Materials - Copper & Aluminum,2,gate-passer basket,0.151797,0.000000
+Materials - Diversified Mining,2,gate-passer basket,0.157300,0.048000
+Materials - Gold,2,gate-passer basket,0.042354,0.158000
+Materials - Packaging & Paper,2,gate-passer basket,0.056448,0.002000
+Materials - Specialty Chemicals,2,gate-passer basket,-0.000210,0.504000
+Materials - Steel,2,gate-passer basket,-0.037441,0.912000
+Tech - Application Software,2,gate-passer basket,-0.055901,0.982000
+Tech - Communications Equipment,2,gate-passer basket,-0.075673,0.794000
+Tech - Electronic Components,2,gate-passer basket,-0.023882,0.650000
+Tech - Hardware,2,gate-passer basket,-0.020908,0.650000
+Tech - IT Services,2,gate-passer basket,0.031922,0.094000
+Tech - Semiconductor Equipment,2,gate-passer basket,0.045763,0.096000
+Tech - Semiconductors,2,gate-passer basket,-0.084218,0.976000
+Tech - Systems Software,2,gate-passer basket,-0.092691,0.990000
+Utilities - Electric,2,gate-passer basket,0.011665,0.284000
+"Utilities - Gas, Water & Multi-Utilities",2,gate-passer basket,0.037588,0.032000
+Utilities - Renewable & Independent Power,2,gate-passer basket,0.025767,0.238000
+ALL INDUSTRIES,2,gate-passer basket,0.003588,0.268000
+Chemicals,2,size-matched basket,-0.023343,0.938000
+Comms - Interactive Media & Gaming,2,size-matched basket,0.055563,0.076000
+Comms - Media & Entertainment,2,size-matched basket,-0.061768,0.942000
+Comms - Telecoms,2,size-matched basket,-0.012980,0.774000
+Consumer - Auto Manufacturers,2,size-matched basket,-0.022043,0.618000
+Consumer - Auto Parts,2,size-matched basket,0.028441,0.080000
+Consumer - Beverages & Tobacco,2,size-matched basket,-0.006823,0.652000
+Consumer - Discretionary Retail,2,size-matched basket,-0.030718,0.944000
+Consumer - Grocery & Discount Retailers,2,size-matched basket,0.003136,0.432000
+Consumer - Homebuilders,2,size-matched basket,0.007443,0.372000
+"Consumer - Hotels, Resorts & Gaming",2,size-matched basket,-0.035480,0.872000
+Consumer - Household & Personal Products,2,size-matched basket,-0.066247,1.000000
+Consumer - Internet Retail,2,size-matched basket,0.000309,0.488000
+Consumer - Leisure & Travel,2,size-matched basket,-0.034681,0.738000
+"Consumer - Luxury, Apparel & Footwear",2,size-matched basket,0.047136,0.016000
+Consumer - Packaged Foods & Confectionery,2,size-matched basket,0.009110,0.266000
+Consumer - Restaurants,2,size-matched basket,-0.010247,0.674000
+Energy - Exploration & Production,2,size-matched basket,0.012112,0.366000
+Energy - Integrated Oil & Refining,2,size-matched basket,0.087869,0.196000
+Energy - Midstream & Pipelines,2,size-matched basket,0.006209,0.420000
+Energy - Oilfield Services & Equipment,2,size-matched basket,0.000116,0.512000
+Health - Biotechnology,2,size-matched basket,0.053510,0.156000
+Health - Large Pharma,2,size-matched basket,0.002177,0.472000
+Health - Life Science Tools & Diagnostics,2,size-matched basket,0.014470,0.296000
+Health - Medical Devices & Instruments,2,size-matched basket,-0.023676,0.908000
+Health - Services & Managed Care,2,size-matched basket,-0.000269,0.506000
+Health - Specialty & Generic Pharma,2,size-matched basket,-0.040439,0.874000
+Industrials - Aerospace & Defense (Europe + US),2,size-matched basket,-0.036718,0.878000
+Industrials - Airlines & Airports,2,size-matched basket,0.032511,0.092000
+Industrials - Building Products,2,size-matched basket,-0.024813,0.864000
+Industrials - Construction & Farm Machinery,2,size-matched basket,0.013912,0.272000
+Industrials - Electrical Equipment,2,size-matched basket,-0.049453,0.734000
+Industrials - Engineering & Construction,2,size-matched basket,-0.016518,0.614000
+Industrials - Grid & Electrical Machinery,2,size-matched basket,0.108541,0.024000
+Industrials - Industrial Machinery,2,size-matched basket,0.006138,0.326000
+Industrials - Logistics & Trucking,2,size-matched basket,0.006069,0.378000
+Industrials - Marine Shipping,2,size-matched basket,0.107398,0.134000
+Industrials - Railroads,2,size-matched basket,-0.009135,0.616000
+Industrials - Waste & Environmental,2,size-matched basket,0.033837,0.116000
+Materials - Building Materials,2,size-matched basket,0.002044,0.478000
+Materials - Commodity Chemicals & Agri Inputs,2,size-matched basket,-0.068863,0.954000
+Materials - Copper & Aluminum,2,size-matched basket,0.142244,0.000000
+Materials - Diversified Mining,2,size-matched basket,0.124125,0.076000
+Materials - Gold,2,size-matched basket,0.028999,0.220000
+Materials - Packaging & Paper,2,size-matched basket,0.046388,0.004000
+Materials - Specialty Chemicals,2,size-matched basket,-0.000571,0.516000
+Materials - Steel,2,size-matched basket,-0.023941,0.832000
+Tech - Application Software,2,size-matched basket,-0.050438,0.968000
+Tech - Communications Equipment,2,size-matched basket,-0.031292,0.630000
+Tech - Electronic Components,2,size-matched basket,-0.024586,0.662000
+Tech - Hardware,2,size-matched basket,-0.042104,0.838000
+Tech - IT Services,2,size-matched basket,0.008322,0.364000
+Tech - Semiconductor Equipment,2,size-matched basket,0.008514,0.388000
+Tech - Semiconductors,2,size-matched basket,-0.067003,0.930000
+Tech - Systems Software,2,size-matched basket,-0.073303,0.970000
+Utilities - Electric,2,size-matched basket,0.006477,0.372000
+"Utilities - Gas, Water & Multi-Utilities",2,size-matched basket,0.037625,0.030000
+Utilities - Renewable & Independent Power,2,size-matched basket,-0.002618,0.518000
+ALL INDUSTRIES,2,size-matched basket,-0.000569,0.518000
+Chemicals,3,industry basket,0.010521,0.350000
+Comms - Interactive Media & Gaming,3,industry basket,0.018242,0.298000
+Comms - Media & Entertainment,3,industry basket,-0.070156,0.972000
+Comms - Telecoms,3,industry basket,-0.016263,0.810000
+Consumer - Auto Manufacturers,3,industry basket,-0.088524,0.870000
+Consumer - Auto Parts,3,industry basket,0.042538,0.008000
+Consumer - Beverages & Tobacco,3,industry basket,0.000181,0.486000
+Consumer - Discretionary Retail,3,industry basket,0.001107,0.486000
+Consumer - Grocery & Discount Retailers,3,industry basket,0.004264,0.402000
+Consumer - Homebuilders,3,industry basket,-0.022595,0.896000
+"Consumer - Hotels, Resorts & Gaming",3,industry basket,0.033779,0.216000
+Consumer - Household & Personal Products,3,industry basket,-0.034859,0.710000
+Consumer - Internet Retail,3,industry basket,0.036802,0.250000
+Consumer - Leisure & Travel,3,industry basket,0.068129,0.080000
+"Consumer - Luxury, Apparel & Footwear",3,industry basket,-0.001369,0.518000
+Consumer - Packaged Foods & Confectionery,3,industry basket,0.012594,0.286000
+Consumer - Restaurants,3,industry basket,-0.022171,0.762000
+Energy - Exploration & Production,3,industry basket,-0.075914,0.800000
+Energy - Integrated Oil & Refining,3,industry basket,-0.003125,0.416000
+Energy - Midstream & Pipelines,3,industry basket,-0.066944,0.916000
+Energy - Oilfield Services & Equipment,3,industry basket,-0.021625,0.648000
+Health - Biotechnology,3,industry basket,-0.042473,0.634000
+Health - Large Pharma,3,industry basket,0.010059,0.338000
+Health - Life Science Tools & Diagnostics,3,industry basket,0.044504,0.094000
+Health - Medical Devices & Instruments,3,industry basket,0.042248,0.158000
+Health - Services & Managed Care,3,industry basket,-0.004552,0.604000
+Health - Specialty & Generic Pharma,3,industry basket,0.013363,0.382000
+Industrials - Aerospace & Defense (Europe + US),3,industry basket,-0.036176,0.714000
+Industrials - Airlines & Airports,3,industry basket,-0.001406,0.532000
+Industrials - Building Products,3,industry basket,-0.015540,0.754000
+Industrials - Construction & Farm Machinery,3,industry basket,-0.013890,0.738000
+Industrials - Electrical Equipment,3,industry basket,-0.110617,0.880000
+Industrials - Engineering & Construction,3,industry basket,0.077465,0.016000
+Industrials - Grid & Electrical Machinery,3,industry basket,0.120977,0.028000
+Industrials - Industrial Machinery,3,industry basket,0.009432,0.296000
+Industrials - Logistics & Trucking,3,industry basket,-0.000693,0.502000
+Industrials - Marine Shipping,3,industry basket,0.112594,0.146000
+Industrials - Railroads,3,industry basket,0.027922,0.162000
+Industrials - Waste & Environmental,3,industry basket,0.044305,0.098000
+Materials - Building Materials,3,industry basket,0.054073,0.016000
+Materials - Commodity Chemicals & Agri Inputs,3,industry basket,-0.029782,0.660000
+Materials - Copper & Aluminum,3,industry basket,-0.012428,0.526000
+Materials - Diversified Mining,3,industry basket,-0.058723,0.776000
+Materials - Gold,3,industry basket,0.005409,0.454000
+Materials - Packaging & Paper,3,industry basket,0.010184,0.286000
+Materials - Specialty Chemicals,3,industry basket,-0.041453,0.970000
+Materials - Steel,3,industry basket,0.010374,0.340000
+Tech - Application Software,3,industry basket,-0.044537,0.900000
+Tech - Communications Equipment,3,industry basket,-0.055668,0.572000
+Tech - Electronic Components,3,industry basket,0.019872,0.320000
+Tech - Hardware,3,industry basket,-0.087895,0.992000
+Tech - IT Services,3,industry basket,0.032187,0.034000
+Tech - Semiconductor Equipment,3,industry basket,0.013647,0.304000
+Tech - Semiconductors,3,industry basket,-0.086963,0.980000
+Tech - Systems Software,3,industry basket,-0.063163,0.912000
+Utilities - Electric,3,industry basket,-0.033006,0.768000
+"Utilities - Gas, Water & Multi-Utilities",3,industry basket,-0.007483,0.630000
+Utilities - Renewable & Independent Power,3,industry basket,-0.029840,0.738000
+ALL INDUSTRIES,3,industry basket,-0.004881,0.794000
+Chemicals,3,gate-passer basket,0.011142,0.342000
+Comms - Interactive Media & Gaming,3,gate-passer basket,0.016435,0.320000
+Comms - Media & Entertainment,3,gate-passer basket,-0.063716,0.960000
+Comms - Telecoms,3,gate-passer basket,-0.013567,0.758000
+Consumer - Auto Manufacturers,3,gate-passer basket,-0.107567,0.930000
+Consumer - Auto Parts,3,gate-passer basket,0.040351,0.014000
+Consumer - Beverages & Tobacco,3,gate-passer basket,0.002629,0.460000
+Consumer - Discretionary Retail,3,gate-passer basket,-0.000608,0.516000
+Consumer - Grocery & Discount Retailers,3,gate-passer basket,0.002228,0.436000
+Consumer - Homebuilders,3,gate-passer basket,-0.013768,0.770000
+"Consumer - Hotels, Resorts & Gaming",3,gate-passer basket,0.027553,0.274000
+Consumer - Household & Personal Products,3,gate-passer basket,-0.036259,0.720000
+Consumer - Internet Retail,3,gate-passer basket,0.042617,0.226000
+Consumer - Leisure & Travel,3,gate-passer basket,0.074576,0.062000
+"Consumer - Luxury, Apparel & Footwear",3,gate-passer basket,0.000538,0.474000
+Consumer - Packaged Foods & Confectionery,3,gate-passer basket,0.011607,0.304000
+Consumer - Restaurants,3,gate-passer basket,-0.022357,0.764000
+Energy - Exploration & Production,3,gate-passer basket,-0.074885,0.794000
+Energy - Integrated Oil & Refining,3,gate-passer basket,0.036251,0.278000
+Energy - Midstream & Pipelines,3,gate-passer basket,-0.070064,0.928000
+Energy - Oilfield Services & Equipment,3,gate-passer basket,-0.030133,0.700000
+Health - Biotechnology,3,gate-passer basket,-0.069696,0.746000
+Health - Large Pharma,3,gate-passer basket,0.006239,0.382000
+Health - Life Science Tools & Diagnostics,3,gate-passer basket,0.037926,0.128000
+Health - Medical Devices & Instruments,3,gate-passer basket,0.035697,0.192000
+Health - Services & Managed Care,3,gate-passer basket,-0.004806,0.614000
+Health - Specialty & Generic Pharma,3,gate-passer basket,0.018794,0.334000
+Industrials - Aerospace & Defense (Europe + US),3,gate-passer basket,-0.052825,0.818000
+Industrials - Airlines & Airports,3,gate-passer basket,-0.010293,0.668000
+Industrials - Building Products,3,gate-passer basket,-0.011475,0.690000
+Industrials - Construction & Farm Machinery,3,gate-passer basket,-0.014534,0.748000
+Industrials - Electrical Equipment,3,gate-passer basket,-0.081723,0.794000
+Industrials - Engineering & Construction,3,gate-passer basket,0.096083,0.002000
+Industrials - Grid & Electrical Machinery,3,gate-passer basket,0.106476,0.044000
+Industrials - Industrial Machinery,3,gate-passer basket,0.011555,0.252000
+Industrials - Logistics & Trucking,3,gate-passer basket,-0.005302,0.552000
+Industrials - Marine Shipping,3,gate-passer basket,0.114031,0.144000
+Industrials - Railroads,3,gate-passer basket,0.031009,0.134000
+Industrials - Waste & Environmental,3,gate-passer basket,0.030694,0.190000
+Materials - Building Materials,3,gate-passer basket,0.051270,0.022000
+Materials - Commodity Chemicals & Agri Inputs,3,gate-passer basket,-0.008770,0.526000
+Materials - Copper & Aluminum,3,gate-passer basket,-0.012595,0.528000
+Materials - Diversified Mining,3,gate-passer basket,-0.059885,0.780000
+Materials - Gold,3,gate-passer basket,0.002869,0.486000
+Materials - Packaging & Paper,3,gate-passer basket,0.011360,0.264000
+Materials - Specialty Chemicals,3,gate-passer basket,-0.042723,0.974000
+Materials - Steel,3,gate-passer basket,0.013518,0.314000
+Tech - Application Software,3,gate-passer basket,-0.037736,0.864000
+Tech - Communications Equipment,3,gate-passer basket,-0.032095,0.514000
+Tech - Electronic Components,3,gate-passer basket,0.022947,0.280000
+Tech - Hardware,3,gate-passer basket,-0.056052,0.918000
+Tech - IT Services,3,gate-passer basket,0.030967,0.038000
+Tech - Semiconductor Equipment,3,gate-passer basket,0.022777,0.214000
+Tech - Semiconductors,3,gate-passer basket,-0.086821,0.980000
+Tech - Systems Software,3,gate-passer basket,-0.064350,0.916000
+Utilities - Electric,3,gate-passer basket,-0.036901,0.778000
+"Utilities - Gas, Water & Multi-Utilities",3,gate-passer basket,-0.010627,0.684000
+Utilities - Renewable & Independent Power,3,gate-passer basket,-0.017887,0.640000
+ALL INDUSTRIES,3,gate-passer basket,-0.003063,0.696000
+Chemicals,3,size-matched basket,-0.029449,0.904000
+Comms - Interactive Media & Gaming,3,size-matched basket,0.007432,0.392000
+Comms - Media & Entertainment,3,size-matched basket,-0.059329,0.962000
+Comms - Telecoms,3,size-matched basket,-0.007487,0.640000
+Consumer - Auto Manufacturers,3,size-matched basket,-0.075745,0.844000
+Consumer - Auto Parts,3,size-matched basket,0.035332,0.022000
+Consumer - Beverages & Tobacco,3,size-matched basket,0.006461,0.390000
+Consumer - Discretionary Retail,3,size-matched basket,-0.001569,0.552000
+Consumer - Grocery & Discount Retailers,3,size-matched basket,0.009363,0.308000
+Consumer - Homebuilders,3,size-matched basket,-0.008780,0.710000
+"Consumer - Hotels, Resorts & Gaming",3,size-matched basket,0.037580,0.182000
+Consumer - Household & Personal Products,3,size-matched basket,-0.034391,0.744000
+Consumer - Internet Retail,3,size-matched basket,0.020688,0.318000
+Consumer - Leisure & Travel,3,size-matched basket,0.053688,0.124000
+"Consumer - Luxury, Apparel & Footwear",3,size-matched basket,-0.011618,0.720000
+Consumer - Packaged Foods & Confectionery,3,size-matched basket,0.002141,0.460000
+Consumer - Restaurants,3,size-matched basket,-0.019025,0.742000
+Energy - Exploration & Production,3,size-matched basket,-0.071531,0.778000
+Energy - Integrated Oil & Refining,3,size-matched basket,-0.008787,0.456000
+Energy - Midstream & Pipelines,3,size-matched basket,-0.073441,0.956000
+Energy - Oilfield Services & Equipment,3,size-matched basket,-0.038829,0.782000
+Health - Biotechnology,3,size-matched basket,-0.017101,0.548000
+Health - Large Pharma,3,size-matched basket,0.005060,0.402000
+Health - Life Science Tools & Diagnostics,3,size-matched basket,0.039401,0.090000
+Health - Medical Devices & Instruments,3,size-matched basket,0.057039,0.092000
+Health - Services & Managed Care,3,size-matched basket,-0.006794,0.684000
+Health - Specialty & Generic Pharma,3,size-matched basket,0.029237,0.228000
+Industrials - Aerospace & Defense (Europe + US),3,size-matched basket,-0.037269,0.744000
+Industrials - Airlines & Airports,3,size-matched basket,0.003732,0.432000
+Industrials - Building Products,3,size-matched basket,-0.010502,0.682000
+Industrials - Construction & Farm Machinery,3,size-matched basket,-0.017727,0.812000
+Industrials - Electrical Equipment,3,size-matched basket,-0.138248,0.968000
+Industrials - Engineering & Construction,3,size-matched basket,0.051961,0.048000
+Industrials - Grid & Electrical Machinery,3,size-matched basket,0.080769,0.070000
+Industrials - Industrial Machinery,3,size-matched basket,0.010063,0.286000
+Industrials - Logistics & Trucking,3,size-matched basket,0.014733,0.290000
+Industrials - Marine Shipping,3,size-matched basket,0.127215,0.122000
+Industrials - Railroads,3,size-matched basket,0.029101,0.134000
+Industrials - Waste & Environmental,3,size-matched basket,0.043468,0.098000
+Materials - Building Materials,3,size-matched basket,0.064702,0.004000
+Materials - Commodity Chemicals & Agri Inputs,3,size-matched basket,-0.012881,0.570000
+Materials - Copper & Aluminum,3,size-matched basket,-0.021679,0.596000
+Materials - Diversified Mining,3,size-matched basket,-0.077525,0.856000
+Materials - Gold,3,size-matched basket,-0.010825,0.562000
+Materials - Packaging & Paper,3,size-matched basket,0.011976,0.230000
+Materials - Specialty Chemicals,3,size-matched basket,-0.042297,0.970000
+Materials - Steel,3,size-matched basket,0.015332,0.266000
+Tech - Application Software,3,size-matched basket,-0.018087,0.704000
+Tech - Communications Equipment,3,size-matched basket,-0.077939,0.694000
+Tech - Electronic Components,3,size-matched basket,0.028158,0.242000
+Tech - Hardware,3,size-matched basket,-0.068702,0.976000
+Tech - IT Services,3,size-matched basket,0.021135,0.110000
+Tech - Semiconductor Equipment,3,size-matched basket,0.000379,0.490000
+Tech - Semiconductors,3,size-matched basket,-0.080784,0.976000
+Tech - Systems Software,3,size-matched basket,-0.062527,0.930000
+Utilities - Electric,3,size-matched basket,-0.026110,0.744000
+"Utilities - Gas, Water & Multi-Utilities",3,size-matched basket,-0.010625,0.686000
+Utilities - Renewable & Independent Power,3,size-matched basket,-0.050590,0.882000
+ALL INDUSTRIES,3,size-matched basket,-0.006252,0.864000

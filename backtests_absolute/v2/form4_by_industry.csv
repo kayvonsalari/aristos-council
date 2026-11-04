@@ -1,0 +1,62 @@
+# Survivorship and restatement limits: the company list is today's market index, so companies that were delisted, merged or went bankrupt are not in it, and a test that removes failing companies is flattered most by their absence. Accounts are the provider's restated record, not the figures first published. No edge shown in a test that cannot see failures; nothing here is proof.
+# ABSOLUTE-BACKTEST-2: 12-month hold, every basket and benchmark pays 0.5% round trip. Pooling: by calendar year of entry inside an industry, then across industries, then across years. Definitions were frozen in PREREGISTRATION.md before the run.
+industry,form,positioned_rounds,excess,luck
+Chemicals,4,109,0.002952,0.438000
+Comms - Interactive Media & Gaming,4,104,0.062210,0.074000
+Comms - Media & Entertainment,4,109,-0.053530,0.766000
+Comms - Telecoms,4,109,0.013105,0.292000
+Consumer - Auto Manufacturers,4,31,0.084119,0.186000
+Consumer - Auto Parts,4,109,0.043396,0.080000
+Consumer - Beverages & Tobacco,4,109,0.021382,0.222000
+Consumer - Discretionary Retail,4,109,0.026129,0.174000
+Consumer - Grocery & Discount Retailers,4,109,0.009043,0.376000
+Consumer - Homebuilders,4,51,-0.002825,0.526000
+"Consumer - Hotels, Resorts & Gaming",4,87,-0.122565,1.000000
+Consumer - Household & Personal Products,4,109,-0.041076,0.874000
+Consumer - Internet Retail,4,19,0.018749,0.414000
+Consumer - Leisure & Travel,4,54,-0.021346,0.584000
+"Consumer - Luxury, Apparel & Footwear",4,109,0.075870,0.008000
+Consumer - Packaged Foods & Confectionery,4,109,0.028008,0.088000
+Consumer - Restaurants,4,109,-0.036620,0.814000
+Energy - Exploration & Production,4,45,0.125676,0.004000
+Energy - Integrated Oil & Refining,4,108,0.159293,0.120000
+Energy - Midstream & Pipelines,4,45,0.003999,0.450000
+Energy - Oilfield Services & Equipment,4,34,0.042859,0.274000
+Health - Biotechnology,4,0,,
+Health - Large Pharma,4,109,0.018451,0.276000
+Health - Life Science Tools & Diagnostics,4,109,0.010939,0.382000
+Health - Medical Devices & Instruments,4,109,-0.004408,0.540000
+Health - Services & Managed Care,4,109,0.049513,0.082000
+Health - Specialty & Generic Pharma,4,43,0.057878,0.190000
+Industrials - Aerospace & Defense (Europe + US),4,109,-0.028012,0.706000
+Industrials - Airlines & Airports,4,72,0.037495,0.168000
+Industrials - Building Products,4,109,-0.030803,0.844000
+Industrials - Construction & Farm Machinery,4,98,0.000349,0.494000
+Industrials - Electrical Equipment,4,27,-0.279202,0.872000
+Industrials - Engineering & Construction,4,81,0.038415,0.204000
+Industrials - Grid & Electrical Machinery,4,8,-0.059434,0.554000
+Industrials - Industrial Machinery,4,109,0.016036,0.180000
+Industrials - Logistics & Trucking,4,82,0.037921,0.136000
+Industrials - Marine Shipping,4,42,0.046052,0.200000
+Industrials - Railroads,4,90,0.004349,0.430000
+Industrials - Waste & Environmental,4,6,0.178693,0.074000
+Materials - Building Materials,4,109,0.008284,0.420000
+Materials - Commodity Chemicals & Agri Inputs,4,34,-0.025162,0.584000
+Materials - Copper & Aluminum,4,56,0.128387,0.062000
+Materials - Diversified Mining,4,0,,
+Materials - Gold,4,44,0.037015,0.246000
+Materials - Packaging & Paper,4,109,0.056920,0.012000
+Materials - Specialty Chemicals,4,109,-0.000056,0.466000
+Materials - Steel,4,104,-0.028655,0.770000
+Tech - Application Software,4,109,-0.038003,0.822000
+Tech - Communications Equipment,4,50,-0.187712,0.840000
+Tech - Electronic Components,4,94,-0.044511,0.714000
+Tech - Hardware,4,109,-0.022021,0.580000
+Tech - IT Services,4,109,0.036005,0.140000
+Tech - Semiconductor Equipment,4,61,0.061194,0.160000
+Tech - Semiconductors,4,109,-0.104164,0.964000
+Tech - Systems Software,4,93,-0.070317,0.862000
+Utilities - Electric,4,40,-0.013461,0.640000
+"Utilities - Gas, Water & Multi-Utilities",4,109,0.052059,0.024000
+Utilities - Renewable & Independent Power,4,105,-0.030526,0.702000
+ALL INDUSTRIES,4,4642,0.004776,0.258000

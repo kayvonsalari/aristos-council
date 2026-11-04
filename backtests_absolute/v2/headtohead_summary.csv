@@ -1,0 +1,80 @@
+# Survivorship and restatement limits: the company list is today's market index, so companies that were delisted, merged or went bankrupt are not in it, and a test that removes failing companies is flattered most by their absence. Accounts are the provider's restated record, not the figures first published. No edge shown in a test that cannot see failures; nothing here is proof.
+# ABSOLUTE-BACKTEST-2: 12-month hold, every basket and benchmark pays 0.5% round trip. Pooling: by calendar year of entry inside an industry, then across industries, then across years. Definitions were frozen in PREREGISTRATION.md before the run.
+version,metric,scope,n,mean,median,share_pos
+unmatched,count,pooled,4938,0.406845,0.000000,0.441474
+unmatched,average size ($bn),pooled,4926,9.942163,1.967930,0.626878
+unmatched,cash yield (points),pooled,4938,-4.371487,-2.180228,0.082017
+unmatched,12-month return (points),pooled,4938,-0.215598,0.077882,0.502835
+unmatched,count,2016,114,0.780702,0.000000,0.482456
+unmatched,average size ($bn),2016,114,1.547097,0.865701,0.552632
+unmatched,cash yield (points),2016,114,-1.871422,-1.795082,0.061404
+unmatched,12-month return (points),2016,114,-2.508682,-4.054897,0.421053
+unmatched,count,2017,428,-0.070093,0.000000,0.422897
+unmatched,average size ($bn),2017,428,6.569597,0.510673,0.572430
+unmatched,cash yield (points),2017,428,-6.298971,-1.175646,0.156542
+unmatched,12-month return (points),2017,428,-1.066920,-0.181736,0.483645
+unmatched,count,2018,492,-0.134146,0.000000,0.343496
+unmatched,average size ($bn),2018,492,7.308749,1.800982,0.617886
+unmatched,cash yield (points),2018,492,-3.929892,-1.527154,0.073171
+unmatched,12-month return (points),2018,492,1.424151,1.762090,0.565041
+unmatched,count,2019,530,0.415094,0.000000,0.439623
+unmatched,average size ($bn),2019,530,5.523470,0.453071,0.543396
+unmatched,cash yield (points),2019,530,-3.475712,-2.347683,0.024528
+unmatched,12-month return (points),2019,530,7.050813,4.980551,0.720755
+unmatched,count,2020,540,0.507407,0.000000,0.459259
+unmatched,average size ($bn),2020,540,9.313368,3.389234,0.629630
+unmatched,cash yield (points),2020,540,-4.391734,-2.891455,0.059259
+unmatched,12-month return (points),2020,540,-4.439313,-2.992956,0.409259
+unmatched,count,2021,430,-1.362791,-2.000000,0.190698
+unmatched,average size ($bn),2021,430,16.909367,2.568911,0.667442
+unmatched,cash yield (points),2021,430,-3.508636,-1.669126,0.095349
+unmatched,12-month return (points),2021,430,1.610537,2.043854,0.581395
+unmatched,count,2022,633,1.206951,0.000000,0.494471
+unmatched,average size ($bn),2022,633,14.392606,3.071337,0.666667
+unmatched,cash yield (points),2022,633,-3.757010,-2.722226,0.055292
+unmatched,12-month return (points),2022,633,-1.747882,-0.554781,0.464455
+unmatched,count,2023,623,1.651685,1.000000,0.595506
+unmatched,average size ($bn),2023,623,9.738887,1.622901,0.601926
+unmatched,cash yield (points),2023,623,-6.852460,-2.858028,0.077047
+unmatched,12-month return (points),2023,623,-0.767633,-0.362915,0.467095
+unmatched,count,2024,617,0.340357,0.000000,0.471637
+unmatched,average size ($bn),2024,606,5.292479,1.979212,0.627063
+unmatched,cash yield (points),2024,617,-3.835607,-2.350806,0.137763
+unmatched,12-month return (points),2024,617,0.724254,-0.401359,0.470016
+unmatched,count,2025,531,0.197740,0.000000,0.446328
+unmatched,average size ($bn),2025,530,16.562755,3.321427,0.724528
+unmatched,cash yield (points),2025,531,-3.780376,-2.278429,0.077213
+unmatched,12-month return (points),2025,531,-3.610411,-2.167226,0.418079
+matched (equal sizes),average size ($bn),pooled,4926,8.730230,0.989318,0.584450
+matched (equal sizes),cash yield (points),pooled,4938,-4.883710,-1.682500,0.000000
+matched (equal sizes),12-month return (points),pooled,4938,-0.384330,0.000000,0.477724
+matched (equal sizes),average size ($bn),2016,114,4.526029,1.103980,0.614035
+matched (equal sizes),cash yield (points),2016,114,-1.929889,-1.446777,0.000000
+matched (equal sizes),12-month return (points),2016,114,-2.582199,-1.440433,0.412281
+matched (equal sizes),average size ($bn),2017,428,4.665290,0.342463,0.532710
+matched (equal sizes),cash yield (points),2017,428,-15.153146,-0.878742,0.000000
+matched (equal sizes),12-month return (points),2017,428,-1.306271,-0.840997,0.392523
+matched (equal sizes),average size ($bn),2018,492,7.079322,1.565254,0.587398
+matched (equal sizes),cash yield (points),2018,492,-5.276299,-1.526456,0.000000
+matched (equal sizes),12-month return (points),2018,492,1.440931,1.398047,0.552846
+matched (equal sizes),average size ($bn),2019,530,4.235410,0.000000,0.496226
+matched (equal sizes),cash yield (points),2019,530,-3.395004,-1.938669,0.000000
+matched (equal sizes),12-month return (points),2019,530,6.272617,4.331090,0.667925
+matched (equal sizes),average size ($bn),2020,540,8.115154,2.716869,0.651852
+matched (equal sizes),cash yield (points),2020,540,-4.199761,-2.243113,0.000000
+matched (equal sizes),12-month return (points),2020,540,-4.171860,-1.059523,0.431481
+matched (equal sizes),average size ($bn),2021,430,17.730078,2.327381,0.655814
+matched (equal sizes),cash yield (points),2021,430,-4.388428,-2.070673,0.000000
+matched (equal sizes),12-month return (points),2021,430,1.366003,2.003907,0.562791
+matched (equal sizes),average size ($bn),2022,633,11.326635,0.867810,0.578199
+matched (equal sizes),cash yield (points),2022,633,-3.614195,-1.874325,0.000000
+matched (equal sizes),12-month return (points),2022,633,-1.564543,-0.019986,0.445498
+matched (equal sizes),average size ($bn),2023,623,8.002860,0.167111,0.512039
+matched (equal sizes),cash yield (points),2023,623,-5.252936,-1.375149,0.000000
+matched (equal sizes),12-month return (points),2023,623,-0.875664,0.000000,0.428571
+matched (equal sizes),average size ($bn),2024,606,5.945626,1.143162,0.587459
+matched (equal sizes),cash yield (points),2024,617,-2.968086,-1.655044,0.000000
+matched (equal sizes),12-month return (points),2024,617,0.008828,0.000000,0.444084
+matched (equal sizes),average size ($bn),2025,530,13.207360,2.295813,0.667925
+matched (equal sizes),cash yield (points),2025,531,-2.765249,-1.760897,0.000000
+matched (equal sizes),12-month return (points),2025,531,-3.544105,-1.772829,0.414313

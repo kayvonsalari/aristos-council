@@ -1,0 +1,15 @@
+# Survivorship and restatement limits: the company list is today's market index, so companies that were delisted, merged or went bankrupt are not in it, and a test that removes failing companies is flattered most by their absence. Accounts are the provider's restated record, not the figures first published. No edge shown in a test that cannot see failures; nothing here is proof.
+# ABSOLUTE-BACKTEST-2: 12-month hold, every basket and benchmark pays 0.5% round trip. Pooling: by calendar year of entry inside an industry, then across industries, then across years. Definitions were frozen in PREREGISTRATION.md before the run.
+form,regime,excess,luck,years
+1,2016-2019,0.000019,0.504000,"2016,2017,2018,2019"
+1,2020-2021,-0.004241,0.920000,"2020,2021"
+1,2022-2026,-0.004762,1.000000,"2022,2023,2024,2025"
+2,2016-2019,-0.025420,1.000000,"2016,2017,2018,2019"
+2,2020-2021,0.025656,0.088000,"2020,2021"
+2,2022-2026,0.013479,0.060000,"2022,2023,2024,2025"
+3,2016-2019,-0.013781,0.952000,"2016,2017,2018,2019"
+3,2020-2021,0.013368,0.188000,"2020,2021"
+3,2022-2026,-0.005106,0.726000,"2022,2023,2024,2025"
+4,2016-2019,-0.010177,0.828000,"2016,2017,2018,2019"
+4,2020-2021,0.003639,0.310000,"2020,2021"
+4,2022-2026,0.020298,0.038000,"2022,2023,2024,2025"

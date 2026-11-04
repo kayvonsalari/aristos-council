@@ -1,0 +1,14 @@
+{
+ "slug": "consumer_internet_retail",
+ "industry": "Consumer - Internet Retail",
+ "members": 22,
+ "names_without_accounts": 0,
+ "names_unpriced": 0,
+ "rounds": 109,
+ "first": "2016-10-31",
+ "last": "2025-10-31",
+ "rows": 1849,
+ "cache_date": "2026-11-04",
+ "gate": "absolute_gate_v2",
+ "valuation": "absolute_value_v3"
+}
