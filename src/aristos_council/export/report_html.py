@@ -1693,6 +1693,11 @@ def _workings_html(report) -> str:
                  or '<section class="section"><h2>What analysts say</h2>'
                     '<p class="note">not available</p></section>')
     inner.append(_relative_view_html(report))
+    from ..absolute_backtest.lookup import workings_lines as _bt_lines
+    bt = _bt_lines(getattr(report, "cohort_slug", None))
+    if bt:
+        inner.append('<section class="section"><h2>Backtest of this method in this industry</h2>'
+                     + _bullets(_esc(ln) for ln in bt) + "</section>")
     inner.append(_company_peers_html(c, rank_columns(report), report.ticker))
     line = narration_check_line(report)
     if line:

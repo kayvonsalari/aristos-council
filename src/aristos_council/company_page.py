@@ -283,8 +283,8 @@ def _cannot(report) -> str:
     if bt is not None and av.shown:
         tail = f", {bt.count_text()}" if bt.of else ""
         out.append(f"On the form a backtest could test (no analyst figures) the verdict reads {bt.word}{tail}.")
-    out.append("No backtest of this method exists yet, so nothing shows that companies with this reading went on "
-               "to do better.")
+    from .absolute_backtest.lookup import NO_RESULT, cannot_sentence
+    out.append(cannot_sentence(getattr(report, "cohort_slug", None)) or NO_RESULT)
     return " ".join(out)
 
 

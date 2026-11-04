@@ -112,6 +112,10 @@ def company_report_markdown(report) -> str:
     for extra in (page.track_intro, page.caption, page.group_note, page.badge_note):
         if extra:
             out += [f"*{extra}*", ""]
+    from .absolute_backtest.lookup import workings_lines as _bt_lines
+    bt = _bt_lines(getattr(report, "cohort_slug", None))
+    if bt:
+        out += ["### Backtest of this method in this industry", "", *_bullets(bt), ""]
     from .company_check import peers_lines
     peer_block = peers_lines(c, columns=rank_columns(report), company_ticker=report.ticker)
     out += ["### Peers", "", "```", *(peer_block or ["none computed"]), "```", ""]

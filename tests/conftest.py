@@ -29,6 +29,7 @@ import os
 import pytest
 
 from aristos_council import pipeline as _pipeline
+from aristos_council.absolute_backtest import runner as _abs_runner
 from aristos_council.data import news_fallback as _news_fallback
 from aristos_council.data import provider as _provider
 from aristos_council.data import sentiment as _sentiment
@@ -143,6 +144,11 @@ _TARGETS = (
      lambda real: _guard("data.news_fallback.real_url_opener", real)),
     (_news_fallback, "real_yfinance_news",
      lambda real: _guard("data.news_fallback.real_yfinance_news", real)),
+    # ABSOLUTE-BACKTEST-1: the backtest's own data feed (EODHD accounts + yfinance prices) and its index/cash fetch
+    (_abs_runner, "default_feed",
+     lambda real: _guard("absolute_backtest.runner.default_feed", real)),
+    (_abs_runner.Benchmarks, "fetch",
+     lambda real: _guard("absolute_backtest.runner.Benchmarks.fetch", real)),
 )
 
 
@@ -250,6 +256,19 @@ def no_ambient_credentials():
         yield
     finally:
         _drop_credentials()
+
+
+@pytest.fixture(autouse=True)
+def no_ambient_backtest_results(tmp_path_factory, monkeypatch):
+    """The page tests never read the repo's real ``backtests_absolute/`` (ABSOLUTE-BACKTEST-1).
+
+    Once the backtest has run, that folder holds real results and the company page would quote them, so every
+    byte-golden and order test would change whenever the backtest is re-run. Tests of the lookup pass their own
+    root or patch ``DEFAULT_ROOT`` themselves.
+    """
+    from aristos_council.absolute_backtest import lookup as _lookup
+    monkeypatch.setattr(_lookup, "DEFAULT_ROOT", tmp_path_factory.mktemp("no_backtests"))
+    yield
 
 
 @pytest.fixture(autouse=True)

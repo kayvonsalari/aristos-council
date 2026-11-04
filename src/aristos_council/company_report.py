@@ -1709,6 +1709,13 @@ def workings_text_lines(report: CompanyReport) -> list[str]:
     lines.extend(relative_view_text_lines(report))
     lines.append("")
 
+    from .absolute_backtest.lookup import workings_lines as _bt_lines
+    bt = _bt_lines(getattr(report, "cohort_slug", None))
+    if bt:
+        lines.append("BACKTEST OF THIS METHOD IN THIS INDUSTRY (ten years, three forms; not proof)")
+        lines.extend(f"  {ln}" for ln in bt)
+        lines.append("")
+
     peer_block = peers_lines(c, columns=rank_columns(report), company_ticker=report.ticker)
     lines.extend(peer_block if peer_block else ["PEERS: none computed"])
     lines.append("")
