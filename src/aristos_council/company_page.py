@@ -125,8 +125,10 @@ def answer_lines(report) -> tuple[str, str]:
                 f"{name} is a bank or an insurer, so the method works out no return range and gives no verdict.")
     if state == "not_enough_data" or av is None or gate is None:
         items = missing_items(report)
+        extra = (" The price test and the forecast-based cases below are shown as information."
+                 if av is not None and av.verdict.reason == "no record of the company's own growth" else "")
         return (f"Not enough data: {'; '.join(items)}.",
-                f"No verdict is given for {name}: a missing item is neither a pass nor a fail.")
+                f"No verdict is given for {name}: a missing item is neither a pass nor a fail.{extra}")
     h, v = av.hurdle.hurdle, av.verdict
     from .absolute_value.render import range_text
     rng = range_text(av)
@@ -229,8 +231,10 @@ def _requires(report) -> str:
     got = [f"{_CASE_SHORT[c.key]} {c.ret_bound or _pct(c.ret)}" for c in av.cases if c.available]
     if got:
         bits.append("The growth cases return " + ", ".join(got) + " a year.")
-    if av.verdict.of:
+    if av.verdict.of and av.verdict.state in ("qualifies_below_hurdle", "qualifies_clears_hurdle"):
         bits.append(f"{_cap(av.verdict.count_text())}.")
+    elif av.verdict.reason == "no record of the company's own growth":
+        bits.append("Without a record of the company's own growth, no verdict is given; the cases above are information.")
     return " ".join(bits)
 
 
@@ -252,6 +256,8 @@ def _doubt(report) -> str:
         hi = [_CASE_SHORT[c.key] for c in av.cases if c.high_growth]
         if hi:
             bits.append(f"Marked above 18% a year: {', '.join(hi)}.")
+        if av.yield_high:
+            bits.append(f"The yield on the base is {_pct(av.yield_on_base)}, which is unusually high; check the cash flow lines.")
         if av.base.share_basis == "basic shares":
             bits.append("The share count is the basic count, not the diluted one.")
         if av.base.note and av.base.usable:

@@ -3483,8 +3483,8 @@ def _render_company_report(report) -> None:
 
     if report.council_opinion is not None:                # only when it was ticked
         st.subheader("Council opinion")
-        st.caption("Narration only — never a vote; the agreement above is the verdict of "
-                   "record.")
+        st.caption("Narration only — never a vote; it explains the lens ranks (the relative view), "
+                   "not the verdict at the top of the page.")
         op = report.council_opinion
         if op.available:
             # HTML-NARR-MD-1 — rendered through the SAME HTML builder the export uses

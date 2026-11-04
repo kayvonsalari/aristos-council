@@ -126,7 +126,8 @@ Not covered in this release. Earnings before interest and tax over enterprise va
 
 The base is free cash flow per share. Free cash flow is the cash left after the business has paid for what it needs to stay in business and grow. Per share means it is what one share owns.
 
-- Formula: free cash flow per share = (operating cash flow minus capital spending) divided by diluted weighted-average shares. (Diluted means counting shares that options and similar rights could add.)
+- Formula: free cash flow per share = (cash from operations before working-capital changes minus capital spending) divided by diluted weighted-average shares. (Diluted means counting shares that options and similar rights could add.) **Revised in definition version 3 (ABSOLUTE-PAGE-2; decision 29):** versions 1 and 2 used operating cash flow as reported. Working-capital swings reverse, so they are not cash the owner keeps: Korea Gas (036460.KS) read a 107% yield because receivables collected after years of under-recovered costs flowed through operating cash flow. The solvency rule (section b, decision 23) already uses cash from operations before working-capital changes, so the page now has one definition of cash from operations. The price test prints the latest year's working-capital effect as its own line, and marks a yield on the base above 25% as "unusually high; check the cash flow lines".
+- Not valued in this release: companies with positive cash from operations but negative free cash flow after capital spending (regulated utilities in an investing phase, such as Duke Energy) read "not enough data: not valued, no positive free cash flow". A dividend-based path for them is a later design.
 - Rule: use the lower of the latest fiscal year and the three-year average of per-share free cash flow. This is a judgment, and it is conservative.
 - Price per share is in the reporting currency. A share quoted in another currency is converted at the current rate. The tool already fetches current exchange rates as price pairs from yfinance for this purpose (the same source the valuation band uses at month ends), so no new source is needed for this step.
 - Why after-tax operating profit cannot be the base. It is profit before the money the business must put back to grow, so it is not cash to the owner. A company that must spend most of what it earns to keep growing would look cheap on it and be expensive on cash.
@@ -172,16 +173,20 @@ Inputs from Microsoft's 10-K for the year to June 2026 (SEC filing; the saved ru
 
 | Line | FY2026 | FY2025 | FY2024 |
 |---|---|---|---|
-| Net cash from operations | 182,935 | 136,162 | 118,548 |
+| Net cash from operations (as reported) | 182,935 | 136,162 | 118,548 |
+| Change in working capital (positive = cash released) | -4,895 | -1,000 | -2,000 |
+| Cash from operations before working-capital changes | 187,830 | 137,162 | 120,548 |
 | Additions to property and equipment | 115,948 | 64,551 | 44,477 |
-| Free cash flow | 66,987 | 71,611 | 74,071 |
+| Free cash flow (before working-capital changes) | 71,882 | 72,611 | 76,071 |
 | Diluted weighted-average shares (millions) | 7,453 | 7,465 | 7,469 |
-| Free cash flow per share | 8.99 | 9.59 | 9.92 |
+| Per share | 9.64 | 9.73 | 10.18 |
 
-- Lower-of rule: the three-year average is 9.50 and the latest year is 8.99. The latest year (FY2026) wins. The base is 8.99 a share.
-- Price: $521.91 (saved run). Yield on the base: 8.99 / 521.91 = 1.7%.
+(Re-anchored by ABSOLUTE-PAGE-2. FY2026's working-capital change is the figure that gives the owner's 187,830; the FY2025 and FY2024 changes are round fixture values used by the tests, not read from the 10-K. On operating cash flow as reported the three years were 8.99, 9.59 and 9.92.)
+
+- Lower-of rule: the three-year average is 9.85 and the latest year is 9.64. The latest year (FY2026) wins. The base is 9.64 a share. The latest year's working-capital effect is a use of 0.66 a share, which the base leaves out.
+- Price: $521.91 (saved run). Yield on the base: 9.64 / 521.91 = 1.8%.
 - Bond: 4.93%, the ten-year US yield on 30 October 2026 (EODHD series, close 4.934; section g). FRED shows 4.94 for the same day. Hurdle = 4.93 + 5.0 = 9.93%.
-- Implied growth: the price needs **25.0% a year** for ten years. Computed with a throwaway script, not committed. The same calculation with the three-year average base (9.50) needs 24.2%.
+- Implied growth: the price needs **24.0% a year** for ten years (25.0% on the old base of 8.99). Computed with a throwaway script, not committed.
 - Records: own 5-year diluted earnings per share growth 17.2%, own 10-year 21.2% (saved run). Consensus 16.0% a year: two steps from the last reported year (FY2026 diluted earnings per share $17.95, from the 10-K) to the consensus for the year to June 2028 ($24.14). The page used to show 20.6%, a single step between the two forecast years ($20.02 to $24.14). The change is because the definition now starts from the last reported year, which is the only year with an actual figure, and spreads the growth over the two steps it needs. The first step alone (17.95 to 20.02) is 11.5%. All the records sit below the 25.0% the price needs. The own 10-year rate of 21.2% is above 18% and carries the mark.
 - Investment intensity: capital spending of $115.9bn against depreciation, amortisation and other of $38.5bn is 3.0 times. The cash flow statement line also includes "other", so the ratio is approximate. The three-year history of capital spending is 44.5, 64.6 and 115.9 ($bn).
 
@@ -204,16 +209,16 @@ The range runs from the lowest to the highest of the available cases. Fewer than
 
 ### Microsoft, on the new basis
 
-Hurdle 9.93%. Base 8.99 a share.
+Hurdle 9.93%. Base 9.64 a share (cash from operations before working-capital changes; ABSOLUTE-PAGE-2). On the old base of 8.99 the four returns were 6.5%, 6.0%, 8.1% and 4.3%.
 
 | Growth case | Growth | Return |
 |---|---|---|
-| Own 5-year | 17.2% | 6.5% |
-| Consensus (two steps, 16.0%) | 16.0% | 6.0% |
-| Own 10-year | 21.2% | 8.1% |
-| Downside | 16.0% for two years, then falling to 4.93% | 4.3% |
+| Own 5-year | 17.2% | 6.8% |
+| Consensus (two steps, 16.0%) | 16.0% | 6.3% |
+| Own 10-year | 21.2% | 8.6% |
+| Downside | 16.0% for two years (the lower of the consensus and own 5-year rates), then falling to 4.93% | 4.6% |
 
-The range is 4.3% to 8.1% a year, against a hurdle of 9.93%. Verdict: **qualifies, below hurdle, 0 of 4 cases clear.** Beside it, for the change in the consensus definition: the old one-step 20.6% would have returned 7.9% for the consensus case and 5.2% for the downside case. The verdict is the same either way.
+The range is 4.6% to 8.6% a year, against a hurdle of 9.93%. Verdict: **qualifies, below hurdle, 0 of 4 cases clear.** Beside it, for the change in the consensus definition: the old one-step 20.6% would have returned 7.9% for the consensus case and 5.2% for the downside case. The verdict is the same either way.
 
 ### Verdict of record
 
@@ -222,9 +227,10 @@ The range is 4.3% to 8.1% a year, against a hurdle of 9.93%. Verdict: **qualifie
 | Excluded | At least one exclusion rule failed. The rule and figure are named. |
 | Not enough data | The gate could not be completed, or fewer than two growth cases exist, or no hurdle, or no free cash flow per share. The missing items are listed. |
 | Qualifies, below hurdle | Passed the gate, and at least one available case returns less than the hurdle. |
-| Qualifies, clears hurdle | Passed the gate, and every available case, the downside case included, returns at least the hurdle. |
+| Qualifies, clears hurdle | Passed the gate, and every available case, the downside case included, returns at least the hurdle, **and at least one own-record case (own 5-year or own 10-year growth) is available and clears.** |
+| Not enough data (no own record) | Passed the gate, but neither own-record case exists: "no record of the company's own growth". The price test and the forecast-based cases stay on the page as information. (ABSOLUTE-PAGE-2; decision 28.) |
 
-The page always shows "n of 4 cases clear" (or n of the cases that exist).
+The page always shows "n of 4 cases clear" (or n of the cases that exist). Forecast-based cases (consensus, and a downside that starts from it) cannot make a company clear on their own: Ford read "clears hurdle" on two of them, with no record of its own growth, three warnings and net debt of 38.6 times EBITDA.
 
 The backtest-form verdict is computed and shown on every live page beside the full one. It uses the cases the backtest can test: own 5-year, own 10-year and the downside case with its fallback, with no consensus. For Microsoft the downside case with the own 5-year rate in years 1 and 2 returns 4.6%, own 5-year 6.5%, own 10-year 8.1%. That is below hurdle, 0 of 3.
 
@@ -389,6 +395,7 @@ The saved run says net cash of $7.3bn (cash and short-term investments $64.5bn, 
   the sweep gained the section 3 rules. The Analyse tab's cohort and list runs are unchanged.
 - **Phase 4** (backtest): not started. Nothing yet shows that a company reading "clears hurdle" went on to do better, and the page says so.
 - **Decision 17 revised** by ABSOLUTE-PAGE-1's last commit: see the note under decision 17.
+- **ABSOLUTE-PAGE-2 (4 Nov 2026):** own-record rule for "clears" (decision 28), pre-working-capital base in definition version 3 (decision 29), judge scoring (decision 30).
 
 ### Phase 3: report and UI
 
@@ -444,6 +451,10 @@ New decisions.
 25. Principle (a): an exclusion rule that removes more than one name in ten at calibration is the wrong instrument and becomes a mark until re-specified. The calibration reports a breach and never changes a rule. Owner's principle.
 26. Principle (b): the gate excludes only for broken accounts or solvency; everything else is a mark the reader sees. Owner's principle.
 27. Principle (c): size is not a gate question. The absolute path runs for any company, and one below the backtested range is labelled "outside the tested range", never blocked. Owner's principle.
+
+28. Own record required (ABSOLUTE-PAGE-2): "clears hurdle" needs at least one own-record case (own 5-year or own 10-year growth) available and clearing; with none the verdict is "not enough data: no record of the company's own growth". Owner's ruling after the Ford and Korea Gas pages of 2026-11-04.
+29. Base before working-capital changes (ABSOLUTE-PAGE-2, `valuation/absolute_value_v3.yaml`): cash from operations before working-capital changes minus capital spending, per share, lower of latest and three-year average. Same measure as decision 23. A yield above 25% is marked. Owner's ruling (the Korea Gas 107% yield).
+30. Judge scoring (ABSOLUTE-PAGE-2): a YES is right when the share's total return over the window exceeded the bond yield of its currency plus 5 points a year, pro-rated to the window; a NO when it did not; ABSTAIN is not scored. Old BUY/HOLD/SELL rows keep the old scoring.
 
 ### Judgment calls, listed together
 

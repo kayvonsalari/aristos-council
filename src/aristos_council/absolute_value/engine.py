@@ -63,6 +63,8 @@ class BaseReading:
     currency: str = ""
     note: str = ""                          # why there is no base, or a caution
     not_valued: bool = False                # base at or below zero
+    pre_wc: bool = False                    # version 3: cash from operations before working-capital changes
+    wc_effect: Optional[float] = None       # the latest year's working-capital change per share (positive = cash released)
 
     @property
     def usable(self) -> bool:
@@ -71,7 +73,8 @@ class BaseReading:
     def as_dict(self) -> dict:
         return {"years": [y.as_dict() for y in self.years], "latest": self.latest, "average": self.average,
                 "base": self.base, "chosen": self.chosen, "share_basis": self.share_basis,
-                "currency": self.currency, "note": self.note, "not_valued": self.not_valued}
+                "currency": self.currency, "note": self.note, "not_valued": self.not_valued,
+                "pre_wc": self.pre_wc, "wc_effect": self.wc_effect}
 
 
 @dataclass(frozen=True)
@@ -183,6 +186,7 @@ class AbsoluteValue:
     context: dict = field(default_factory=dict)
     debt_line: str = ""
     shown: bool = True                      # False for a bank or insurer: no figures, just the line
+    yield_high: bool = False                # the yield on the base is above the definition's mark (25%)
 
     def as_dict(self) -> dict:
         return {"definition": self.definition_id, "gate_state": self.gate_state, "shown": self.shown,
@@ -192,7 +196,7 @@ class AbsoluteValue:
                 "backtest_cases": [c.as_dict() for c in self.backtest_cases],
                 "verdict": self.verdict.as_dict(),
                 "backtest_verdict": (self.backtest_verdict.as_dict() if self.backtest_verdict else None),
-                "context": self.context, "debt_line": self.debt_line}
+                "context": self.context, "debt_line": self.debt_line, "yield_high": self.yield_high}
 
 
 # --------------------------------------------------------------------------- #
@@ -237,8 +241,10 @@ def free_cash_flow_base(f, definition: ValueDefinition) -> BaseReading:
     if getattr(f, "statements_currency_note", ""):
         return BaseReading(currency=ccy, note=f"statements not in one currency ({f.statements_currency_note})")
     n = definition.average_years
-    diluted = period_matched(f, ("operating_cash_flow", "capital_expenditure", "diluted_shares"), periods=n)
-    basic = period_matched(f, ("operating_cash_flow", "capital_expenditure", "shares_outstanding"), periods=n)
+    pre = bool(getattr(definition, "base_before_working_capital", False))
+    wc = ("change_in_working_capital",) if pre else ()
+    diluted = period_matched(f, ("operating_cash_flow", "capital_expenditure", "diluted_shares") + wc, periods=n)
+    basic = period_matched(f, ("operating_cash_flow", "capital_expenditure", "shares_outstanding") + wc, periods=n)
     use_diluted = diluted[0].get("diluted_shares") is not None
     rows, share_key, basis = ((diluted, "diluted_shares", "diluted shares") if use_diluted
                               else (basic, "shares_outstanding", "basic shares"))
@@ -246,15 +252,24 @@ def free_cash_flow_base(f, definition: ValueDefinition) -> BaseReading:
     years, values = [], []
     for i, row in enumerate(rows):
         ocf, capex, sh = row.get("operating_cash_flow"), row.get("capital_expenditure"), row.get(share_key)
+        dwc = row.get("change_in_working_capital") if pre else None
+        if pre and ocf is not None and dwc is not None:
+            ocf = ocf - dwc            # cash from operations BEFORE working-capital changes (the solvency rule's measure)
+        elif pre:
+            ocf = None if dwc is None else ocf
         v = am.free_cash_flow_per_share(ocf, capex, sh)
         why = ""
         if v is None:
-            missing = [name for name, x in (("operating cash flow", ocf), ("capital spending", capex),
-                                            ("share count", sh)) if x is None]
+            missing = [name for name, x in (("operating cash flow", row.get("operating_cash_flow")),
+                                            ("change in working capital", dwc if pre else 0),
+                                            ("capital spending", capex), ("share count", sh)) if x is None]
             why = (f"{', '.join(missing)} missing" if missing else "share count not positive")
         years.append(YearFcf(labels[i], v, why))
         values.append(v)
     latest = values[0]
+    wc_effect = None
+    if pre and rows[0].get("change_in_working_capital") is not None and (rows[0].get(share_key) or 0) > 0:
+        wc_effect = rows[0]["change_in_working_capital"] / rows[0][share_key]
     if latest is None:
         # Capital spending can only lower free cash flow: a latest year whose operating cash flow was
         # already negative has no positive free cash flow whatever the missing line says.
@@ -262,9 +277,9 @@ def free_cash_flow_base(f, definition: ValueDefinition) -> BaseReading:
                              rows[0].get(share_key))
         if ocf0 is not None and ocf0 <= 0 and capex0 is None and sh0 is not None and sh0 > 0:
             return BaseReading(years=tuple(years), share_basis=basis, currency=ccy, note=NO_FCF,
-                               not_valued=True)
+                               not_valued=True, pre_wc=pre, wc_effect=wc_effect)
         return BaseReading(years=tuple(years), share_basis=basis, currency=ccy,
-                           note=f"{years[0].note} for {labels[0]}")
+                           note=f"{years[0].note} for {labels[0]}", pre_wc=pre)
     average = sum(values) / n if all(v is not None for v in values) else None
     if average is None:
         have = sum(1 for v in values if v is not None)
@@ -276,9 +291,10 @@ def free_cash_flow_base(f, definition: ValueDefinition) -> BaseReading:
         base, chosen, note = latest, "the latest year", ""
     if base <= 0:
         return BaseReading(years=tuple(years), latest=latest, average=average, base=base, chosen=chosen,
-                           share_basis=basis, currency=ccy, note=NO_FCF, not_valued=True)
+                           share_basis=basis, currency=ccy, note=NO_FCF, not_valued=True, pre_wc=pre,
+                           wc_effect=wc_effect)
     return BaseReading(years=tuple(years), latest=latest, average=average, base=base, chosen=chosen,
-                       share_basis=basis, currency=ccy, note=note)
+                       share_basis=basis, currency=ccy, note=note, pre_wc=pre, wc_effect=wc_effect)
 
 
 # --------------------------------------------------------------------------- #
@@ -539,15 +555,22 @@ def build_cases(base: BaseReading, price: PriceReading, hurdle: HurdleReading, r
     return cases, backtest
 
 
+NO_OWN_RECORD = "no record of the company's own growth"
+
+
 def decide(cases, hurdle: HurdleReading, *, minimum_cases: int = 2) -> Verdict:
     """Qualifies below / clears the hurdle from the available cases. Fewer than two available, or no
-    hurdle: not enough data."""
+    hurdle: not enough data. ABSOLUTE-PAGE-2: "clears" needs at least one OWN-RECORD case (own 5-year or own
+    10-year growth) to be available and to clear; with none the verdict is not enough data, and the forecast-
+    based cases stay on the page as information."""
     have = [c for c in cases if c.available]
     if not hurdle.available:
         return Verdict(NOT_ENOUGH_DATA, f"no hurdle: {hurdle.note}", of=len(have))
     if len(have) < minimum_cases:
         return Verdict(NOT_ENOUGH_DATA, f"fewer than {minimum_cases} growth cases could be worked out",
                        of=len(have))
+    if not any(c.key in (OWN_5, OWN_10) for c in have):
+        return Verdict(NOT_ENOUGH_DATA, NO_OWN_RECORD, of=len(have))
     clearing = sum(1 for c in have if c.clears(hurdle.hurdle))
     rets = [c.ret for c in have]
     state = CLEARS_HURDLE if clearing == len(have) else BELOW_HURDLE
@@ -640,4 +663,5 @@ def build_absolute(f, *, gate, last_close: Optional[float], quote_fx=None, growt
         verdict = Verdict(NOT_ENOUGH_DATA, f"not enough data: {price.note}")
         bt_verdict = verdict
     return AbsoluteValue(definition.id, gate_state, base, price, hurdle, yield_on_base, implied, implied_note,
-                         cases, backtest, verdict, bt_verdict, ctx, debt_line)
+                         cases, backtest, verdict, bt_verdict, ctx, debt_line,
+                         yield_high=(yield_on_base is not None and yield_on_base > definition.yield_mark_above))

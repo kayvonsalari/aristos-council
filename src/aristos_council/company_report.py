@@ -1756,8 +1756,8 @@ def format_company_report(report: CompanyReport) -> str:
         lines += [f"{_judge_render.SECTION_TITLE.upper()} (blind, no vote; it changes nothing above)",
                   *_judge_render.text_lines(report.judge_panel), ""]
     if report.council_opinion is not None:
-        lines += ["COUNCIL OPINION (narration only - never a vote; the agreement above is "
-                  "the verdict of record)", *council_opinion_lines(report), ""]
+        lines += ["COUNCIL OPINION (narration only - never a vote; it explains the lens ranks, the relative "
+                  "view, not the verdict at the top of the page)", *council_opinion_lines(report), ""]
     lines += workings_text_lines(report)
     tail = f"Ran in {report.seconds:.1f}s"
     if report.cache.get("hits") is not None:

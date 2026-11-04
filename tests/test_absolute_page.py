@@ -53,9 +53,13 @@ def msft(**over) -> Fundamentals:
             "capital_expenditure": [-115_948 * M, -64_551 * M, -44_477 * M],
             "diluted_shares": [7_453 * M, 7_465 * M, 7_469 * M],
             "depreciation_amortization": [38_534 * M, 29_433 * M, 20_958 * M],
-            "diluted_eps": [17.95, 13.64, 11.80]},
+            "diluted_eps": [17.95, 13.64, 11.80],
+            # ABSOLUTE-PAGE-2: the cash flow statement's change in working capital (positive = cash released), so cash
+            # from operations before it is 187,830m for FY2026
+            "change_in_working_capital": [-4_895 * M, -1_000 * M, -2_000 * M]},
         aligned_period_ends={"operating_cash_flow": ends, "capital_expenditure": ends,
-                             "diluted_shares": ends, "diluted_eps": ends, "depreciation_amortization": ends},
+                             "diluted_shares": ends, "diluted_eps": ends, "depreciation_amortization": ends,
+                             "change_in_working_capital": ends},
         capital_expenditure_annual=[-115_948 * M, -64_551 * M, -44_477 * M, -28_107 * M],
         total_revenue=[331_800 * M, 281_700 * M, 245_100 * M, 211_900 * M],
         depreciation_amortization_annual=[38_534 * M, 29_433 * M, 20_958 * M],
@@ -163,9 +167,9 @@ def test_the_fixtures_reach_the_five_verdict_states():
 
 def test_microsoft_below_hurdle_reads_the_design_pages_range_and_hurdle():
     first, second = cp.answer_lines(case("below"))
-    assert first == ("Qualifies, below hurdle: the price returns 4.3% to 8.1% a year if growth holds, against a "
+    assert first == ("Qualifies, below hurdle: the price returns 4.6% to 8.6% a year if growth holds, against a "
                      "hurdle of 9.93%.")
-    assert "25.0% a year of growth in free cash flow per share for ten years" in second
+    assert "24.0% a year of growth in free cash flow per share for ten years" in second
     assert "0 of 4 cases clear" in second
 
 
@@ -237,11 +241,11 @@ def test_the_excluded_story_says_which_rule_failed():
 
 def test_the_price_paragraph_for_microsoft_carries_the_base_the_implied_growth_and_the_count():
     price = dict(cp.story_paragraphs(case("below")))["What the price requires."]
-    assert "$8.99 of free cash flow per share (the latest year)" in price
-    assert "needs 25.0% a year of growth for ten years" in price
+    assert "$9.64 of free cash flow per share (the latest year)" in price
+    assert "needs 24.0% a year of growth for ten years" in price
     assert "17.2% (5-year)" in price and "21.2% (10-year)" in price
     assert "above the 18% a year few companies have kept up" in price
-    assert "own 5-year growth 6.5%" in price and "the downside case 4.3%" in price
+    assert "own 5-year growth 6.8%" in price and "the downside case 4.6%" in price
     assert price.rstrip().endswith("0 of 4 cases clear.")
 
 
@@ -434,8 +438,8 @@ def _good_summary():
         asked="Would a buyer of Microsoft at today's price, holding for ten years, more likely than not beat the "
               "ten-year US bond yield plus 5 points?",
         happened="The gate found no failed exclusion. One warning fired: Highly leveraged.",
-        survived="Free cash flow is 8.99 dollars a share. At the hurdle the price needs 25.0% growth a year for "
-                 "ten years. The four cases return 4.3% to 8.1%, so 0 of 4 clear the hurdle. It qualifies, "
+        survived="Free cash flow is 9.64 dollars a share. At the hurdle the price needs 24.0% growth a year for "
+                 "ten years. The four cases return 4.6% to 8.6%, so 0 of 4 clear the hurdle. It qualifies, "
                  "below hurdle.",
         doubt="The consensus case rests on analyst forecasts that no past data can test.",
         cannot_say="This is not a forecast and no backtest of this method exists yet.")
@@ -453,7 +457,7 @@ def test_the_facts_pack_is_built_from_the_page_and_names_what_must_be_named():
     assert pack["answer"] == list(cp.answer_lines(_facts_report()))
     assert pack["gate"]["to_name"] == ["Highly leveraged"]
     assert [c["role"] for c in pack["return_range"]["cases"]] == ["record", "record", "forecast", "downside"]
-    assert any("25.0% a year of growth" in ln for ln in pack["price_test"]["lines"])
+    assert any("24.0% a year of growth" in ln for ln in pack["price_test"]["lines"])
     assert any("Verdict: Qualifies, below hurdle, 0 of 4 cases clear." in ln for ln in pack["return_range"]["lines"])
     assert company_facts_pack(_facts_report(excluded=True))["gate"]["to_name"] == ["Earnings quality"]
     assert "lenses" not in pack and "agreement" not in pack

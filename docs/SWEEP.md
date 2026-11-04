@@ -82,3 +82,17 @@ invalid or incomplete judge row with its reason. The rules that already existed 
 and are called, not copied; the sweep adds location (entry, section, line).
 
 A finding is a report, not a fix: the sweep changes no report.
+
+
+## The company page rules (ABSOLUTE-PAGE-1)
+
+The report sweep (`tests/test_report_sweep.py`, rules in `src/aristos_council/report_sweep.py`) checks the company page in its text,
+HTML and Markdown renderings with two page rules, on every company in the fixture set:
+
+1. **Sections 1 to 5** (the answer, the story, the gate, the price test, the return range) name no lens: no lens id, no column
+   name ("BUY votes" and the like) and no lens display label. A one-word label that is also plain English ("Growth", "Quality") cannot
+   be told from the word itself, so only unmistakable labels are matched.
+2. **Sections 1 to 6** (adding "Context, no vote") never use "expected return", "target" or "proven", and never BUY, HOLD or SELL. Those
+   words may appear only in the relative view under "Show the workings" and in the judges' own answers.
+
+The first-screen budget now counts the answer and the story only (it ends where "The gate" begins).

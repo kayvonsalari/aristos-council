@@ -1,0 +1,59 @@
+# ABSOLUTE-PAGE-2 - the valuation definition, version 3. It SUPERSEDES absolute_value_v2.yaml (and v1), which stay on disk
+# as the record. Immutable once merged: a change is absolute_value_v4.yaml, never an edit.
+#
+# ONE change from version 2: the BASE is cash from operations BEFORE working-capital changes, minus capital spending, per
+# share (the lower of the latest year and the three-year average, as before). Everything else is version 2, including the
+# downside case's lower-of start. Two additions that belong to it: the latest year's working-capital effect is printed as
+# its own line, and a yield on the base above 25% is marked "unusually high; check the cash flow lines".
+#
+# Why (docs/DESIGN_absolute.md section d): working-capital swings reverse, so they are not cash the owner keeps. Korea Gas
+# (036460.KS) read a 107% yield on 2026-11-04 because receivables collected after years of under-recovered costs flowed
+# through operating cash flow. The solvency rule of the gate already uses cash from operations before working-capital
+# changes (Moody's CFO pre-WC), so the page now has ONE definition of cash from operations.
+
+id: absolute_value_v3
+version: 3
+status: frozen
+supersedes: absolute_value_v2
+design: docs/DESIGN_absolute.md
+
+base:
+  measure: free cash flow per share = (cash from operations before working-capital changes minus capital spending) / diluted weighted-average shares
+  cash_from_operations: before_working_capital_changes     # version 2: operating cash flow as reported
+  rule: lower_of_latest_and_three_year_average          # judgment (design section d, decision 14)
+  average_years: 3
+  yield_mark_above: 0.25          # a yield on the base above 25% is marked "unusually high; check the cash flow lines"
+
+hurdle:
+  margin_points: 5.0              # Kroll 2026 US equity risk premium; Fernandez et al. 2025 (decision 15)
+  bond_series_file: data/bond_series.yaml
+  staleness_days: 7               # the last good yield is used for up to 7 days, then lapses
+
+solver:
+  horizon_years: 10               # decision 5: the ten-year equation
+  growth_after_horizon: 0.0       # flat after year 10, valued as a perpetuity
+  implied_growth_range: [-0.10, 0.40]
+  return_range: [0.0001, 0.60]    # 0.01% to 60%
+  iterations: 200
+
+cases:
+  own_5_year:  {window: 5,  label: "Own 5-year earnings growth"}
+  own_10_year: {window: 10, label: "Own 10-year earnings growth"}
+  consensus:
+    label: "Analyst consensus"
+    marked: not testable
+    note: two steps from the last reported fiscal year's diluted earnings per share to the second forecast year's consensus
+  downside:
+    label: "Downside"
+    rule: years 1 and 2 at the LOWER of the consensus rate and the own 5-year rate (whichever exists if one is missing), then a straight line to the bond yield by year 10, flat after
+    fast_rule: lower_of_consensus_and_own_5_year
+    fast_years: 2
+
+high_growth_mark: 0.18            # Chan, Karceski and Lakonishok 2003, Table I: the lowest of the three 90th percentiles
+
+verdict_states: [excluded, not_covered, not_enough_data, qualifies_below_hurdle, qualifies_clears_hurdle]
+# ABSOLUTE-PAGE-2 verdict rule: "clears" needs at least one own-record case (own 5-year or own 10-year) available and clearing;
+# with none the verdict is "not enough data: no record of the company's own growth" (code: absolute_value/engine.decide).
+
+investment_intensity:
+  boundary_from: gates/absolute_gate_v2.yaml

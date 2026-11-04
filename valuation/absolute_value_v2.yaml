@@ -1,3 +1,6 @@
+# SUPERSEDED by valuation/absolute_value_v3.yaml (ABSOLUTE-PAGE-2, 2026-11-04): version 3 changes the base to cash from
+# operations BEFORE working-capital changes. This file is kept unchanged as the record of version 2.
+#
 # ABSOLUTE-PAGE-1, last commit - the valuation definition, version 2. It SUPERSEDES absolute_value_v1.yaml, which stays on
 # disk as the record of the first version (a changed definition is a new version, never an edit).
 # Every number the price test, the hurdle, the four growth cases and the verdict use is on this page.

@@ -32,10 +32,11 @@ OUTSIDE_RANGE_LINE = ("Outside the tested range: this company is smaller than th
                       "tested on. It is shown, never blocked.")
 NOT_COVERED_LINE = ("Not covered: banks and insurers are outside this path. No return figure and no verdict "
                     "is shown here; the price-to-book and return-on-equity readings are the context for them.")
-HEADERS_BASE = ("Year", "Free cash flow per share")
+HEADERS_BASE = ("Year", "Cash flow per share, before working-capital changes")
 HEADERS_RECORDS = ("Record", "Growth a year", "Note")
 HEADERS_RETURNS = ("Growth case", "Growth", RETURN_LABEL, "Against the hurdle")
 NO_FCF_TEXT = "not valued: no positive free cash flow"
+YIELD_HIGH_MARK = "unusually high; check the cash flow lines"
 
 
 def _pct(v, places: int = 1) -> str:
@@ -130,11 +131,26 @@ def _base_lines(av: AbsoluteValue) -> tuple[list, str]:
                     f"({_money(b.average, b.currency)}), so {b.chosen}. Share count: {b.share_basis}.")
         else:
             text = f"Base: {_money(b.base, b.currency)} a share, {b.chosen}. Share count: {b.share_basis}."
+        if b.pre_wc:
+            text += " Cash from operations is taken before working-capital changes, minus capital spending."
         if b.note:
             text += f" {b.note}."
     else:
         text = f"Base: not enough data: {b.note or 'no free cash flow per share'}."
     return rows, text
+
+
+def _wc_line(av: AbsoluteValue) -> str:
+    """The latest year's working-capital effect as its own line: the cash the base leaves out (version 3)."""
+    b = av.base
+    if not b.pre_wc or b.wc_effect is None:
+        return ""
+    amount = _money(abs(b.wc_effect), b.currency)
+    if abs(b.wc_effect) < 0.005:
+        return "Working-capital effect of the latest year: none to speak of; the base leaves it out."
+    way = "released cash" if b.wc_effect > 0 else "took cash"
+    return (f"Working-capital effect of the latest year: it {way} of {amount} a share, "
+            f"which the base leaves out (swings in working capital reverse).")
 
 
 def _record_rows(av: AbsoluteValue) -> list[list[str]]:
@@ -213,8 +229,12 @@ def price_test_blocks(av: AbsoluteValue, outside_range: bool = False) -> list[tu
     out += [("head", "The base"), ("table", list(HEADERS_BASE), rows), ("p", base_text),
             ("p", _price_line(av))]
     out.append(("head", "What the price requires"))
+    wc = _wc_line(av)
+    if wc:
+        out.append(("p", wc))
     if av.yield_on_base is not None:
-        out.append(("p", f"Free cash flow yield on the base: {_pct(av.yield_on_base)}."))
+        mark = f" {YIELD_HIGH_MARK.capitalize()}." if av.yield_high else ""
+        out.append(("p", f"Free cash flow yield on the base: {_pct(av.yield_on_base)}.{mark}"))
     if av.implied_growth is not None:
         out.append(("p", f"Implied growth: at the hurdle, the price needs {_pct(av.implied_growth)} a year of "
                          f"growth in free cash flow per share for ten years, flat after that."))

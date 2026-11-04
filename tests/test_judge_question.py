@@ -136,7 +136,7 @@ def test_an_old_summary_file_is_upgraded_in_place_and_its_rows_are_kept(tmp_path
     caller = _scripted({"anthropic": [_reply("NO")], "openai": [_reply("NO")], "google": [_reply("NO")]})
     jlog.write_log(_run_panel(report, caller), folder)
     rows = list(csv.DictReader(path.open(encoding="utf-8", newline="")))
-    assert tuple(rows[0].keys()) == jlog.SUMMARY_COLUMNS and jlog.SUMMARY_COLUMNS[-1] == "question"
+    assert tuple(rows[0].keys()) == jlog.SUMMARY_COLUMNS and jlog.SUMMARY_COLUMNS[-2:] == ("question", "hurdle")
     old, new = rows
     assert old["ticker"] == "KO" and old["claude_verdict"] == "HOLD" and old["panel_agreement"] == "mixed"
     assert old["question"] == "" and new["question"] == QUESTION_VERSION
@@ -165,10 +165,56 @@ def test_the_judge_report_labels_an_old_row_as_the_older_question():
     assert "(older question: BUY, HOLD or SELL)" in out and "(ten-year question)" in out
 
 
-def test_a_new_answer_is_never_scored_by_the_old_buy_hold_sell_rule():
+def _series(start, end_ret_by_days):
+    from datetime import date, timedelta
+    d0 = date(2026, 10, 1)
+    return [(d0 + timedelta(days=k), 100.0 * (1 + r)) for k, r in end_ret_by_days]
+
+
+def test_yes_is_right_when_the_return_beats_the_pro_rated_hurdle_and_no_when_it_does_not():
+    assert score.yes_no_outcome("YES", 0.051, 0.10, 6) == score.RIGHT          # 10% x 6/12 = 5%: 5.1% beats it
+    assert score.yes_no_outcome("YES", 0.05, 0.10, 6) == score.WRONG           # equal is not beating
+    assert score.yes_no_outcome("NO", 0.05, 0.10, 6) == score.RIGHT
+    assert score.yes_no_outcome("NO", 0.30, 0.10, 12) == score.WRONG
+
+
+def test_scoring_rows_of_the_ten_year_question_against_the_recorded_hurdle():
     from datetime import date
+    prices = {"CO": _series(0, [(0, 0.0), (91, 0.06), (182, 0.04), (365, 0.30), (400, 0.30)])}
     row = {"run_date": "2026-10-01T09:00:00+00:00", "ticker": "CO", "verdict_of_record": "Qualifies, below hurdle",
-           "claude_verdict": "NO", "openai_verdict": "YES", "gemini_verdict": "ABSTAIN", "peers": "A;B;C",
-           "question": QUESTION_VERSION}
-    out = score.score_rows([row], {}, date(2027, 6, 1))
-    assert {r["status"] for r in out} == {score.NOT_SCORED}
+           "claude_verdict": "YES", "openai_verdict": "NO", "gemini_verdict": "ABSTAIN", "peers": "",
+           "question": QUESTION_VERSION, "hurdle": "0.0993"}
+    out = score.score_rows([row], prices, date(2027, 11, 1))
+    by = {(r["subject"], int(r["window_months"])): r for r in out}
+    # 3 months: 6% beat 9.93% x 3/12 = 2.5%; 6 months: 4% did not beat 4.97%; 12 months: 30% beat 9.93%
+    assert by[("claude", 3)]["status"] == score.RIGHT and by[("openai", 3)]["status"] == score.WRONG
+    assert by[("claude", 6)]["status"] == score.WRONG and by[("openai", 6)]["status"] == score.RIGHT
+    assert by[("claude", 12)]["status"] == score.RIGHT and by[("openai", 12)]["status"] == score.WRONG
+    assert all(by[("gemini", m)]["status"] == score.NOT_SCORED for m in (3, 6, 12))       # ABSTAIN is never scored
+    assert all(by[("lenses", m)]["status"] == score.NOT_SCORED for m in (3, 6, 12))
+    assert {r["rule"] for r in out} == {score.RULE_NEW}
+
+
+def test_an_old_row_keeps_the_old_rule_and_says_so_and_a_new_row_without_a_hurdle_is_no_data():
+    from datetime import date
+    prices = {"CO": _series(0, [(0, 0.0), (91, 0.10), (400, 0.10)]), "A": _series(0, [(0, 0.0), (95, 0.0), (400, 0.0)]),
+              "B": _series(0, [(0, 0.0), (95, 0.0), (400, 0.0)]), "C": _series(0, [(0, 0.0), (95, 0.0), (400, 0.0)])}
+    old = {"run_date": "2026-10-01T09:00:00+00:00", "ticker": "CO", "verdict_of_record": "BUY", "claude_verdict": "BUY",
+           "openai_verdict": "", "gemini_verdict": "", "peers": "A;B;C", "question": ""}
+    new = {**old, "verdict_of_record": "Qualifies, below hurdle", "claude_verdict": "YES", "question": QUESTION_VERSION,
+           "hurdle": "", "peers": ""}
+    out = score.score_rows([old, new], prices, date(2027, 11, 1))
+    olds = [r for r in out if r["rule"] == score.RULE_OLD and r["subject"] == "claude" and int(r["window_months"]) == 3]
+    news = [r for r in out if r["rule"] == score.RULE_NEW and r["subject"] == "claude" and int(r["window_months"]) == 3]
+    assert olds[0]["status"] == score.RIGHT                       # BUY: beat its cohort by 10 points
+    assert news[0]["status"] == score.NO_DATA                     # no hurdle was recorded
+    assert "pro-rated to the window" in score.summary_text(out) and "Older rows keep the rule above" in score.summary_text(out)
+
+
+def test_the_summary_log_records_the_hurdle_so_a_row_can_be_scored_later(tmp_path, report):
+    caller = _scripted({"anthropic": [_reply("NO")], "openai": [_reply("NO")], "google": [_reply("NO")]})
+    result = _run_panel(report, caller)
+    assert jlog.SUMMARY_COLUMNS[-2:] == ("question", "hurdle")
+    row = jlog.summary_row(result)
+    expected = "" if result.record.hurdle is None else f"{result.record.hurdle:.6f}"
+    assert row[-1] == expected and row[-2] == QUESTION_VERSION

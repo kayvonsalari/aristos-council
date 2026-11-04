@@ -1,3 +1,12 @@
+> **Changed 4 Nov 2026 (ABSOLUTE-PAGE-1 and 2).** On a **company page** the verdict of record is no longer a lens vote. It is the
+> absolute verdict: a gate on the accounts (excluded / not covered / not enough data), then a price test that works out the
+> growth the price needs and what a buyer would earn each year under four stated growth cases, against a hurdle of the
+> ten-year government bond yield plus 5 points. The answer is one of five states (excluded, not covered, not enough data,
+> qualifies below hurdle, qualifies clears hurdle); "clears" needs at least one case built on the company's own growth record.
+> The lens votes and the equal-vote majority described below are now the **relative view** on that page, folded under "Show
+> the workings"; they decide nothing there. The Analyse tab's list and cohort runs still rank and vote exactly as described.
+> See `docs/DESIGN_absolute.md` and `docs/CALCULATIONS.md` 4.12.
+
 # Aristos Council — How It Works
 
 Aristos Council is an auditable, multi-agent equity research system. Given a ticker and a
