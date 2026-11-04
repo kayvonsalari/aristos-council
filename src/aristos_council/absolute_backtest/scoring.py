@@ -2,12 +2,17 @@
 
 For one form and one hold: each round's basket (the form's names that have a price at entry and exit) is held equal-weight,
 pays the round-trip cost once, and is turned into a yearly rate. The excess is that rate minus the yearly rate of the
-comparison over the same window: the equal-weight basket of the industry (pays no cost), the index fund, cash. A round with
+comparison over the same window: the equal-weight basket of the industry (pays the same round-trip cost, once per hold, since
+ABSOLUTE-BACKTEST-CORRECTED; before that it paid none and every excess was 0.5 points a year too low on a 12-month hold), the
+index fund, cash. A round with
 fewer than ``MIN_HELD`` priced names holds no position and is left out of every average.
 
 Excess is averaged by calendar year of entry and then across years, as the existing backtest does. The luck test draws 500
 random baskets of the same size, from the same priced pool, that turn over as often as the form's own basket does
-(``backtest._TurnoverBaskets``); the luck score is the share of them whose mean yearly excess is at least the form's.
+(``backtest._TurnoverBaskets``); the luck score is the share of them whose mean yearly excess is at least the form's. Each
+calendar year's random series are re-centred on zero (a random basket earns the pool's return minus the cost, so its excess over
+a basket that pays the same cost is nil on average); the persistent baskets sat 0.3 to 0.4 points below that, which flattered
+the forms. Their spread is kept.
 """
 from __future__ import annotations
 
@@ -73,7 +78,7 @@ def score_rounds(inputs, hold_months: int, cost: float) -> list[RoundScore]:
         n_new = len(names) if prev is None else len(names - prev)
         prev = names
         rets = list(ri.pool_returns.values())
-        pool_ann = annualise(sum(rets) / len(rets), years) if rets else None
+        pool_ann = annualise(sum(rets) / len(rets) - cost, years) if rets else None      # the basket pays the cost too
         index_ann, cash_ann = annualise(ri.index_return, years), annualise(ri.cash_return, years)
         if len(held) >= MIN_HELD and pool_ann is not None:
             net = sum(v for _, v in held) / len(held) - cost
@@ -178,11 +183,15 @@ def luck_test(inputs, scores, hold_months: int, cost: float, *, industry_slug: s
     if not cols or metrics.ex_pool is None:
         return LuckResult(None, None)
     yearly = _year_group_means(np.column_stack(cols), pos_dates)          # (n_years, N)
+    shift = yearly.mean(axis=1, keepdims=True)                            # how far the random baskets sit from the pool
+    yearly = yearly - shift                                               # re-centred on the pool, spread kept
+    shift_by_year = dict(zip(sorted({d.year for d in pos_dates}), shift[:, 0]))
     series_mean = yearly.mean(axis=0)
     luck = float(np.mean(series_mean >= metrics.ex_pool - PROOF_TOLERANCE))
     db_vs = None
     if db_cols and metrics.drop_best is not None:
         db_year = _year_group_means(np.column_stack(db_cols), db_dates)
+        db_year = db_year - np.array([[shift_by_year[y]] for y in sorted({d.year for d in db_dates})])   # the same shift
         db_vs = float(metrics.drop_best - np.median(db_year.mean(axis=0)))
     return LuckResult(luck, db_vs, tuple(sorted({d.year for d in pos_dates})), yearly.astype(np.float32))
 

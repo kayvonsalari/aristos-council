@@ -22,6 +22,7 @@ SURVIVORSHIP = ("Survivorship and restatement limits: the company list is today'
                 "No edge shown in a test that cannot see failures; nothing here is proof.")
 
 BACKTEST_DIR = "backtests_absolute"
+CORRECTED_SUBDIR = "corrected"   # the corrected run (split fix, two-sided cost, re-centred luck) beside the published baseline
 HOLDS = (12, 36)
 COST_BPS = 50.0                  # the existing 0.5% round-trip cost
 YEARS = 10
