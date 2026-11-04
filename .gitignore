@@ -68,3 +68,5 @@ data/local/paper_trade/
 # watched is personal (same reason as data/local/cohorts/watch.yaml), and this repo is public.
 # `forward_snapshot take --commit` force-adds one on purpose, for a private repo.
 snapshots/forward_*.csv
+
+reports_cc/

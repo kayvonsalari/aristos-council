@@ -1,0 +1,59 @@
+industry,form2_pts,nogate_pts,difference_pts
+Chemicals,-0.73,-0.69,-0.04
+Comms - Interactive Media & Gaming,+6.97,+7.23,-0.26
+Comms - Media & Entertainment,-9.00,-9.29,+0.29
+Comms - Telecoms,-1.08,-1.17,+0.09
+Consumer - Auto Manufacturers,-2.25,-1.59,-0.66
+Consumer - Auto Parts,+2.70,+2.70,+0.00
+Consumer - Beverages & Tobacco,-2.46,-2.86,+0.40
+Consumer - Discretionary Retail,-2.07,-2.07,+0.00
+Consumer - Grocery & Discount Retailers,-0.31,-0.25,-0.05
+Consumer - Homebuilders,-0.66,+1.15,-1.81
+"Consumer - Hotels, Resorts & Gaming",-3.40,-2.95,-0.45
+Consumer - Household & Personal Products,-4.90,-4.81,-0.09
+Consumer - Internet Retail,+2.09,+5.53,-3.45
+Consumer - Leisure & Travel,-5.84,-6.07,+0.22
+"Consumer - Luxury, Apparel & Footwear",+4.24,+4.77,-0.53
+Consumer - Packaged Foods & Confectionery,+0.61,+0.63,-0.02
+Consumer - Restaurants,-1.56,-1.61,+0.05
+Energy - Exploration & Production,+4.22,+4.24,-0.02
+Energy - Integrated Oil & Refining,+5.81,+5.82,-0.01
+Energy - Midstream & Pipelines,-0.33,-0.34,+0.00
+Energy - Oilfield Services & Equipment,+2.80,+0.83,+1.98
+Health - Biotechnology,+7.11,+3.97,+3.13
+Health - Large Pharma,+0.59,+0.41,+0.18
+Health - Life Science Tools & Diagnostics,+1.03,+1.03,-0.00
+Health - Medical Devices & Instruments,-4.43,-4.93,+0.50
+Health - Services & Managed Care,-1.07,-1.09,+0.03
+Health - Specialty & Generic Pharma,-3.87,-4.04,+0.17
+Industrials - Aerospace & Defense (Europe + US),-3.91,-4.30,+0.39
+Industrials - Airlines & Airports,+3.17,+3.30,-0.13
+Industrials - Building Products,-1.10,-0.96,-0.14
+Industrials - Construction & Farm Machinery,+0.86,+0.84,+0.02
+Industrials - Electrical Equipment,-8.55,-9.04,+0.50
+Industrials - Engineering & Construction,-1.13,-1.56,+0.43
+Industrials - Grid & Electrical Machinery,+13.77,+13.79,-0.02
+Industrials - Industrial Machinery,+0.43,+0.56,-0.13
+Industrials - Logistics & Trucking,-0.86,-0.93,+0.06
+Industrials - Marine Shipping,+13.05,+13.11,-0.07
+Industrials - Railroads,-2.16,-2.11,-0.04
+Industrials - Waste & Environmental,-0.20,-0.21,+0.01
+Materials - Building Materials,+0.40,+0.40,+0.00
+Materials - Commodity Chemicals & Agri Inputs,-7.19,-7.18,-0.00
+Materials - Copper & Aluminum,+14.86,+15.23,-0.38
+Materials - Diversified Mining,+15.42,+15.42,+0.00
+Materials - Gold,+3.11,+3.11,+0.00
+Materials - Packaging & Paper,+5.46,+5.34,+0.13
+Materials - Specialty Chemicals,-0.35,-0.31,-0.04
+Materials - Steel,-4.49,-4.44,-0.04
+Tech - Application Software,-7.00,-7.10,+0.10
+Tech - Communications Equipment,-11.01,-10.68,-0.33
+Tech - Electronic Components,-3.69,-3.77,+0.08
+Tech - Hardware,-5.70,-5.79,+0.10
+Tech - IT Services,+2.78,+2.88,-0.10
+Tech - Semiconductor Equipment,+3.31,+2.95,+0.37
+Tech - Semiconductors,-9.39,-9.53,+0.14
+Tech - Systems Software,-9.72,-9.34,-0.38
+Utilities - Electric,+0.63,+0.63,+0.00
+"Utilities - Gas, Water & Multi-Utilities",+3.59,+3.32,+0.26
+Utilities - Renewable & Independent Power,+0.78,+0.24,+0.54

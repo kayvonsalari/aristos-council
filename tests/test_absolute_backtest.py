@@ -12,6 +12,7 @@ import json
 from datetime import date, timedelta
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from aristos_council.absolute_backtest import (CASH_TICKER, FORMS, HOLDS, INDEX_TICKER, MIN_HELD, SURVIVORSHIP,
@@ -277,6 +278,43 @@ def test_a_split_sized_jump_in_the_share_count_withholds_the_per_share_figures()
     assert hist.eps[0] is not None and all(v is None for v in hist.eps[1:])
 
 
+def _with_shares(f: Fundamentals, shares_by_year) -> Fundamentals:
+    """``f`` with the provider's share count per fiscal year replaced (the list and the per-period scalar alike)."""
+    ends = f.period_ends["shares_outstanding_annual"]
+    sh = [shares_by_year(int(e[:4])) for e in ends]
+    scalars = {e: {**s, "shares_outstanding": shares_by_year(int(e[:4]))} for e, s in f.period_scalars.items()}
+    return Fundamentals(**{**f.__dict__, "shares_outstanding_annual": sh, "period_scalars": scalars})
+
+
+def _read(f: Fundamentals, d: date) -> "NameReading":
+    memo = MemoAdapter(FakeFeed({"X": f}, {"X": weekly_bars(100, 0.05)}), start=date(2007, 1, 1), end=date(2021, 1, 31))
+    return evaluate.evaluate_name("X", d, AsOfAdapter(memo, d, 90, "filing"), f, Tape(weekly_bars(100, 0.05)),
+                                  cap_today_usd=None, size_floor=None, gate_def=load_gate(), value_def=DEF, bonds=fake_bonds())
+
+
+def test_a_split_that_happens_after_the_round_date_does_not_remove_the_name_from_the_forms():
+    """ABSOLUTE-BACKTEST-REVIEW. The provider's share counts are as reported, the closes are split-adjusted to today. The
+    old rule withheld the valuation of every name that split AFTER the round date, in every earlier round: it used the
+    future to take names out, and names that split are mostly names that went up (6% of the priced names, +7.8 points a
+    year more than the rest, measured on the 58 industries). They could never enter form 2 or form 3, while the industry
+    basket and the random baskets held them. The shares of the earlier periods are restated to today's basis instead."""
+    d = date(2012, 6, 30)
+    split = _read(_with_shares(synth_fundamentals("X"), lambda y: 10 * M if y < 2015 else 40 * M), d)      # 4-for-1 in 2015
+    control = _read(_with_shares(synth_fundamentals("X"), lambda y: 40 * M), d)                           # always 40m
+    assert not split.split_withheld and split.base_yield is not None
+    assert split.base_yield == pytest.approx(control.base_yield)
+    assert split.backtest_state == control.backtest_state
+
+
+def test_a_split_inside_the_visible_accounts_still_withholds_and_an_odd_ratio_is_not_taken_for_a_split():
+    d = date(2018, 6, 30)                                   # the 2015 split is now inside the visible record
+    inside = _read(_with_shares(synth_fundamentals("X"), lambda y: 10 * M if y < 2015 else 40 * M), d)
+    assert inside.split_withheld and inside.base_yield is None
+    d = date(2012, 6, 30)
+    odd = _read(_with_shares(synth_fundamentals("X"), lambda y: 10 * M if y < 2015 else 24.5 * M), d)     # x2.45: near no split ratio
+    assert odd.split_withheld and odd.base_yield is None
+
+
 # --------------------------------------------------------------------------- #
 # holds, cost, comparisons, luck
 # --------------------------------------------------------------------------- #
@@ -293,9 +331,34 @@ def test_a_twelve_month_hold_pays_the_cost_once_and_is_compared_three_ways():
     (s, *_), cost = score_rounds(_inputs(1), 12, 0.005), 0.005
     basket = (0.30 + 0.20 + 0.10 + 0.0 + 0.05 - 0.05) / 6
     assert s.positioned and s.n_held == 4
-    assert s.form_ann == pytest.approx(0.15 - cost) and s.pool_ann == pytest.approx(basket)
-    assert s.ex_pool == pytest.approx(0.15 - cost - basket)
+    # ABSOLUTE-BACKTEST-CORRECTED: the industry basket pays the same round trip, so a picker is not charged for a cost the
+    # comparison escapes
+    assert s.form_ann == pytest.approx(0.15 - cost) and s.pool_ann == pytest.approx(basket - cost)
+    assert s.ex_pool == pytest.approx(0.15 - basket)
     assert s.ex_index == pytest.approx(0.15 - cost - 0.10) and s.ex_cash == pytest.approx(0.15 - cost - 0.01)
+
+
+def test_a_form_that_holds_the_whole_pool_earns_exactly_nothing_over_the_basket():
+    pool = {"A": 0.30, "B": 0.20, "C": 0.10, "D": 0.00}
+    for hold in (12, 36):
+        inputs = [RoundInput(date(2015, 1, 31), date(2015 + hold // 12, 1, 31), pool, tuple(pool))]
+        (s,) = score_rounds(inputs, hold, 0.005)
+        assert s.ex_pool == pytest.approx(0.0, abs=1e-12)
+
+
+def test_random_baskets_are_centred_on_the_pool_so_luck_does_not_flatter_a_form():
+    from aristos_council.absolute_backtest.scoring import luck_test
+    rng = __import__("random").Random(3)
+    inputs = []
+    for i in range(36):
+        d = date(2012 + i // 12, 1 + i % 12, 28)
+        pool = {f"T{k}": rng.uniform(-0.2, 0.5) for k in range(30)}
+        inputs.append(RoundInput(d, date(d.year + 1, d.month, 28), pool, tuple(sorted(pool))[:6]))
+    sc = score_rounds(inputs, 12, 0.005)
+    m = metrics_for(sc)
+    lk = luck_test(inputs, sc, 12, 0.005, industry_slug="x", label="centre", metrics=m, n_baskets=200)
+    assert np.abs(lk.random_year_means.mean(axis=1)).max() < 1e-6          # each year's random series average zero
+    assert 0.0 <= lk.luck <= 1.0
 
 
 def test_a_thirty_six_month_hold_is_annualised_after_the_cost():

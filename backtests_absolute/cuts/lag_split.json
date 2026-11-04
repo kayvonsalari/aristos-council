@@ -1,0 +1,78 @@
+{
+ "names_with_filing_dates_share": 0.44564152791381,
+ "filing_lag_days": {
+  "n": 21551,
+  "median": 58,
+  "p10": 44,
+  "p90": 90,
+  "share_over_90": 0.09521599925757505
+ },
+ "newest_accounts_age_days": {
+  "dated": {
+   "n": 92892,
+   "mean": 236.17280282478578,
+   "median": 243.0
+  },
+  "undated": {
+   "n": 118173,
+   "mean": 257.56549296370576,
+   "median": 273
+  }
+ },
+ "dated_by_suffix": {
+  "US": [
+   899,
+   993
+  ],
+  "HK": [
+   0,
+   184
+  ],
+  "TW": [
+   1,
+   119
+  ],
+  "TO": [
+   10,
+   117
+  ],
+  "L": [
+   0,
+   105
+  ],
+  "DE": [
+   0,
+   84
+  ],
+  "KS": [
+   0,
+   81
+  ],
+  "AX": [
+   0,
+   78
+  ],
+  "PA": [
+   0,
+   68
+  ],
+  "SW": [
+   0,
+   48
+  ],
+  "ST": [
+   0,
+   38
+  ],
+  "MC": [
+   0,
+   33
+  ]
+ },
+ "split_rows": 4630,
+ "share_withheld_of_priced": 0.06213101288567175,
+ "mean_fwd12_withheld": 0.31669111606420625,
+ "mean_fwd12_rest": 0.23840150196724708,
+ "rest_minus_basket_pts_per_year": -0.45803406737333685,
+ "forward_split_share_of_withheld": 0.7700888246230118
+}

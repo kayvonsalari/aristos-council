@@ -1,0 +1,5 @@
+LUCK CHECK, pooled over 58 industries, 12-month hold. Random excess over the basket, points a year (an unbiased random basket earns minus the cost: -0.50).
+ form  form ex |  persistent mean    sd   luck |  fresh mean    sd   luck
+    1    -0.77 |            -0.56  0.07  99.2% |       -0.50  0.04 100.0% |         100.0%
+    2    -0.44 |            -0.83  0.62  26.0% |       -0.51  0.26  36.8% |          43.8%
+    3    -0.98 |            -0.89  0.61  55.4% |       -0.49  0.33  93.2% |          77.8%

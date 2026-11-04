@@ -1,5 +1,6 @@
 """What the company page says about the backtest: one sentence for "what this cannot tell you" and the three forms'
-figures for the workings. Reads ``backtests_absolute/<industry>/result.json`` only; nothing is computed here, and an
+figures for the workings. Reads ``backtests_absolute/corrected/<industry>/result.json`` only (the corrected run of ABSOLUTE-BACKTEST-CORRECTED; the
+published first run stays under ``backtests_absolute/`` as the baseline and is not read here); nothing is computed here, and an
 industry with no finished result gets no sentence (the page keeps its old one).
 """
 from __future__ import annotations
@@ -8,9 +9,9 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from . import BACKTEST_DIR, FORM_NAMES, FORMS, HOLDS, SURVIVORSHIP
+from . import BACKTEST_DIR, CORRECTED_SUBDIR, FORM_NAMES, FORMS, HOLDS, SURVIVORSHIP
 
-DEFAULT_ROOT = Path(__file__).resolve().parents[3] / BACKTEST_DIR
+DEFAULT_ROOT = Path(__file__).resolve().parents[3] / BACKTEST_DIR / CORRECTED_SUBDIR
 NO_RESULT = ("No backtest of this method exists yet, so nothing shows that companies with this reading went on "
              "to do better.")
 
