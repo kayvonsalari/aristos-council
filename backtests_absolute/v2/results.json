@@ -1,0 +1,437 @@
+{
+ "check": {
+  "selection_rounds_compared": 18966,
+  "selection_rounds_different": 0,
+  "pooled": [
+   {
+    "form": 1,
+    "ex_mine": -0.002745717843089418,
+    "ex_corrected": -0.002746,
+    "luck_mine": 1.0,
+    "luck_corrected": 1.0
+   },
+   {
+    "form": 2,
+    "ex_mine": 0.0003547619759260847,
+    "ex_corrected": 0.000355,
+    "luck_mine": 0.448,
+    "luck_corrected": 0.448
+   },
+   {
+    "form": 3,
+    "ex_mine": -0.004881240581279725,
+    "ex_corrected": -0.004881,
+    "luck_mine": 0.794,
+    "luck_corrected": 0.794
+   }
+  ]
+ },
+ "benchmarks": [
+  [
+   "2 gate + cheapest third",
+   "industry basket",
+   "+0.04",
+   "44.8%",
+   7,
+   58
+  ],
+  [
+   "2 gate + cheapest third",
+   "gate-passer basket",
+   "+0.36",
+   "26.8%",
+   7,
+   58
+  ],
+  [
+   "2 gate + cheapest third",
+   "size-matched basket",
+   "-0.06",
+   "51.8%",
+   5,
+   58
+  ],
+  [
+   "3 gate + absolute verdict",
+   "industry basket",
+   "-0.49",
+   "79.4%",
+   5,
+   58
+  ],
+  [
+   "3 gate + absolute verdict",
+   "gate-passer basket",
+   "-0.31",
+   "69.6%",
+   5,
+   58
+  ],
+  [
+   "3 gate + absolute verdict",
+   "size-matched basket",
+   "-0.63",
+   "86.4%",
+   3,
+   58
+  ]
+ ],
+ "headtohead": [
+  [
+   "unmatched",
+   "count",
+   4938,
+   "+0.41",
+   "+0.00",
+   "44.1%"
+  ],
+  [
+   "unmatched",
+   "average size ($bn)",
+   4926,
+   "+9.94",
+   "+1.97",
+   "62.7%"
+  ],
+  [
+   "unmatched",
+   "cash yield (points)",
+   4938,
+   "-4.37",
+   "-2.18",
+   "8.2%"
+  ],
+  [
+   "unmatched",
+   "12-month return (points)",
+   4938,
+   "-0.22",
+   "+0.08",
+   "50.3%"
+  ],
+  [
+   "matched (equal sizes)",
+   "average size ($bn)",
+   4926,
+   "+8.73",
+   "+0.99",
+   "58.4%"
+  ],
+  [
+   "matched (equal sizes)",
+   "cash yield (points)",
+   4938,
+   "-4.88",
+   "-1.68",
+   "0.0%"
+  ],
+  [
+   "matched (equal sizes)",
+   "12-month return (points)",
+   4938,
+   "-0.38",
+   "+0.00",
+   "47.8%"
+  ]
+ ],
+ "headtohead_by_year": [
+  [
+   "unmatched",
+   2016,
+   114,
+   "+1.55",
+   "-1.87",
+   "-2.51",
+   "-4.05",
+   "42.1%"
+  ],
+  [
+   "unmatched",
+   2017,
+   428,
+   "+6.57",
+   "-6.30",
+   "-1.07",
+   "-0.18",
+   "48.4%"
+  ],
+  [
+   "unmatched",
+   2018,
+   492,
+   "+7.31",
+   "-3.93",
+   "+1.42",
+   "+1.76",
+   "56.5%"
+  ],
+  [
+   "unmatched",
+   2019,
+   530,
+   "+5.52",
+   "-3.48",
+   "+7.05",
+   "+4.98",
+   "72.1%"
+  ],
+  [
+   "unmatched",
+   2020,
+   540,
+   "+9.31",
+   "-4.39",
+   "-4.44",
+   "-2.99",
+   "40.9%"
+  ],
+  [
+   "unmatched",
+   2021,
+   430,
+   "+16.91",
+   "-3.51",
+   "+1.61",
+   "+2.04",
+   "58.1%"
+  ],
+  [
+   "unmatched",
+   2022,
+   633,
+   "+14.39",
+   "-3.76",
+   "-1.75",
+   "-0.55",
+   "46.4%"
+  ],
+  [
+   "unmatched",
+   2023,
+   623,
+   "+9.74",
+   "-6.85",
+   "-0.77",
+   "-0.36",
+   "46.7%"
+  ],
+  [
+   "unmatched",
+   2024,
+   617,
+   "+5.29",
+   "-3.84",
+   "+0.72",
+   "-0.40",
+   "47.0%"
+  ],
+  [
+   "unmatched",
+   2025,
+   531,
+   "+16.56",
+   "-3.78",
+   "-3.61",
+   "-2.17",
+   "41.8%"
+  ],
+  [
+   "matched (equal sizes)",
+   2016,
+   114,
+   "+4.53",
+   "-1.93",
+   "-2.58",
+   "-1.44",
+   "41.2%"
+  ],
+  [
+   "matched (equal sizes)",
+   2017,
+   428,
+   "+4.67",
+   "-15.15",
+   "-1.31",
+   "-0.84",
+   "39.3%"
+  ],
+  [
+   "matched (equal sizes)",
+   2018,
+   492,
+   "+7.08",
+   "-5.28",
+   "+1.44",
+   "+1.40",
+   "55.3%"
+  ],
+  [
+   "matched (equal sizes)",
+   2019,
+   530,
+   "+4.24",
+   "-3.40",
+   "+6.27",
+   "+4.33",
+   "66.8%"
+  ],
+  [
+   "matched (equal sizes)",
+   2020,
+   540,
+   "+8.12",
+   "-4.20",
+   "-4.17",
+   "-1.06",
+   "43.1%"
+  ],
+  [
+   "matched (equal sizes)",
+   2021,
+   430,
+   "+17.73",
+   "-4.39",
+   "+1.37",
+   "+2.00",
+   "56.3%"
+  ],
+  [
+   "matched (equal sizes)",
+   2022,
+   633,
+   "+11.33",
+   "-3.61",
+   "-1.56",
+   "-0.02",
+   "44.5%"
+  ],
+  [
+   "matched (equal sizes)",
+   2023,
+   623,
+   "+8.00",
+   "-5.25",
+   "-0.88",
+   "+0.00",
+   "42.9%"
+  ],
+  [
+   "matched (equal sizes)",
+   2024,
+   617,
+   "+5.95",
+   "-2.97",
+   "+0.01",
+   "+0.00",
+   "44.4%"
+  ],
+  [
+   "matched (equal sizes)",
+   2025,
+   531,
+   "+13.21",
+   "-2.77",
+   "-3.54",
+   "-1.77",
+   "41.4%"
+  ]
+ ],
+ "bootstrap": [
+  [
+   "1 gate alone",
+   "-0.27",
+   "100.0%",
+   "-0.29",
+   "-0.53 to -0.09",
+   109
+  ],
+  [
+   "2 gate + cheapest third",
+   "+0.04",
+   "44.8%",
+   "+0.09",
+   "-1.76 to +1.65",
+   109
+  ],
+  [
+   "3 gate + absolute verdict",
+   "-0.49",
+   "79.4%",
+   "+0.01",
+   "-1.02 to +1.70",
+   109
+  ],
+  [
+   "4 cheapest third + gross profit (pre-registered)",
+   "+0.48",
+   "25.8%",
+   "+0.28",
+   "-1.64 to +1.76",
+   109
+  ]
+ ],
+ "regimes": [
+  [
+   "1 gate alone",
+   "+0.00 / 50.4%",
+   "-0.42 / 92.0%",
+   "-0.48 / 100.0%"
+  ],
+  [
+   "2 gate + cheapest third",
+   "-2.54 / 100.0%",
+   "+2.57 / 8.8%",
+   "+1.35 / 6.0%"
+  ],
+  [
+   "3 gate + absolute verdict",
+   "-1.38 / 95.2%",
+   "+1.34 / 18.8%",
+   "-0.51 / 72.6%"
+  ],
+  [
+   "4 cheapest third + gross profit (pre-registered)",
+   "-1.02 / 82.8%",
+   "+0.36 / 31.0%",
+   "+2.03 / 3.8%"
+  ]
+ ],
+ "spread": [
+  [
+   "wide spread (above the industry's own first-five-year median)",
+   "+1.63",
+   3763,
+   10
+  ],
+  [
+   "narrow spread (at or below it)",
+   "-1.51",
+   2194,
+   10
+  ]
+ ],
+ "spread_left_out": [],
+ "form4": {
+  "verdict": "FAIL",
+  "ex": 0.004776277581509445,
+  "luck": 0.258,
+  "boot": {
+   "point": 0.002750875788866715,
+   "lo": -0.016377714351371378,
+   "hi": 0.017643023269949626,
+   "n": 109
+  },
+  "status": {
+   "chosen": 4642,
+   "fewer than 3 chosen": 1680,
+   "no cheap third": 0
+  },
+  "rounds": 6322,
+  "positioned": 4642,
+  "median_held": 4.0,
+  "industries_passing": 4,
+  "form2_pooled": 0.0003547619759260847,
+  "form2_same_rounds": -0.002780763969789372,
+  "n_industries": 56
+ }
+}

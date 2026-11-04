@@ -1,0 +1,7 @@
+# Survivorship and restatement limits: the company list is today's market index, so companies that were delisted, merged or went bankrupt are not in it, and a test that removes failing companies is flattered most by their absence. Accounts are the provider's restated record, not the figures first published. No edge shown in a test that cannot see failures; nothing here is proof.
+# ABSOLUTE-BACKTEST-2: 12-month hold, every basket and benchmark pays 0.5% round trip. Pooling: by calendar year of entry inside an industry, then across industries, then across years. Definitions were frozen in PREREGISTRATION.md before the run.
+form,pooled_excess,luck,monthly_point,lo90,hi90,months
+1,-0.002746,1.000000,-0.002930,-0.005268,-0.000885,109
+2,0.000355,0.448000,0.000913,-0.017588,0.016496,109
+3,-0.004881,0.794000,0.000141,-0.010229,0.016975,109
+4,0.004776,0.258000,0.002751,-0.016378,0.017643,109
