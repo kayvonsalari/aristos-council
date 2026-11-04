@@ -20,31 +20,31 @@ pytestmark = pytest.mark.min_group(3)
 # =========================================================================== #
 # no lens voted
 # =========================================================================== #
-def test_no_lens_vote_still_asks_three_judges_and_logs_no_lens_vote(tmp_path, report):
-    report.agreement = None
+def test_no_verdict_still_asks_three_judges_and_logs_no_verdict(tmp_path, report):
+    report.check.absolute = None
     narrator = []
-    caller = _scripted({"anthropic": [_reply("SELL")], "openai": [_reply("SELL")], "google": [_reply("HOLD")]})
+    caller = _scripted({"anthropic": [_reply("NO")], "openai": [_reply("NO")], "google": [_reply("YES")]})
     result = _run_panel(report, caller, reader=lambda *a: narrator.append(a))
     assert result.available and len(caller.calls) == 6 and narrator == []
-    assert result.agreement == panel.NO_RECORD and result.reading is None
-    assert [c["verdict"] for c in render.cards(result)] == ["SELL", "SELL", "HOLD"]     # three judge rows
+    assert result.agreement == panel.NO_COMPARISON and result.reading is None
+    assert [c["verdict"] for c in render.cards(result)] == ["NO", "NO", "YES"]          # three judge rows
     folder = jlog.write_log(result, tmp_path / "j")
     log = list(csv.DictReader((folder / jlog.LOG_NAME).open(encoding="utf-8")))
     (summary,) = list(csv.DictReader((folder / jlog.SUMMARY_NAME).open(encoding="utf-8")))
-    assert {r["verdict_of_record"] for r in log} == {"no lens vote"} and len(log) == 6
-    assert summary["verdict_of_record"] == "no lens vote" and summary["judges_answered"] == "3"
+    assert {r["verdict_of_record"] for r in log} == {"no verdict"} and len(log) == 6
+    assert summary["verdict_of_record"] == "no verdict" and summary["judges_answered"] == "3"
 
 
-def test_the_agreement_line_without_a_lens_vote(report):
-    report.agreement = None
-    caller = _scripted({"anthropic": [_reply("SELL")], "openai": [_reply("SELL")], "google": [_reply("HOLD")]})
+def test_the_agreement_line_without_a_verdict(report):
+    report.check.absolute = None
+    caller = _scripted({"anthropic": [_reply("NO")], "openai": [_reply("NO")], "google": [_reply("YES")]})
     result = _run_panel(report, caller)
     # JUDGE-FIGURE-CHECK-1: the scripted answers quote figures the test pack does not hold, so the header also
     # counts the sentences that were marked
     assert render.summary_lines(result) == [
-        "Verdict of record: none (no lens voted). Panel: 1 HOLD, 2 SELL.",
+        "Verdict: none. Panel: 1 YES, 2 NO \u2014 no comparison.",
         "3 sentences quoted a figure that is not in the facts the judges were given; each is marked where it stands."]
-    one = _run_panel(report, _scripted({"anthropic": [_reply("SELL")], "openai": [RuntimeError("x")],
+    one = _run_panel(report, _scripted({"anthropic": [_reply("NO")], "openai": [RuntimeError("x")],
                                         "google": [RuntimeError("x")]}))
     assert render.summary_lines(one)[0].endswith("No panel reading: fewer than two judges answered.")
 
@@ -75,10 +75,10 @@ def test_a_timeout_is_retried_once_and_the_second_try_can_succeed(report):
         tries["n"] += 1
         if tries["n"] == 1:
             raise CallError("TimeoutError: timed out", timeout=True)
-        return _reply("BUY")
+        return _reply("YES")
 
     call = panel._ask_once(_config(1, 1).judges[0], "s", "u", caller, 1)
-    assert call.status == "ok" and call.attempts == 2 and call.verdict == "BUY"
+    assert call.status == "ok" and call.attempts == 2 and call.verdict == "YES"
 
 
 def test_two_timeouts_record_error_timeout_with_the_raw_detail():
@@ -106,7 +106,7 @@ def test_a_non_timeout_failure_is_still_not_retried():
 
 
 def test_a_timeout_then_a_malformed_reply_still_gets_its_one_format_retry():
-    seq = iter([CallError("timed out", timeout=True), "not json", _reply("HOLD")])
+    seq = iter([CallError("timed out", timeout=True), "not json", _reply("NO")])
 
     def caller(spec, system, user):
         item = next(seq)

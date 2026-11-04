@@ -58,40 +58,21 @@ def company_report_markdown(report) -> str:
         out += [f"*{page.note}*", ""]
 
     gate = getattr(c, "gate", None)
-    if gate is not None:                                  # ABSOLUTE-GATE-1, after the story, before the table
+    if gate is not None:                                  # section 3
         from .gate import render as _gate_render
         out += _gate_render.markdown_lines(gate)
     absolute = getattr(c, "absolute", None)
-    if absolute is not None:                              # ABSOLUTE-VALUE-1, directly after the gate section
+    if absolute is not None:                              # sections 4 and 5
         from .absolute_value import render as _value_render
         out += _value_render.markdown_lines(absolute, report.outside_tested_range)
 
-    out += [f"## {SECTION_TABLE}", ""]
-    for line in page.tag:
-        out += [f"*{line}*", ""]
-    notes = []
-    if page.no_vote:
-        out += [page.no_vote, ""]
-    else:
-        out += ["| " + " | ".join(page.headers) + " |", "|" + "---|" * len(page.headers)]
-        for r in page.rows:
-            lens = _cell(r.lens)
-            if r.asks:
-                notes.append((len(notes) + 1, r))
-                lens += f"[^{len(notes)}]"
-            out.append("| " + " | ".join([lens, _cell(r.outcome), _cell(r.badge),
-                                          _cell(r.reason)]) + " |")
-        out.append("")
-    if page.track_intro:
-        out += [f"*{page.track_intro}*", ""]
-    if page.caption:
-        out += [f"*{page.caption}*", ""]
-    if page.group_note:
-        out += [f"*{page.group_note}*", ""]
-    if page.badge_note:
-        out += [f"*{page.badge_note}*", ""]
+    from .company_page import CONTEXT_TITLE, context_blocks   # section 6
+    from .absolute_value.render import _md_block
+    out += [f"## {CONTEXT_TITLE}", ""]
+    for b in context_blocks(report):
+        out += _md_block(b)
 
-    if report.judge_panel is not None:
+    if report.judge_panel is not None:                    # section 7
         from .judges.render import markdown_lines as _judge_markdown
         out += _judge_markdown(report.judge_panel)
 
@@ -110,6 +91,27 @@ def company_report_markdown(report) -> str:
     out += ["### Absolute readings", "", *(_bullets(body) if body else ["none available"]), ""]
     forecasts = analyst_forecast_lines(c)
     out += ["### What analysts say", "", *(_bullets(forecasts[1:]) if forecasts else ["not available"]), ""]
+    from .company_page import RELATIVE_VIEW_CAPTION, RELATIVE_VIEW_TITLE
+    out += [f"### {RELATIVE_VIEW_TITLE}", "", f"*{RELATIVE_VIEW_CAPTION}*", ""]
+    out += [f"{ln}" for ln in (page.relative_answer[0], "", page.relative_answer[1], "")]
+    for line in page.tag:
+        out += [f"*{line}*", ""]
+    notes = []
+    if page.no_vote:
+        out += [page.no_vote, ""]
+    else:
+        out += ["| " + " | ".join(page.headers) + " |", "|" + "---|" * len(page.headers)]
+        for r in page.rows:
+            lens = _cell(r.lens)
+            if r.asks:
+                notes.append((len(notes) + 1, r))
+                lens += f"[^{len(notes)}]"
+            out.append("| " + " | ".join([lens, _cell(r.outcome), _cell(r.badge),
+                                          _cell(r.reason)]) + " |")
+        out.append("")
+    for extra in (page.track_intro, page.caption, page.group_note, page.badge_note):
+        if extra:
+            out += [f"*{extra}*", ""]
     from .company_check import peers_lines
     peer_block = peers_lines(c, columns=rank_columns(report), company_ticker=report.ticker)
     out += ["### Peers", "", "```", *(peer_block or ["none computed"]), "```", ""]

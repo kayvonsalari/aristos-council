@@ -35,7 +35,7 @@ pytestmark = pytest.mark.min_group(3)
 KEYS = {"ANTHROPIC_API_KEY": "k-a", "OPENAI_API_KEY": "k-o", "GEMINI_API_KEY": "k-g"}
 
 
-def _reply(verdict="BUY", confidence="medium", reason="Cash flow covers its debt twice over [pack].",
+def _reply(verdict="YES", confidence="medium", reason="Cash flow covers its debt twice over [pack].",
            change="A cut to the dividend.", fact="Free cash flow was $5.3bn in FY2025 [pack].",
            risk="A one-off tax bill could recur.", unexplained="nothing"):
     return json.dumps({"verdict": verdict, "confidence": confidence, "driving_fact": fact,
@@ -173,8 +173,16 @@ def test_the_pack_hash_changes_with_the_facts_and_not_otherwise(report):
 # the answer shape
 # =========================================================================== #
 def test_a_valid_answer_parses_and_is_normalised():
-    got, why = ans.parse_answer(_reply("buy", "HIGH"))
-    assert why == "" and (got.verdict, got.confidence) == ("BUY", "high")
+    got, why = ans.parse_answer(_reply("yes", "HIGH"))
+    assert why == "" and (got.verdict, got.confidence) == ("YES", "high")
+
+
+@pytest.mark.parametrize("old_word", ["BUY", "HOLD", "SELL"])
+def test_the_answers_to_the_old_question_are_rejected_with_the_new_vocabulary(old_word):
+    """ABSOLUTE-PAGE-1: the judges answer YES, NO or ABSTAIN; BUY, HOLD and SELL belonged to the old question."""
+    assert ans.VERDICTS == ("YES", "NO", "ABSTAIN") and ans.OLD_VERDICTS == ("BUY", "HOLD", "SELL", "ABSTAIN")
+    got, why = ans.parse_answer(_reply(old_word))
+    assert got is None and why == "verdict is not one of YES, NO, ABSTAIN"
 
 
 def test_a_single_code_fence_is_tolerated_but_prose_around_the_object_is_not():
@@ -183,13 +191,13 @@ def test_a_single_code_fence_is_tolerated_but_prose_around_the_object_is_not():
 
 
 @pytest.mark.parametrize("raw", [
-    "", "not json", "[]", json.dumps({"verdict": "BUY"}),
+    "", "not json", "[]", json.dumps({"verdict": "YES"}),
     json.dumps({"verdict": "MAYBE", "confidence": "low", "reason": "r", "would_change_my_mind": "w"}),
-    json.dumps({"verdict": "BUY", "confidence": "certain", "reason": "r", "would_change_my_mind": "w"}),
-    json.dumps({"verdict": "BUY", "confidence": "low", "reason": " ", "would_change_my_mind": "w"}),
-    json.dumps({"verdict": "BUY", "confidence": "low", "reason": "r", "would_change_my_mind": "w",
+    json.dumps({"verdict": "YES", "confidence": "certain", "reason": "r", "would_change_my_mind": "w"}),
+    json.dumps({"verdict": "YES", "confidence": "low", "reason": " ", "would_change_my_mind": "w"}),
+    json.dumps({"verdict": "YES", "confidence": "low", "reason": "r", "would_change_my_mind": "w",
                 "extra": 1}),
-    json.dumps({"verdict": "BUY", "confidence": "low", "reason": 5, "would_change_my_mind": "w"}),
+    json.dumps({"verdict": "YES", "confidence": "low", "reason": 5, "would_change_my_mind": "w"}),
 ])
 def test_a_malformed_answer_is_rejected_with_a_reason(raw):
     got, why = ans.parse_answer(raw)
@@ -198,9 +206,9 @@ def test_a_malformed_answer_is_rejected_with_a_reason(raw):
 
 def test_malformed_output_is_retried_once_then_recorded_as_invalid():
     spec = _config().judges[0]
-    caller = _scripted({"anthropic": ["garbage", _reply("SELL")]})
+    caller = _scripted({"anthropic": ["garbage", _reply("NO")]})
     call = panel._ask_once(spec, "sys", "user", caller, 1)
-    assert call.status == "ok" and call.verdict == "SELL" and call.attempts == 2
+    assert call.status == "ok" and call.verdict == "NO" and call.attempts == 2
     assert panel.RETRY_NOTE in caller.calls[1][1] and panel.RETRY_NOTE not in caller.calls[0][1]
 
     always_bad = _scripted({"anthropic": ["garbage"]})
@@ -220,18 +228,18 @@ def test_a_failed_call_is_an_error_and_is_not_retried():
 # stability, split, agreement
 # =========================================================================== #
 def test_a_judge_that_repeats_itself_is_stable_and_shows_its_verdict_once():
-    results = panel.run_judges("facts", _config(1), _scripted({"anthropic": [_reply("BUY")]}),
+    results = panel.run_judges("facts", _config(1), _scripted({"anthropic": [_reply("YES")]}),
                                environ=KEYS)
     j = results[0]
-    assert j.status == panel.STABLE and j.verdict == "BUY" and j.verdict_text() == "BUY"
+    assert j.status == panel.STABLE and j.verdict == "YES" and j.verdict_text() == "YES"
     assert [c.call_no for c in j.calls] == [1, 2]
 
 
 def test_a_judge_whose_two_answers_differ_is_unstable_and_keeps_both():
-    caller = _scripted({"anthropic": [_reply("BUY"), _reply("HOLD")]})
+    caller = _scripted({"anthropic": [_reply("YES"), _reply("NO")]})
     j = panel.run_judges("facts", _config(1), caller, environ=KEYS)[0]
     assert j.status == panel.UNSTABLE and j.verdict == ""
-    assert sorted(j.verdicts) == ["BUY", "HOLD"] and j.verdict_text().startswith("unstable: ")
+    assert sorted(j.verdicts) == ["NO", "YES"] and j.verdict_text().startswith("unstable: ")
 
 
 def test_a_stable_abstention_is_shown_as_abstained():
@@ -241,14 +249,14 @@ def test_a_stable_abstention_is_shown_as_abstained():
 
 
 def test_one_valid_call_and_one_failed_call_is_incomplete_not_stable():
-    caller = _scripted({"anthropic": [_reply("BUY"), "garbage"]})
+    caller = _scripted({"anthropic": [_reply("YES"), "garbage"]})
     j = panel.run_judges("facts", _config(1), caller, environ=KEYS)[0]
     assert j.status == panel.INCOMPLETE and not j.is_stable and j.verdict == ""
 
 
 def test_a_missing_key_is_not_run_and_the_other_judges_still_run():
-    caller = _scripted({"anthropic": [_reply("BUY")], "openai": [_reply("BUY")],
-                        "google": [_reply("BUY")]})
+    caller = _scripted({"anthropic": [_reply("YES")], "openai": [_reply("YES")],
+                        "google": [_reply("YES")]})
     results = panel.run_judges("facts", _config(3), caller, environ={"ANTHROPIC_API_KEY": "k"})
     by = {j.family: j for j in results}
     assert by["anthropic"].status == panel.STABLE
@@ -262,15 +270,24 @@ def test_the_split_line_counts_stable_judges_then_the_ones_that_did_not_settle()
         r = panel.JudgeResult("f", "L", "m", status=status)
         r.calls = [panel.JudgeCall(1, "ok", verdict)] * 2 if verdict else []
         return r
-    two_buy_one_abstain = [j(panel.STABLE, "BUY"), j(panel.STABLE, "BUY"), j(panel.STABLE, "ABSTAIN")]
-    assert panel.split_line(two_buy_one_abstain) == "2 BUY, 1 ABSTAIN"
-    assert panel.split_line([j(panel.STABLE, "HOLD"), j(panel.UNSTABLE), j(panel.NOT_RUN)]) == \
-        "1 HOLD, 1 unstable, 1 not run"
+    two_yes_one_abstain = [j(panel.STABLE, "YES"), j(panel.STABLE, "YES"), j(panel.STABLE, "ABSTAIN")]
+    assert panel.split_line(two_yes_one_abstain) == "2 YES, 1 ABSTAIN"
+    assert panel.split_line([j(panel.STABLE, "NO"), j(panel.UNSTABLE), j(panel.NOT_RUN)]) == \
+        "1 NO, 1 unstable, 1 not run"
     assert panel.split_line([]) == "no judge answered"
 
 
-def _record(verdict, split="BUY 2 / HOLD 1 / SELL 0"):
-    return panel.RecordSnapshot(verdict=verdict, split=split, headline="BUY on 2 of 3 votes", n_voted=3)
+_RECORDS = {"CLEARS": ("qualifies_clears_hurdle", "Qualifies, clears hurdle", "4 of 4 cases clear"),
+            "BELOW": ("qualifies_below_hurdle", "Qualifies, below hurdle", "0 of 4 cases clear"),
+            "": ("excluded", "Excluded", "")}
+
+
+def _record(side, _legacy_split=None):
+    """The verdict of record as the panel sees it (ABSOLUTE-PAGE-1): CLEARS, BELOW or "" (no side). The words the
+    old tests used (BUY, HOLD, SELL, MIXED) are read as the side they stood in for."""
+    side = {"BUY": "CLEARS", "HOLD": "BELOW", "SELL": "BELOW", "MIXED": "", "YES": "CLEARS", "NO": "BELOW"}.get(side, side)
+    state, word, split = _RECORDS[side]
+    return panel.RecordSnapshot(verdict=side, state=state, word=word, split=split)
 
 
 def _stable(*verdicts):
@@ -282,33 +299,65 @@ def _stable(*verdicts):
     return out
 
 
-def test_the_panel_agrees_disagrees_or_is_mixed_against_the_record_without_averaging():
-    rec = _record("BUY")
-    assert panel.panel_agreement(_stable("BUY", "BUY", "ABSTAIN"), rec) == panel.AGREES
-    assert panel.panel_agreement(_stable("HOLD", "SELL"), rec) == panel.DISAGREES
-    assert panel.panel_agreement(_stable("BUY", "HOLD"), rec) == panel.MIXED
-    assert panel.panel_agreement(_stable("ABSTAIN", "ABSTAIN"), rec) == panel.NO_STABLE
-    assert panel.panel_agreement([], rec) == panel.NO_READING
-    # a record that is itself split cannot be "agreed with"
-    assert panel.panel_agreement(_stable("BUY", "BUY"), _record("MIXED")) == panel.MIXED
+def test_the_panel_agrees_disagrees_or_is_mixed_against_the_verdict_without_averaging():
+    """YES is set against "clears hurdle" and NO against "below hurdle"; an abstention takes no side."""
+    clears, below = _record("CLEARS"), _record("BELOW")
+    assert panel.panel_agreement(_stable("YES", "YES", "ABSTAIN"), clears) == panel.AGREES
+    assert panel.panel_agreement(_stable("NO", "NO"), clears) == panel.DISAGREES
+    assert panel.panel_agreement(_stable("YES", "NO"), clears) == panel.MIXED
+    assert panel.panel_agreement(_stable("NO", "NO", "ABSTAIN"), below) == panel.AGREES
+    assert panel.panel_agreement(_stable("YES", "YES"), below) == panel.DISAGREES
+    assert panel.panel_agreement(_stable("YES", "NO"), below) == panel.MIXED
+    assert panel.panel_agreement(_stable("ABSTAIN", "ABSTAIN"), clears) == panel.NO_STABLE
+    assert panel.panel_agreement([], clears) == panel.NO_READING
+    assert panel.panel_agreement(_stable("YES"), clears) == panel.NO_READING      # one judge is not a panel
 
 
-def test_the_record_is_the_strict_majority_of_the_lenses_that_voted():
-    from aristos_council.company_report import CompanyAgreement
-    make = lambda b, h, s: CompanyAgreement(n_ticked=b + h + s, buy=("a",) * b, hold=("b",) * h, sell=("c",) * s)
-    assert panel.record_snapshot(make(2, 1, 0)).verdict == "BUY"
-    assert panel.record_snapshot(make(1, 1, 0)).verdict == "MIXED"
-    assert panel.record_snapshot(make(0, 0, 3)).verdict == "SELL"
-    assert panel.record_snapshot(make(0, 0, 0)).verdict == ""
-    assert panel.record_snapshot(None).verdict == ""
-    assert panel.record_snapshot(make(2, 1, 0)).split == "BUY 2 / HOLD 1 / SELL 0"
+def test_excluded_not_covered_and_not_enough_data_show_no_comparison():
+    for answers in (("YES", "YES"), ("NO", "NO"), ("YES", "NO")):
+        assert panel.panel_agreement(_stable(*answers), _record("")) == panel.NO_COMPARISON
+    assert panel.NO_RECORD == panel.NO_COMPARISON
 
 
-def test_the_agreement_line_names_the_verdict_of_record():
-    line = panel.agreement_line(panel.DISAGREES, _record("BUY"))
-    assert "disagrees" in line and "(BUY: BUY 2, HOLD 1, SELL 0)" in line
-    assert "the lenses are split" in panel.agreement_line(panel.MIXED, _record("MIXED", "BUY 1 / HOLD 1 / SELL 0"))
-    assert "nothing to compare" in panel.agreement_line(panel.NO_STABLE, _record("BUY"))
+def test_the_record_is_the_verdict_the_page_reached():
+    from types import SimpleNamespace
+
+    from aristos_council.absolute_value.engine import (BELOW_HURDLE, CLEARS_HURDLE, EXCLUDED, NOT_COVERED,
+                                                       NOT_ENOUGH_DATA, Verdict)
+    av = lambda v: SimpleNamespace(verdict=v)
+    clears = panel.record_snapshot(av(Verdict(CLEARS_HURDLE, "", 4, 4, 0.12, 0.2)))
+    below = panel.record_snapshot(av(Verdict(BELOW_HURDLE, "", 1, 4, 0.04, 0.2)))
+    assert (clears.verdict, clears.word, clears.split) == ("CLEARS", "Qualifies, clears hurdle", "4 of 4 cases clear")
+    assert (below.verdict, below.word, below.split) == ("BELOW", "Qualifies, below hurdle", "1 of 4 cases clear")
+    for state in (EXCLUDED, NOT_COVERED, NOT_ENOUGH_DATA):
+        r = panel.record_snapshot(av(Verdict(state, "x")))
+        assert r.verdict == "" and not r.comparable and r.state == state
+    assert panel.record_snapshot(None) == panel.RecordSnapshot() and panel.RecordSnapshot().cell == "no verdict"
+
+
+def test_the_agreement_line_names_the_verdict_and_says_no_comparison_when_there_is_none():
+    line = panel.agreement_line(panel.DISAGREES, _record("BELOW"))
+    assert line == "The panel disagrees with the verdict (Qualifies, below hurdle, 0 of 4 cases clear)."
+    assert panel.agreement_line(panel.AGREES, _record("CLEARS")).startswith("The panel agrees with the verdict (Qualifies, clears")
+    assert "mixed against the verdict (Qualifies, below hurdle" in panel.agreement_line(panel.MIXED, _record("BELOW"))
+    assert "nothing to compare" in panel.agreement_line(panel.NO_STABLE, _record("BELOW"))
+    assert panel.agreement_line(panel.NO_COMPARISON, _record("")).startswith("No comparison: the verdict is Excluded")
+
+
+def test_the_question_is_the_one_in_the_design_and_the_prompt_asks_it():
+    from aristos_council.judges.config import (OLD_QUESTION_VERSION, QUESTION_TEXT, QUESTION_VERSION,
+                                               prompt_text, question_of)
+    assert QUESTION_TEXT == (
+        "Using only the evidence pack and anything you know about the company, which you must label, would a person "
+        "who buys this company at today's price and holds it for ten years more likely than not earn more than the "
+        "ten-year government bond yield of the company's currency plus 5 points a year? Answer YES, NO or ABSTAIN, "
+        "with a confidence and the one fact that decided it.")
+    text = prompt_text()
+    assert QUESTION_TEXT[:QUESTION_TEXT.index(" Answer YES")] in text.replace("\"", '"').replace('"Using', "Using")
+    assert '"verdict": "YES|NO|ABSTAIN"' in text and "BUY|HOLD|SELL" not in text
+    assert "no verdict, and no required return" in text
+    assert question_of({"question": QUESTION_VERSION}) == QUESTION_VERSION
+    assert question_of({"ticker": "OLD"}) == OLD_QUESTION_VERSION              # a record from before 4 Nov 2026
 
 
 # =========================================================================== #
@@ -325,7 +374,7 @@ class _Runner:
 
 
 def _result(agreement_status, judges):
-    r = panel.PanelResult(ticker="CO", available=True, record=_record("BUY"), judges=judges,
+    r = panel.PanelResult(ticker="CO", available=True, record=_record("CLEARS"), judges=judges,
                           agreement=agreement_status)
     return r
 
@@ -336,15 +385,15 @@ class _R:
 
 def test_the_narrator_is_not_asked_when_the_panel_agrees_or_no_judge_is_stable():
     runner = _Runner("A paragraph.")
-    agree = narrate.write_panel_reading(_result(panel.AGREES, _stable("BUY", "BUY")), _R(), runner=runner)
+    agree = narrate.write_panel_reading(_result(panel.AGREES, _stable("YES", "YES")), _R(), runner=runner)
     none = narrate.write_panel_reading(_result(panel.NO_STABLE, []), _R(), runner=runner)
     assert runner.calls == 0 and not agree.paragraph and not none.paragraph
 
 
 def test_the_narrator_writes_one_checked_paragraph_when_the_panel_differs():
-    runner = _Runner("Two judges read the cash flow differently from the lenses; Claude held back "
-                     "on the debt while the lenses rated it BUY on value.")
-    out = narrate.write_panel_reading(_result(panel.DISAGREES, _stable("HOLD", "HOLD")), _R(),
+    runner = _Runner("Two judges read the cash flow differently from the verdict; Claude held back "
+                     "on the debt while the verdict rests on what the price returns if growth holds.")
+    out = narrate.write_panel_reading(_result(panel.DISAGREES, _stable("NO", "NO")), _R(),
                                       runner=runner)
     assert out.paragraph.startswith("Two judges") and out.calls == 1 and not out.note
 
@@ -354,19 +403,20 @@ def test_the_narrator_writes_one_checked_paragraph_when_the_panel_differs():
     ("You should buy this company now.", "recommendation"),
     ("The combined verdict of the panel is hold.", "combines"),
     ("The panel says SELL.", "verdict word nobody gave"),
+    ("The panel says BUY.", "verdict word nobody gave"),
     ("First point.\n- second point", "plain paragraph"),
 ])
 def test_a_paragraph_that_recommends_combines_or_overruns_is_withheld_after_one_retry(bad, why):
     runner = _Runner(bad)
-    out = narrate.write_panel_reading(_result(panel.DISAGREES, _stable("HOLD", "HOLD")), _R(),
+    out = narrate.write_panel_reading(_result(panel.DISAGREES, _stable("NO", "NO")), _R(),
                                       runner=runner)
     assert not out.paragraph and out.note.startswith("The reading was withheld") and out.calls == 2
-    assert narrate.check_reading(bad, {"BUY", "HOLD"})
+    assert narrate.check_reading(bad, {"YES", "NO"})
 
 
 def test_the_retry_can_rescue_a_paragraph():
-    runner = _Runner("You should buy it.", "The judges hold back where the lenses rated it BUY.")
-    out = narrate.write_panel_reading(_result(panel.DISAGREES, _stable("HOLD")), _R(), runner=runner)
+    runner = _Runner("You should buy it.", "The judges step back where the verdict rests on the price.")
+    out = narrate.write_panel_reading(_result(panel.DISAGREES, _stable("NO")), _R(), runner=runner)
     assert out.paragraph and out.calls == 2
 
 
@@ -382,11 +432,11 @@ def _run_panel(report, caller, *, tmp_path=None, **kw):
 
 
 def test_the_panel_runs_every_judge_twice_and_reports_the_split(report):
-    caller = _scripted({"anthropic": [_reply("BUY")], "openai": [_reply("BUY")], "google": [_reply("ABSTAIN")]})
+    caller = _scripted({"anthropic": [_reply("YES")], "openai": [_reply("YES")], "google": [_reply("ABSTAIN")]})
     result = _run_panel(report, caller)
     assert result.available and len(caller.calls) == 6
-    assert result.split_line == "2 BUY, 1 ABSTAIN" and result.pack_hash
-    assert result.record.verdict in ("BUY", "HOLD", "SELL", "MIXED")
+    assert result.split_line == "2 YES, 1 ABSTAIN" and result.pack_hash
+    assert result.record.verdict in ("CLEARS", "BELOW", "") and result.question == "ten_year_hurdle_v1"
     # every judge was handed the SAME text, and it is the blind pack
     users = {u for _, u in caller.calls}
     assert len(users) == 1 and "FACTS PACK" in next(iter(users))
@@ -399,16 +449,16 @@ def test_every_judge_gets_the_identical_prompt_and_pack(report):
 
     def caller(spec, system, user):
         seen.append((system, user))
-        return _reply("BUY")
+        return _reply("YES")
 
     _run_panel(report, caller)
     assert len({s for s, _ in seen}) == 1 and len({u for _, u in seen}) == 1
     assert "equity analyst" in seen[0][0] and "ABSTAIN" in seen[0][0]
 
 
-def test_the_panel_still_runs_when_no_lens_gave_a_verdict_of_record(report):
-    # JUDGE-PANEL-3: the "Not run: no lens gave a verdict of record" rule is gone for the panel
-    report.agreement = None
+def test_the_panel_still_runs_when_the_price_test_gave_no_verdict(report):
+    # JUDGE-PANEL-3: the panel runs whether or not the verdict reaches a side
+    report.check.absolute = None
     caller = _scripted({"anthropic": [_reply()], "openai": [_reply()], "google": [_reply()]})
     result = _run_panel(report, caller)
     assert result.available and len(caller.calls) == 6 and result.record.verdict == ""
@@ -436,8 +486,8 @@ def _cut_panel(text, marker):
 
 
 def test_lens_output_is_byte_identical_with_the_panel_on_or_off(tmp_path):
-    caller = _scripted({"anthropic": [_reply("HOLD")], "openai": [_reply("SELL")],
-                        "google": [_reply("BUY")]})
+    caller = _scripted({"anthropic": [_reply("NO")], "openai": [_reply("NO")],
+                        "google": [_reply("YES")]})
     off = _run([RAW, "forensic_v1"], tmp_path=tmp_path / "a", save=False)
     on = _run([RAW, "forensic_v1"], tmp_path=tmp_path / "b", save=False, with_judges=True,
               judge_caller=caller, judge_config=_config(), judges_dir=tmp_path / "judges",
@@ -481,8 +531,8 @@ def _rows(path):
 
 
 def test_the_log_has_one_row_per_judge_per_call_with_the_agreed_columns(tmp_path, report):
-    caller = _scripted({"anthropic": [_reply("BUY", reason="Debt is covered, twice [pack].")],
-                        "openai": [_reply("BUY"), _reply("HOLD")], "google": [_reply("ABSTAIN")]})
+    caller = _scripted({"anthropic": [_reply("YES", reason="Debt is covered, twice [pack].")],
+                        "openai": [_reply("YES"), _reply("NO")], "google": [_reply("ABSTAIN")]})
     result = _run_panel(report, caller)
     folder = jlog.write_log(result, tmp_path / "judges")
     rows = _rows(folder / jlog.LOG_NAME)
@@ -492,24 +542,26 @@ def test_the_log_has_one_row_per_judge_per_call_with_the_agreed_columns(tmp_path
                         "verdict_of_record", "lens_split", "pack_hash") if c not in jlog.LOG_COLUMNS] == []
     assert len(rows) == 6
     by = {(r["judge_family"], r["call_number"]): r for r in rows}
-    assert by[("anthropic", "1")]["verdict"] == "BUY" and by[("anthropic", "1")]["stable"] == "yes"
-    assert by[("openai", "1")]["stable"] == "no" and by[("openai", "2")]["verdict"] == "HOLD"
+    assert by[("anthropic", "1")]["verdict"] == "YES" and by[("anthropic", "1")]["stable"] == "yes"
+    assert by[("openai", "1")]["stable"] == "no" and by[("openai", "2")]["verdict"] == "NO"
+    assert {r["question"] for r in rows} == {"ten_year_hurdle_v1"}          # every new row names its question
     assert by[("google", "2")]["verdict"] == "ABSTAIN"
     assert {r["ticker"] for r in rows} == {"CO"} and {r["pack_hash"] for r in rows} == {result.pack_hash}
-    assert {r["verdict_of_record"] for r in rows} == {result.record.verdict}
+    assert {r["verdict_of_record"] for r in rows} == {result.record.cell}
     assert by[("anthropic", "1")]["reason"] == "Debt is covered, twice [pack]."
     assert by[("anthropic", "1")]["lens_split"] == result.record.split
 
 
 def test_the_summary_has_one_row_per_company_and_the_latest_stable_verdict_per_family(tmp_path, report):
-    caller = _scripted({"anthropic": [_reply("BUY", "high")], "openai": [_reply("BUY"), _reply("HOLD")],
+    caller = _scripted({"anthropic": [_reply("YES", "high")], "openai": [_reply("YES"), _reply("NO")],
                         "google": [_reply("ABSTAIN")]})
     result = _run_panel(report, caller)
     folder = jlog.write_log(result, tmp_path / "judges")
     (row,) = _rows(folder / jlog.SUMMARY_NAME)
     assert tuple(row.keys()) == jlog.SUMMARY_COLUMNS
-    assert (row["claude_verdict"], row["claude_confidence"]) == ("BUY", "high")
-    assert row["openai_verdict"] == "UNSTABLE:BUY/HOLD" and row["gemini_verdict"] == "ABSTAIN"
+    assert (row["claude_verdict"], row["claude_confidence"]) == ("YES", "high")
+    assert row["openai_verdict"] == "UNSTABLE:YES/NO" and row["gemini_verdict"] == "ABSTAIN"
+    assert row["question"] == "ten_year_hurdle_v1"
     assert row["panel_split"] == result.split_line and row["panel_agreement"] == result.agreement
 
 
@@ -558,12 +610,13 @@ def test_a_log_that_cannot_be_written_is_said_on_the_result_and_the_panel_surviv
 
 
 def test_the_report_cli_prints_every_dated_panel_next_to_the_record(tmp_path, report, capsys):
-    caller = _scripted({"anthropic": [_reply("BUY")], "openai": [_reply("HOLD")], "google": [_reply("BUY")]})
+    caller = _scripted({"anthropic": [_reply("YES")], "openai": [_reply("NO")], "google": [_reply("YES")]})
     result = _run_panel(report, caller)
     jlog.write_log(result, tmp_path / "judges")
     assert jreport.main(["report", "--dir", str(tmp_path / "judges")]) == 0
     out = capsys.readouterr().out
-    assert "CO" in out and "record:" in out and "Claude: BUY" in out and "Openai: HOLD" in out
+    assert "CO" in out and "record:" in out and "Claude: YES" in out and "Openai: NO" in out
+    assert "(ten-year question)" in out
     assert result.agreement in out
     assert jreport.format_report([]) == "No judge panel results recorded yet."
 
@@ -645,7 +698,7 @@ def test_the_exports_carry_the_panel_section_with_one_row_per_judge(report, tmp_
     from aristos_council.company_markdown import company_report_markdown
     from aristos_council.export.report_html import company_report_html
 
-    caller = _scripted({"anthropic": [_reply("BUY")], "openai": [_reply("HOLD")], "google": [_reply("ABSTAIN")]})
+    caller = _scripted({"anthropic": [_reply("YES")], "openai": [_reply("NO")], "google": [_reply("ABSTAIN")]})
     report.judge_panel = _run_panel(report, caller)
     md = company_report_markdown(report)
     html = company_report_html(report)
@@ -660,12 +713,12 @@ def test_the_exports_carry_the_panel_section_with_one_row_per_judge(report, tmp_
 
 
 def test_an_unstable_judge_shows_both_verdicts_and_a_missing_key_says_so():
-    ok = [panel.JudgeCall(1, "ok", "BUY", "high", "r1", "w1"), panel.JudgeCall(2, "ok", "HOLD", "low", "r2", "w2")]
+    ok = [panel.JudgeCall(1, "ok", "YES", "high", "r1", "w1"), panel.JudgeCall(2, "ok", "NO", "low", "r2", "w2")]
     j1 = panel.JudgeResult("anthropic", "Claude", "m", status=panel.UNSTABLE, calls=ok)
     j2 = panel.JudgeResult("openai", "OpenAI", "m", status=panel.NOT_RUN, note="no key")
-    res = panel.PanelResult(ticker="CO", available=True, record=_record("BUY"), judges=[j1, j2])
+    res = panel.PanelResult(ticker="CO", available=True, record=_record("CLEARS"), judges=[j1, j2])
     rows = {r["judge"].split(" ")[0]: r for r in render.cards(res)}
-    assert rows["Claude"]["verdict"] == "unstable: BUY / HOLD" and "BUY: r1" in rows["Claude"]["reasoning"]
+    assert rows["Claude"]["verdict"] == "unstable: YES / NO" and "YES: r1" in rows["Claude"]["reasoning"]
     assert rows["OpenAI"]["verdict"] == "not run — no key"
 
 
@@ -676,14 +729,16 @@ def test_an_invalid_call_keeps_the_rejected_reply_in_the_log_detail():
     assert call.status == "invalid" and "| raw: garbage reply" in call.error_detail
 
 
-def test_panel_reading_prompt_v2_demands_the_explaining_frame_and_keeps_length_as_guidance():
-    """PANEL-READING-2 (MSFT, 2026-10-31): the paragraph only restated who voted what."""
+def test_panel_reading_prompt_v3_demands_the_explaining_frame_and_keeps_length_as_guidance():
+    """PANEL-READING-2 (MSFT, 2026-10-31): the paragraph only restated who voted what. v3 (ABSOLUTE-PAGE-1) asks it
+    about the ten-year question; v2 stays on disk as the record of the old one."""
     from aristos_council.judges import narrate
     text = narrate.PROMPT_PATH.read_text(encoding="utf-8")
-    assert narrate.PROMPT_VERSION == "judge_reading_prompt_v2"
+    assert narrate.PROMPT_VERSION == "judge_reading_prompt_v3"
+    assert (narrate.PROMPT_PATH.parent / "judge_reading_prompt_v2.md").exists()
     assert "ONE fact or frame that explains the split" in text
-    assert "own five-year history" in text and "never a reason to leave out" in text
-    assert "no BUY/HOLD/SELL word of your own" in text
+    assert "never a reason to leave out" in text and "YES, NO or ABSTAIN" in text
+    assert "no YES/NO word of your own" in text
 
 
 def test_an_unstable_judges_long_answers_are_shown_whole_one_under_the_other():
@@ -692,16 +747,16 @@ def test_an_unstable_judges_long_answers_are_shown_whole_one_under_the_other():
     line, in the Markdown, HTML and text exports."""
     long1 = "Cash lasts about 2.5 years. " * 30 + "Management estimates launch in 2029 at today's price."
     long2 = "Revenue was zero in every year. " * 30 + "Management advanced four Phase III trials."
-    ok = [panel.JudgeCall(1, "ok", "HOLD", "medium", long1, "w1", key_risk=long1),
-          panel.JudgeCall(2, "ok", "BUY", "medium", long2, "w2", key_risk=long2)]
+    ok = [panel.JudgeCall(1, "ok", "NO", "medium", long1, "w1", key_risk=long1),
+          panel.JudgeCall(2, "ok", "YES", "medium", long2, "w2", key_risk=long2)]
     j = panel.JudgeResult("google", "Gemini", "m", status=panel.UNSTABLE, calls=ok)
-    res = panel.PanelResult(ticker="CO", available=True, record=_record("HOLD"), judges=[j])
+    res = panel.PanelResult(ticker="CO", available=True, record=_record("BELOW"), judges=[j])
     md = "\n".join(render.markdown_lines(res))
-    assert "- *Why:* \n  - *First answer: HOLD:* " in md and "\n  - *Second answer: BUY:* " in md
+    assert "- *Why:* \n  - *First answer: NO:* " in md and "\n  - *Second answer: YES:* " in md
     assert md.count("today's price.") == 2 or long1 in md
-    assert long1 in md and long2 in md and " | HOLD" not in md and " | BUY:" not in md
+    assert long1 in md and long2 in md and " | NO" not in md and " | YES:" not in md
     html = render.html_section(res)
-    assert "First answer: HOLD" in html and "Second answer: BUY" in html
+    assert "First answer: NO" in html and "Second answer: YES" in html
     assert "Management estimates launch in 2029 at today&#x27;s price." in html or "at today's price." in html
     txt = "\n".join(render.text_lines(res))
-    assert "First answer: HOLD: " + long1 in txt and "Second answer: BUY: " + long2 in txt
+    assert "First answer: NO: " + long1 in txt and "Second answer: YES: " + long2 in txt

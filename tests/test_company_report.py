@@ -337,13 +337,14 @@ class _Writer:
 
 
 def _fields(report, extra=""):
-    ag = report.agreement
-    buy = ", ".join(ag.buy) or "no test"
+    """A five-field summary written only from what the page's answer says (ABSOLUTE-PAGE-1): the facts pack holds
+    the answer lines, so a summary that repeats them passes the number, name and role checks."""
+    from aristos_council.company_page import answer_lines
+    first, second = answer_lines(report)
     return dict(
-        asked=f"This checks Company Co against {N_PEERS} similar companies under {len(report.votes)} tests.",
-        happened=f"It was rated BUY by {buy}. {ag.headline}.{extra}",
-        survived="Analysts are holding their profit forecasts steady.",
-        doubt="One test may not apply.", cannot_say="This says nothing about the future.")
+        asked="This checks whether a buyer of Company Co at today's price would beat the hurdle.",
+        happened=f"{first}{extra}", survived=second,
+        doubt="One input is missing.", cannot_say="This says nothing about the future.")
 
 
 def test_a_ticked_summary_makes_one_call_and_is_published_when_it_passes(tmp_path):
@@ -354,9 +355,8 @@ def test_a_ticked_summary_makes_one_call_and_is_published_when_it_passes(tmp_pat
     assert report.summary.available, report.summary.note
     text = format_company_report(report)
     # COMPANY-STORY-1: the model's summary REPLACES the code-written story - never two summaries.
-    from aristos_council.company_story import NOT_A_PREDICTION
-    assert "What this run asked." in text and NOT_A_PREDICTION not in text
-    assert text.index("What this run asked.") < text.index("SHOW THE WORKINGS")
+    assert "What was asked." in text and "The question: would a person who buys" not in text
+    assert text.index("What was asked.") < text.index("SHOW THE WORKINGS")
     assert "Company Co" in text
 
 
@@ -376,59 +376,55 @@ def test_the_reader_withholds_a_company_that_is_not_on_the_page(tmp_path):
     assert not report.summary.available and "name not in the run: ACME" in report.summary.note
 
 
-def test_the_reader_withholds_a_lens_given_the_wrong_role(tmp_path):
-    probe = _run([RAW, "forensic_v1"], tmp_path=tmp_path, save=False)
+def test_the_reader_withholds_a_gate_rule_given_the_wrong_role(tmp_path):
+    """ABSOLUTE-PAGE-1: a warning called an exclusion says the gate removed a company it only flagged."""
+    probe = _run([RAW], tmp_path=tmp_path, save=False)
     fields = _fields(probe)
-    fields["happened"] += " Forensic is a picker and counts as a vote."
-    writer = _Writer(fields)
-    report = _run([RAW, "forensic_v1"], tmp_path=tmp_path, with_summary=True,
-                  reader_runner=writer, save=False)
+    fields["happened"] += " Highly leveraged is an exclusion that removes the company."
+    report = _run([RAW], tmp_path=tmp_path, with_summary=True, reader_runner=_Writer(fields), save=False)
     assert not report.summary.available and "role mismatch" in report.summary.note
-
-
-def test_the_reader_withholds_a_buy_vote_it_leaves_unmentioned(tmp_path):
-    probe = _run([RAW], tmp_path=tmp_path, save=False, company_ebit=6000.0)
-    assert probe.agreement.buy == (probe.votes[0].label,), "the strong company must be rated BUY"
-    fields = _fields(probe)
-    for key in ("asked", "happened", "survived", "doubt", "cannot_say"):
-        fields[key] = fields[key].replace(probe.agreement.buy[0], "one test")
-    report = _run([RAW], tmp_path=tmp_path, with_summary=True, reader_runner=_Writer(fields),
-                  save=False, company_ebit=6000.0)
-    assert not report.summary.available and "BUY vote not mentioned" in report.summary.note
+    assert "highly leveraged called an exclusion" in report.summary.note
 
 
 def test_the_facts_pack_holds_only_what_the_page_prints(tmp_path):
+    from aristos_council.company_page import answer_lines
     report = _run([RAW, SCREENED], tmp_path=tmp_path, save=False)
     pack = company_facts_pack(report)
-    assert set(pack) == {"company", "lenses", "agreement", "valuation_band", "absolute_readings",
-                         "what_analysts_say"}
-    assert pack["company"]["peer_group"]["step"] == 1
-    assert [l["votes"] for l in pack["lenses"]] == [True, True]
-    assert pack["agreement"]["buy_lenses_to_name"] == list(report.agreement.buy)
+    assert set(pack) == {"company", "currency_and_bond", "answer", "gate", "price_test", "return_range", "context",
+                         "valuation_band", "absolute_readings", "what_analysts_say"}
+    assert pack["answer"] == list(answer_lines(report))
+    assert pack["company"] == {"name": report.display}
+    assert [r["role"] for r in pack["gate"]["rules"]] == ["exclusion"] * 4
+    assert [w["role"] for w in pack["gate"]["warnings"]] == ["warning"] * 4
     assert pack["absolute_readings"]["debt_and_cash"] == report.check.debt_and_cash.lines()
+    # the relative view no longer votes, so no vote, rank or agreement reaches the summary
+    assert "lenses" not in pack and "agreement" not in pack
 
 
 # =========================================================================== #
 # page order, exports, the saved run
 # =========================================================================== #
-_TEXT_HEADS = {"answer": "\n\n", "story": "What this run asked.",
-               "gate": "GATE (ABSOLUTE-1", "absolute value": "PRICE TEST AND RETURN (ABSOLUTE-1",
-               "lens table": "Vote or mark",
+_TEXT_HEADS = {"answer": "\n\n", "story": "What was asked.",
+               "gate": "THE GATE", "price test": "THE PRICE TEST", "return range": "THE RETURN RANGE",
+               "context": "CONTEXT, NO VOTE", "judge panel": "JUDGE PANEL",
+               "relative view": "RELATIVE VIEW (PEER RANKS)",
                "council opinion": "COUNCIL OPINION",
                "workings": "SHOW THE WORKINGS", "peers": "PEERS", "price and cash": "PRICE AND CASH",
                "valuation band": "VALUATION BAND",
                "absolute readings": "ABSOLUTE READINGS", "what analysts say": "WHAT ANALYSTS SAY",
                "sources": "SOURCES"}
 _HTML_HEADS = {"answer": "<h2>The answer</h2>", "story": "<h2>Summary</h2>",
-               "gate": 'id="gate"', "absolute value": 'id="absolute-value"',
-               "lens table": "<h2>Lens by lens</h2>", "council opinion": "<h2>Council opinion</h2>",
+               "gate": 'id="gate"', "price test": 'id="price-test"', "return range": 'id="return-range"',
+               "context": 'id="context"', "judge panel": "<h2>Judge panel</h2>", "relative view": 'id="relative-view"',
+               "council opinion": "<h2>Council opinion</h2>",
                "workings": 'id="workings"', "peers": "<h2>Peers</h2>",
                "price and cash": "<h2>Price and cash</h2>",
                "valuation band": "<h2>Valuation band</h2>",
                "absolute readings": "<h2>Absolute readings</h2>",
                "what analysts say": "<h2>What analysts say</h2>", "sources": "<h2>Sources</h2>"}
-_MD_HEADS = {"answer": "## The answer", "story": "## Summary", "gate": "## Gate (ABSOLUTE-1", "absolute value": "## Price test and return (ABSOLUTE-1",
-             "lens table": "## Lens by lens",
+_MD_HEADS = {"answer": "## The answer", "story": "## Summary", "gate": "## The gate", "price test": "## The price test",
+             "return range": "## The return range", "context": "## Context, no vote", "judge panel": "## Judge panel",
+             "relative view": "### Relative view (peer ranks)",
              "council opinion": "## Council opinion", "workings": "## Show the workings",
              "valuation band": "### Valuation band", "price and cash": "### Price and cash",
              "absolute readings": "### Absolute readings",
@@ -445,17 +441,18 @@ def test_the_page_order_is_the_same_in_the_text_and_the_html(tmp_path):
     # COUNCIL-OPINION-1 — injected directly (no model call): the section's PLACEMENT is what
     # this test pins, not the council itself, which has its own dedicated tests below.
     report.council_opinion = CouncilOpinion(available=True, narrative="It ranked well.")
-    # COMPANY-STORY-1 order: answer, story, one table, the council opinion above the fold, then
-    # the workings (valuation band, price and cash, absolute readings, analysts, peers, sources).
-    assert SECTION_ORDER == ("answer", "story", "gate", "absolute value", "lens table", "council opinion",
-                             "workings",
-                             "valuation band", "price and cash", "absolute readings",
-                             "what analysts say", "peers", "sources")
+    # ABSOLUTE-PAGE-1 order: the answer, the story, the gate, the price test, the return range, the context, the
+    # judge panel and the council opinion (each only if ticked), then the workings (the inputs, the relative view,
+    # the peers, the sources).
+    assert SECTION_ORDER == ("answer", "story", "gate", "price test", "return range", "context", "judge panel",
+                             "council opinion", "workings", "valuation band", "price and cash",
+                             "absolute readings", "what analysts say", "relative view", "peers", "sources")
     from aristos_council.company_markdown import company_report_markdown
     text, html = format_company_report(report), company_report_html(report)
     md = company_report_markdown(report)
+    order = [n for n in SECTION_ORDER if n != "judge panel"]                  # the panel is not ticked here
     for heads, doc in ((_TEXT_HEADS, text), (_HTML_HEADS, html), (_MD_HEADS, md)):
-        at = [doc.index(heads[name]) for name in SECTION_ORDER]
+        at = [doc.index(heads[name]) for name in order]
         assert at == sorted(at), (heads, at)
 
 
@@ -464,7 +461,7 @@ def test_an_unticked_summary_leaves_no_section_and_the_order_holds(tmp_path):
     # absent, and the order holds over whatever remains.
     report = _run([RAW], tmp_path=tmp_path, save=False)
     text, html = format_company_report(report), company_report_html(report)
-    order = [n for n in SECTION_ORDER if n != "council opinion"]
+    order = [n for n in SECTION_ORDER if n not in ("council opinion", "judge panel")]
     # nothing ticked: the story is the code-written one, and there is no council section at all
     assert "<h2>Summary</h2>" not in html and "<h2>The story</h2>" in html
     assert "COUNCIL OPINION" not in text and "<h2>Council opinion</h2>" not in html
@@ -579,11 +576,11 @@ def test_the_page_renders_the_whole_report_in_order_and_offers_both_downloads(tm
     at.run()
     assert not at.exception
     heads = [str(getattr(h, "value", "")) for h in at.subheader]
-    # COMPANY-STORY-1 order (no council opinion here - not ticked): the answer, the model's summary
-    # in place of the story, one table, then the workings.
-    # ABSOLUTE-GATE-1: the gate section sits after the story and before the lens table.
-    assert heads[:5] == ["The answer", "Summary", GATE_TITLE, VALUE_TITLE, "Lens by lens"], heads
-    assert heads[-3:] == ["What analysts say", "Peers", "Sources"], heads
+    # ABSOLUTE-PAGE-1 order (no judge panel or council opinion here - not ticked): the answer, the model's summary
+    # in place of the story, the gate, the price test, the return range, the context, then the workings.
+    assert heads[:6] == ["The answer", "Summary", GATE_TITLE, VALUE_TITLE, "The return range",
+                         "Context, no vote"], heads
+    assert heads[-3:] == ["Relative view (peer ranks): no longer votes", "Peers", "Sources"], heads
     assert "Price and cash" in heads and "Absolute readings" in heads
     assert "Valuation band" in heads
     frames = [df.value for df in at.dataframe]
@@ -720,14 +717,14 @@ def test_three_votes_is_x_of_3_and_nothing_is_said_about_lenses_that_did_not_app
     assert one.headline == "BUY on 1 of 1 vote"
 
 
-def test_the_facts_pack_carries_voted_did_not_apply_and_check_counts_separately(tmp_path):
+def test_the_facts_pack_carries_no_vote_count_the_relative_view_no_longer_decides_anything(tmp_path):
+    """AGREEMENT-COUNT-1's three counts live on in the relative view; the summary's facts pack (ABSOLUTE-PAGE-1)
+    is built from the gate and the price test, so no lens count or vote can reach it."""
     report = _run([RAW, SCREENED, "forensic_v1"], tmp_path=tmp_path, save=False)
-    say = company_facts_pack(report)["agreement"]
-    assert say["lenses_that_voted"] == 1 and say["lenses_that_did_not_apply"] == 1
-    assert say["check_lenses_that_do_not_vote"] == 1
-    assert "voting_lenses" not in say                       # the ambiguous lump is gone
-    assert say["headline"] == report.agreement.headline
-    assert [l["applies"] for l in company_facts_pack(report)["lenses"]] == [True, False, True]
+    pack = company_facts_pack(report)
+    assert "agreement" not in pack and "lenses" not in pack
+    blob = json.dumps(pack, default=str)
+    assert "voting_lenses" not in blob and "lenses_that_voted" not in blob
 
 
 def test_the_run_tab_table_counts_only_the_lenses_that_voted_on_that_name():
@@ -914,7 +911,7 @@ def test_a_does_not_apply_vote_gets_no_badge_even_with_a_cohort_match(tmp_path):
 
     html = company_report_html(report)
     for doc in (text, html):
-        assert f"({raw_vote.badge.label})" in doc            # RAW's badge text appears
+        assert raw_vote.badge.label in doc                   # RAW's badge text appears (in the relative view)
 
 
 def test_no_cohort_match_says_untested_here_on_every_voting_lens():

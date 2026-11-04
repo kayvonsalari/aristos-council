@@ -458,8 +458,9 @@ def test_the_boundary_comes_from_the_gate_file_not_from_the_valuation_file():
 def test_the_caller_supplied_context_is_printed():
     av = run(context={"ebit_over_ev": 0.031, "ebit_over_ev_label": "Operating profit over enterprise value",
                       "epv": 1.9e12, "epv_enterprise_value": 3.6e12})
-    text = "\n".join(vrender.text_lines(av))
+    text = "\n".join(vrender.context_lines(av))                 # section 6's (context, no vote)
     assert "Operating profit over enterprise value: 3.1%" in text
+    assert "Earnings power value" not in "\n".join(vrender.text_lines(av))      # and not in sections 4 or 5
     assert "Earnings power value at 9%" in text and "an enterprise value" in text
 
 
@@ -538,21 +539,25 @@ def test_the_section_reaches_the_text_markdown_and_html_and_adds_one_key_to_the_
     report = _run([RAW], tmp_path=tmp_path, save=False)
     assert report.check.absolute is not None
     text, md, html = format_company_report(report), company_report_markdown(report), company_report_html(report)
-    assert vrender.SECTION_TITLE.upper() in text
-    assert f"## {vrender.SECTION_TITLE}" in md and 'id="absolute-value"' in html and vrender.SECTION_TITLE in html
-    assert text.index("GATE (ABSOLUTE-1") < text.index(vrender.SECTION_TITLE.upper()) < text.index("Vote or mark")
+    assert vrender.PRICE_TEST_TITLE.upper() in text and vrender.RETURN_TITLE.upper() in text
+    assert f"## {vrender.PRICE_TEST_TITLE}" in md and f"## {vrender.RETURN_TITLE}" in md
+    assert 'id="price-test"' in html and 'id="return-range"' in html and vrender.PRICE_TEST_TITLE in html
+    assert text.index("THE GATE") < text.index("THE PRICE TEST") < text.index("THE RETURN RANGE") \
+        < text.index("Vote or mark")
     with_block = report_record(report)
     assert with_block["absolute"]["verdict"]["state"] == report.check.absolute.verdict.state
     report.check.absolute = None
     without = report_record(report)
     assert "absolute" not in without
-    assert {k: v for k, v in with_block.items() if k != "absolute"} == without      # nothing else moved
+    # nothing else moved (the verdict of record is built from the price test, so it moves with it)
+    strip = lambda d: {k: v for k, v in d.items() if k not in ("absolute", "verdict_of_record")}
+    assert strip(with_block) == strip(without)
 
 
-def test_the_first_screen_budget_does_not_count_the_skippable_section():
+def test_the_first_screen_budget_counts_the_answer_and_the_story_only():
     from aristos_council.report_sweep import first_screen_lines
-    body = "\n".join(["The answer", "line"] + vrender.text_lines(run()) + ["", "Lens table"])
-    assert first_screen_lines(body) <= 4
+    body = "\n".join(["The answer", "line", "THE GATE", "a gate row"] + vrender.text_lines(run()) + ["", "Table"])
+    assert first_screen_lines(body) == 2                       # everything from the gate on is skippable
 
 
 def test_a_negative_operating_cash_flow_with_no_capital_spending_line_is_still_not_valued():

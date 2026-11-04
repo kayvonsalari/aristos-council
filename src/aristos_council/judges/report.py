@@ -36,7 +36,9 @@ def format_report(rows: list, *, ticker: Optional[str] = None) -> str:
                 f"{label.capitalize()}: {r.get(f'{label}_verdict') or '-'}"
                 + (f" ({r.get(f'{label}_confidence')})" if r.get(f"{label}_confidence") else "")
                 for _, label in FAMILY_COLUMNS)
-            out.append(f"  {r.get('run_date', '')[:16].replace('T', ' ')}  "
+            # ABSOLUTE-PAGE-1: a row with no question answered the OLD question (BUY, HOLD or SELL)
+            asked = ("ten-year question" if r.get("question") else "older question: BUY, HOLD or SELL")
+            out.append(f"  {r.get('run_date', '')[:16].replace('T', ' ')}  ({asked})  "
                        f"record: {r.get('verdict_of_record') or '-'} [{r.get('lens_split', '')}]")
             out.append(f"      panel: {judges}")
             out.append(f"      {r.get('panel_split', '')} -> {r.get('panel_agreement', '')}"

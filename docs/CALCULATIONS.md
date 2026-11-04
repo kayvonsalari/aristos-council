@@ -1273,9 +1273,11 @@ wrote its 80th percentile into the gate file; nothing reads it yet.
 
 ### 4.12 The price test and the return range (ABSOLUTE-VALUE-1, `absolute_value/`, `tools/absolute_math.py`, `data/bond_yield.py`)
 
-Phase 2 of `docs/DESIGN_absolute.md`. It prints as its own company-page section directly after the gate; it changes no vote, lens,
-strategy file, gate file or backtest result, and the verdict of record stays the old one until phase 3. The saved record gains an
-additive `absolute` block. Every number it uses is in `valuation/absolute_value_v1.yaml` (frozen; a change is a new version). All
+Phase 2 of `docs/DESIGN_absolute.md`, and since ABSOLUTE-PAGE-1 (phase 3) the **verdict of record on the company page**. It prints as two
+company-page sections directly after the gate ("The price test" and "The return range", the phase labels removed); it changes no strategy
+file, gate file or backtest result, and the Analyse tab's list and cohort runs keep their lenses and votes. The saved record gains an
+additive `absolute` block, and (phase 3) `verdict_of_record`, `relative` and `design_version` keys beside it; every key older records
+carry keeps its shape, and a saved file is never rewritten. Every number it uses is in `valuation/absolute_value_v1.yaml` (frozen; a change is a new version). All
 arithmetic is in `tools/absolute_math.py`; `absolute_value/engine.py` only orchestrates.
 
 **The base: free cash flow per share.** (operating cash flow minus capital spending) / diluted weighted-average shares, each fiscal
@@ -1317,6 +1319,18 @@ and is printed beside it.
 spending over depreciation, and abnormal investment (capex/sales this year over the average of the previous three years, minus 1) with the
 warning "investment well above its own history" above the gate file's frozen 80th-percentile boundary. There is no size floor on this path:
 a company below the $5bn range is labelled "outside the tested range", never blocked.
+
+**The page around it (ABSOLUTE-PAGE-1, `company_page.py`).** Section 1, "The answer", is two lines written by code: the verdict in the
+design's words (`Excluded: <rule> reads <figure>, past the limit of <limit>.` / `Not covered: banks and insurers are outside this method.` /
+`Not enough data: <the missing items>.` / `Qualifies, below hurdle: the price returns <low>% to <high>% a year if growth holds, against a hurdle
+of <h>%.` / `Qualifies, clears hurdle: ... above the hurdle of <h>%.`), then the fact that matters most (the growth the price needs, and "n of
+N cases clear"). Section 2 is five code-written paragraphs (what was asked, what the gate found, what the price requires, what to doubt, what
+this cannot tell you); the optional model summary replaces them and is withheld if it writes a number not on the page, names a company not on
+the page, gives a gate rule or growth case the wrong role, or leaves a failed exclusion or a fired warning unmentioned. Section 6 is context with
+no vote: quality readings with the trough year named (`tools/quality_epv.worst_year_roic_detail`, the same minimum the quality lens reads),
+momentum, the valuation band, earnings over price, earnings power value, the analysts, and one rank line per relative lens with no vote word. The
+lens table, the old majority and the track-record badges are the **relative view**, folded under "Show the workings"; they no longer decide
+anything on this page.
 
 **Worked example (Microsoft, design section e/f):** base 8.99, price 521.91, bond 4.934%, hurdle 9.934%: implied growth 25.0%; returns
 own 5-year 17.2% -> 6.5%, consensus 16.0% -> 6.0%, own 10-year 21.2% -> 8.1%, downside -> 4.3%; backtest-form downside with 17.2% in years 1 and

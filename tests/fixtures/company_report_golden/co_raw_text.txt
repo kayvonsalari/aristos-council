@@ -1,17 +1,17 @@
 Company Report - CO Corp (CO)
-The math judges: each vote below is the lens's own verdict on this company ranked among its peer group, and every lens counts once. Nothing here is a recommendation.
+The math judges: the answer below comes from fixed rules applied to the company's accounts and its price. The writing explains it and cannot change a number. Nothing here is a recommendation.
 
-HOLD, on the one lens that voted (Magic Formula RAW, 10th of 14).
-Track record: 1 behind random picks.
+Not enough data: accrual ratio (net income and operating cash flow missing); solvency (operating cash flow missing).
+No verdict is given for CO: a missing item is neither a pass nor a fail.
 
-What this run asked. CO was ranked against 13 similar-sized companies among its closest rivals, under one lens (Magic Formula RAW).
-What happened. Voting: Magic Formula RAW HOLD - 10th of 14. Its valuation band could not be read: no monthly price history in the 5-year window.
-Other facts. Debt and cash: it owes $600 net of cash (latest balance sheet). Growth record (latest annual accounts): revenue compounded +6.3% a year over 3 years; only 0 years of earnings per share reported; a compound rate needs at least 3. No analyst ratings are shown (2026-06-30).
-What to doubt. No track record shows a passed test for Magic Formula RAW (behind random picks here). Its valuation band abstained.
-What this cannot tell you. This is a ranking against peers by fixed rules. It does not know the company's plans, its management, its legal risks or today's news, it is not a price target, and it is not advice.
+What was asked. The question: would a person who buys CO at today's price and holds it for ten years more likely than not earn more than the ten-year government bond yield (USD) plus 5 points a year? Two steps answer it: a gate that looks for broken accounts and unsafe debt, then a price test that works out what growth the price needs and what the shares return if that growth holds.
+What the gate found. Earnings quality could not be evaluated: net income and operating cash flow missing; solvency could not be evaluated: operating cash flow missing; accounting health could not be evaluated: counts only when all 9 checks can be computed; cash runway could not be evaluated: operating cash flow missing. No warning fired. Not evaluated: highly leveraged, distress score, cash runway.
+What the price requires. The price test has no base: operating cash flow, capital spending, share count missing for the latest year. The growth the price needs could not be worked out: not enough data: operating cash flow, capital spending, share count missing for the latest year.
+What to doubt. Not available: own 5-year growth (only 0 years of earnings per share reported; a compound rate needs at least 3); own 10-year growth (only 0 years of earnings per share reported; a compound rate needs at least 3); analyst consensus (EODHD_API_KEY is not set, so no analyst data was asked for); the downside case (no own 5-year rate to start from). The share count is the basic count, not the diluted one. This figure shows what today's price requires. Studies of company-level implied returns find they rank future returns only partly: where 1 would be perfect, the weakest model scores about 0.2 and the better ones 0.5 to 0.65, and four of five measures do no better than a fixed constant in the cross section. So the figure is a question put to the reader and not an answer. The gate and the cash yield carry the evidence; this figure carries the question.
+What this cannot tell you. These are what the price returns if the stated growth repeats. They are not a forecast and not advice. The method knows nothing of the company's plans, its management or today's news. On the form a backtest could test (no analyst figures) the verdict reads Not enough data. No backtest of this method exists yet, so nothing shows that companies with this reading went on to do better.
 
-GATE (ABSOLUTE-1 PHASE 1, DOES NOT CHANGE THE VERDICT YET)
-Four checks that can exclude a company, and four warnings that never do. Only accounting and solvency failures exclude. This section changes no vote and no verdict.
+THE GATE
+Four checks that can exclude a company, and four warnings that never do. Only accounting and solvency failures exclude.
   Check              Kind       Reading                                                                                                                                   Limit                                                                                            Result
   -----------------  ---------  ----------------------------------------------------------------------------------------------------------------------------------------  -----------------------------------------------------------------------------------------------  ----------------------------------------------------------------------------------------------------------------------------
   Earnings quality   exclusion  not evaluated                                                                                                                             excluded above 0.1                                                                               not evaluated (net income and operating cash flow missing)
@@ -25,8 +25,8 @@ Four checks that can exclude a company, and four warnings that never do. Only ac
 Gate result: Not enough data: accrual ratio (net income and operating cash flow missing); solvency (operating cash flow missing).
 Debt = borrowings plus the long-term operating lease line, from the latest balance sheet.
 
-PRICE TEST AND RETURN (ABSOLUTE-1 PHASE 2; BECOMES THE VERDICT IN PHASE 3)
-What today's price asks of the business, and what a buyer would earn each year if the stated growth holds. This section changes no vote and no verdict yet.
+THE PRICE TEST
+What today's price asks of the business: the base, the price and the growth it requires.
 The base:
   Year              Free cash flow per share
   ----------------  --------------------------------------------------------------------------
@@ -35,15 +35,16 @@ The base:
   two years before  not available (operating cash flow, capital spending, share count missing)
 Base: not enough data: operating cash flow, capital spending, share count missing for the latest year.
 Price: $264.45 a share.
-The price test:
+What the price requires:
 Implied growth: not enough data: operating cash flow, capital spending, share count missing for the latest year.
   Record                            Growth a year  Note
   --------------------------------  -------------  -----------------------------------------------------------------------------
   Own 5-year earnings growth        not available  only 0 years of earnings per share reported; a compound rate needs at least 3
   Own 10-year earnings growth       not available  only 0 years of earnings per share reported; a compound rate needs at least 3
   Analyst consensus (not testable)  not available  EODHD_API_KEY is not set, so no analyst data was asked for
-Operating profit over enterprise value: 0.0%.
-The return:
+
+THE RETURN RANGE
+What a buyer would earn each year if the stated growth holds, against the hurdle. This is the verdict of record.
   Growth case                       Growth         Long-run owner's return if the growth holds                                                    Against the hurdle
   --------------------------------  -------------  ---------------------------------------------------------------------------------------------  ------------------
   Own 5-year earnings growth        not available  not available (only 0 years of earnings per share reported; a compound rate needs at least 3)
@@ -55,12 +56,20 @@ Verdict: Not enough data: accrual ratio (net income and operating cash flow miss
 Backtest form (own 5-year, own 10-year and the downside case with own 5-year growth in its first years; no analyst figures): Not enough data: accrual ratio (net income and operating cash flow missing); solvency (operating cash flow missing).
 These are what the price returns if the stated growth repeats. They are not forecasts. Past growth may not repeat. Forecasts can be wrong. The model's narration cannot change them.
 This figure shows what today's price requires. Studies of company-level implied returns find they rank future returns only partly: where 1 would be perfect, the weakest model scores about 0.2 and the better ones 0.5 to 0.65, and four of five measures do no better than a fixed constant in the cross section. So the figure is a question put to the reader and not an answer. The gate and the cash yield carry the evidence; this figure carries the question.
-Debt = borrowings plus the long-term operating lease line, from the latest balance sheet.
 
-Lens               Vote or mark       Track record              Reason
-Magic Formula RAW  HOLD - 10th of 14  behind random picks here  return on invested capital 14th of 14 against 12-month price momentum 1st of 14
-Track record: whether this lens beat its industry group in a ten-year test. It describes the lens, not the company, and changes no vote. Full definitions under Lens notes.
-Track record from tests on Semiconductors companies, 10 years to Oct 2026
+CONTEXT, NO VOTE
+Readings that describe the company and carry no vote. None of them changes the answer above.
+Quality:
+Worst year of return on invested capital in the last five years: 5.4% (3 years before the latest).
+Momentum:
+The share price moved +110% over twelve months and +36% over six.
+Valuation:
+Its valuation band could not be read: no monthly price history in the 5-year window.
+Operating profit over enterprise value: 0.0%.
+Analysts:
+Analyst forecasts are not shown: EODHD_API_KEY is not set, so no analyst data was asked for.
+Where it sits among rivals:
+Magic Formula RAW: 10th of 14.
 
 SHOW THE WORKINGS
 
@@ -100,6 +109,15 @@ ABSOLUTE READINGS (no comparison group; they do not vote)
 WHAT ANALYSTS SAY (a mark: it does not vote and changes no verdict) (see Sources)
     Analyst ratings are not shown: EODHD_API_KEY is not set
     Analyst forecasts are not shown: EODHD_API_KEY is not set, so no analyst data was asked for.
+
+RELATIVE VIEW (PEER RANKS): NO LONGER VOTES
+  How the company ranks against similar companies, lens by lens. These ranks used to decide the verdict. They no longer decide anything here; they are kept for comparison and carry their track records.
+  HOLD, on the one lens that voted (Magic Formula RAW, 10th of 14).
+  Track record: 1 behind random picks.
+  Lens               Vote or mark       Track record              Reason
+  Magic Formula RAW  HOLD - 10th of 14  behind random picks here  return on invested capital 14th of 14 against 12-month price momentum 1st of 14
+  Track record: whether this lens beat its industry group in a ten-year test. It describes the lens, not the company, and changes no vote. Full definitions under Lens notes.
+  Track record from tests on Semiconductors companies, 10 years to Oct 2026
 
 PEERS (who this company would be measured against):
   13 peers: sub-industry, within 1/4x–4x of its market cap (USD) (step 1 of 4)

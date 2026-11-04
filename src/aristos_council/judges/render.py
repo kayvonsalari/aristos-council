@@ -18,10 +18,12 @@ from .panel import (INCOMPLETE, STABLE, UNSTABLE, PanelResult, needs_reading)
 
 SECTION_TITLE = "Judge panel"
 CHECKBOX_LABEL = "Judge panel (blind, no vote)"
-CAPTION = ("Independent models were each shown this company's facts - the full statements, the "
-           "readings, the news - but no lens, rank, badge or verdict, and asked twice. They have no "
-           "vote and change nothing above: the lenses stay the verdict of record. This is a record "
-           "kept to see, in a year, whether model judgement adds anything.")
+CAPTION = ("Independent models were each shown this company's facts - the full statements, the readings, the "
+           "news - but no verdict, hurdle or return, and asked twice: would a person who buys at today's price "
+           "and holds for ten years more likely than not earn more than the ten-year government bond yield of "
+           "the company's currency plus 5 points a year? They have no vote and change nothing above. This is a "
+           "record kept to see, in a year, whether model judgement adds anything. Answers recorded before "
+           "4 Nov 2026 answered an older question (BUY, HOLD or SELL) and are not counted here.")
 READING_CAPTION = "A reading of the difference, not a recommendation."
 OWN_TAG_NOTE = "Passages marked “own knowledge” come from the model, not from the facts it was given."
 NO_OWN_TAG_NOTE = "No passage was marked own knowledge in this run."
@@ -45,8 +47,9 @@ def claims_line(card) -> str:
             f"{card['claims_own']} from own knowledge")
 
 HELP = ("Three independent models (Claude, OpenAI, Gemini), each shown this company's facts - the "
-        "full statements, the readings, the news - but NO lens, rank, badge or verdict, and asked "
-        "the same question twice. They may use what they know about the company, and must label it. "
+        "full statements, the readings, the news - but NO verdict, hurdle or return, and asked the same "
+        "question twice: more likely than not to earn more than the ten-year bond yield plus 5 points a year, "
+        "buying today and holding ten years? They may use what they know about the company, and must label it. "
         "They never vote and change nothing above; every answer is logged so that in a year we can "
         "see whether model judgement adds anything. A judge with no key is skipped. Off unless you "
         "tick it.")
@@ -196,16 +199,6 @@ def _mark_field_html(key: str, text: str) -> str:
     return _html.escape(text) if key in PLAIN_FIELDS else mark_html(text)
 
 
-def _lens_votes(record) -> str:
-    """The lenses' votes as '0 BUY, 2 HOLD, 0 SELL' - never judge counts."""
-    return ", ".join(f"{n} {w}" for w, n in _split_pairs(record.split))
-
-
-def _split_pairs(split: str):
-    parts = [p.split() for p in (split or "").split(" / ")]
-    return [(p[0], p[1]) for p in parts if len(p) == 2]
-
-
 def figures_line(result: PanelResult) -> str:
     """JUDGE-FIGURE-CHECK-1: the panel header's count of sentences that quote a figure the facts do not hold
     ("" when there are none). Each is marked where it stands."""
@@ -225,26 +218,21 @@ def summary_lines(result: PanelResult) -> list[str]:
 
 
 def _summary_core(result: PanelResult) -> list[str]:
-    """ONE line: the verdict of record with the lenses' votes in the bracket, then the panel's split
-    (judges, not calls) and whether it agrees. e.g. "Verdict of record HOLD (lens votes: 0 BUY,
-    2 HOLD, 0 SELL). Panel: 3 HOLD — agrees." """
-    from .panel import AGREES, DISAGREES, MIXED, NO_READING, NO_STABLE
+    """ONE line: the verdict with its case count, then the panel's split (judges, not calls) and whether it
+    agrees. e.g. "Verdict: Qualifies, below hurdle, 0 of 4 cases clear. Panel: 3 NO - agrees." YES is set
+    against "clears hurdle" and NO against "below hurdle"; every other state reads "no comparison"."""
+    from .panel import AGREES, DISAGREES, MIXED, NO_COMPARISON, NO_READING, NO_STABLE
 
     rec = result.record
     panel = f"Panel: {result.split_line}"
-    if not rec.verdict:                    # no lens voted: there is nothing to agree or disagree with
-        line = f"Verdict of record: none (no lens voted). {panel}."
-        if result.agreement == NO_READING:
-            line += " No panel reading: fewer than two judges answered."
-        return [line]
-    head = f"Verdict of record {rec.verdict} (lens votes: {_lens_votes(rec)})."
-    tail = {AGREES: "agrees", DISAGREES: "disagrees", MIXED: "mixed against the record"}.get(result.agreement)
+    head = (f"Verdict: {rec.word}{', ' + rec.split if rec.split else ''}." if rec.word
+            else "Verdict: none.")
+    tail = {AGREES: "agrees", DISAGREES: "disagrees", MIXED: "mixed against the verdict",
+            NO_COMPARISON: "no comparison", NO_STABLE: "no comparison"}.get(result.agreement)
     if tail:
-        return [f"{head} {panel} — {tail}."]
+        return [f"{head} {panel} \u2014 {tail}."]
     if result.agreement == NO_READING:
         return [f"{head} {panel}. No panel reading: fewer than two judges answered."]
-    if result.agreement == NO_STABLE:
-        return [f"{head} {panel}. The judges that answered all abstained, so there is nothing to compare."]
     return [f"{head} {panel}."]
 
 

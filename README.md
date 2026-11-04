@@ -11,6 +11,8 @@ panel of specialist LLM agents then writes the narrative around that verdict —
 story, the strategy fit, the open questions worth a human's attention — under a hard rule:
 **the language models explain; they do not judge, and they never do arithmetic.**
 
+**What Aristos answers now (on a company's page).** The question is no longer "is it better than its peers?" but "would a person who buys at today's price and holds for ten years more likely than not earn more than the ten-year government bond yield of the company's currency plus 5 points a year?". A gate first sets aside companies with broken accounts or unsafe debt, then a price test works out the growth the price needs and what the shares return under four stated growth cases, and the answer is one of five states: excluded, not covered, not enough data, qualifies below the hurdle, or qualifies and clears it. The peer-rank lenses no longer vote there (they sit under "Show the workings", and still rank lists and cohorts in the Analyse tab), the model only writes the explanation, and no backtest of the new method exists yet.
+
 > **For a first-time reviewer:** read this page top to bottom (about ten minutes), then
 > [How a verdict is reached](docs/COUNCIL_EXPLAINER.md). Every term of art is glossed where it first
 > appears. Aristos is a research prototype — not investment advice, not production infrastructure.

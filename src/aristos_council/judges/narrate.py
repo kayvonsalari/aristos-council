@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from .panel import PanelReading, STABLE, UNSTABLE, needs_reading
 
-PROMPT_VERSION = "judge_reading_prompt_v2"   # PANEL-READING-2: names the one explaining frame
+PROMPT_VERSION = "judge_reading_prompt_v3"   # ABSOLUTE-PAGE-1: the panel answers the ten-year question
 PROMPT_PATH = Path(__file__).resolve().parent / f"{PROMPT_VERSION}.md"
 MAX_WORDS = 80
 NO_KEY_NOTE = "The reading is unavailable: no ANTHROPIC_API_KEY set"
@@ -81,17 +81,18 @@ def fit_length(paragraph: str, limit: int = MAX_WORDS) -> str:
 def _material(result, report) -> str:
     rec = result.record
     lines = [f"Company: {report.display} ({report.ticker})",
-             f"Verdict of record (the lenses): {rec.verdict} - {rec.headline}; split {rec.split}",
-             f"Panel against the record: {result.agreement}",
-             # PANEL-READING-2: the two frames, stated as facts so the paragraph can name the difference
-             "How the two sides look: the lenses rank the company against its PEER GROUP on fixed factors. "
-             "The judges were shown only this company's own statements, history and news - no peers, no "
-             "ranks - so a judge measures it against its own record or against its own sense of a fair price.",
+             f"Verdict (the gate and the price test): {rec.word}" + (f", {rec.split}" if rec.split else ""),
+             f"Panel against the verdict: {result.agreement}",
+             # the two frames, stated as facts so the paragraph can name the difference
+             "How the two sides look: the verdict comes from fixed rules - a gate on the accounts, then the "
+             "return the price gives if the company's own growth records, the analysts' forecast or a fade to "
+             "the bond yield hold. The judges were shown only this company's own statements, history and news - "
+             "no verdict, no hurdle, no growth cases - so a judge answers from its own reading of the business.",
              "", "The judges:"]
     for j in result.judges:
         if j.status == STABLE:
             c = j.first_ok
-            said = "ABSTAINED" if j.verdict == "ABSTAIN" else j.verdict
+            said = "ABSTAINED" if j.verdict == "ABSTAIN" else ("YES" if j.verdict == "YES" else "NO")
             lines.append(f"- {j.label} ({j.model}): {said}; "
                          f"confidence {c.confidence}; the fact that drove it: {c.driving_fact}; "
                          f"reasoning: {c.reason}; could not account for: {c.unexplained}; "
@@ -104,9 +105,10 @@ def _material(result, report) -> str:
 
 
 def allowed_verdicts(result) -> set[str]:
-    out = {w for w in (result.record.verdict,) if w in ("BUY", "HOLD", "SELL")}
-    out |= {j.verdict for j in result.judges if j.status == STABLE and j.verdict in ("BUY", "HOLD", "SELL")}
-    out |= {v for j in result.judges if j.status == UNSTABLE for v in j.verdicts if v in ("BUY", "HOLD", "SELL")}
+    """Verdict-like words the paragraph may use: only what a judge actually answered. The verdict's own words
+    ("below hurdle", "clears hurdle") are not in the narration check's word list."""
+    out = {j.verdict for j in result.judges if j.status == STABLE and j.verdict in ("YES", "NO")}
+    out |= {v for j in result.judges if j.status == UNSTABLE for v in j.verdicts if v in ("YES", "NO")}
     return out
 
 

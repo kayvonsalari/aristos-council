@@ -210,7 +210,8 @@ def test_4a_the_column_is_called_track_record_in_all_four_renderers(tmp_path):
     rep = _real(tmp_path)
     assert TRACK_RECORD_HEADER == "Track record"
     assert story_page(rep).headers == ("Lens", "Vote or mark", "Track record", "Reason")
-    assert "Track record" in format_company_report(rep).split("SHOW THE WORKINGS")[0].split("Lens ")[1]
+    # ABSOLUTE-PAGE-1: the lens table is the relative view, under the workings
+    assert "Track record" in format_company_report(rep).split("SHOW THE WORKINGS")[1].split("Lens ")[1]
     assert "| Lens | Vote or mark | Track record | Reason |" in company_report_markdown(rep)
     assert "<th>Track record</th>" in company_report_html(rep)
     assert "Track record" in company_cards.lens_table(rep) and ">Badge<" not in company_cards.lens_table(rep)
@@ -229,7 +230,7 @@ def test_4b_one_line_under_the_table_comes_before_the_existing_track_record_line
         assert doc.count(TRACK_RECORD_INTRO) == 1
         if page.caption:
             assert doc.index(TRACK_RECORD_INTRO) < doc.index(page.caption)
-    assert text.index(TRACK_RECORD_INTRO) < text.index("SHOW THE WORKINGS")
+    assert text.index(TRACK_RECORD_INTRO) > text.index("SHOW THE WORKINGS")       # the relative view is in the workings
 
 
 def test_4c_lens_notes_open_with_a_legend_built_from_the_badge_codes_own_strings(tmp_path):

@@ -1,5 +1,37 @@
 # The judge panel (JUDGE-PANEL-1)
 
+> **Changed on 4 Nov 2026 (ABSOLUTE-PAGE-1, `docs/DESIGN_absolute.md` section k).** The judges no longer
+> answer BUY, HOLD or SELL. They answer one question, the same one the page's code answers:
+>
+> *"Using only the evidence pack and anything you know about the company, which you must label, would a
+> person who buys this company at today's price and holds it for ten years more likely than not earn more
+> than the ten-year government bond yield of the company's currency plus 5 points a year? Answer YES, NO or
+> ABSTAIN, with a confidence and the one fact that decided it."*
+>
+> - **Answers** are `YES`, `NO` or `ABSTAIN` (parser, record and display). The other six fields, the
+>   `[pack]` / `[own knowledge]` labelling and the stability rule (ask twice, keep both if they differ) are
+>   unchanged. The prompt is `judge_prompt_v3.md`; `judge_prompt_v2.md` stays on disk as the record of the
+>   old question.
+> - **The pack stays blind.** It holds no verdict, no hurdle and no return range; the bond yield is not in it,
+>   so a judge that uses a figure for it labels it `[own knowledge]`. The pack's debt sentence is the page's
+>   one definition ("Debt = borrowings plus the long-term operating lease line, from the balance sheet of
+>   <Mon YYYY>"), not the older "leases add ..." wording below.
+> - **Agreement is computed after the code has finished.** `YES` is set against "Qualifies, clears hurdle" and
+>   `NO` against "Qualifies, below hurdle". `ABSTAIN`, and every other verdict state (excluded, not covered,
+>   not enough data), read **"no comparison"**. The page line is e.g. `Verdict: Qualifies, below hurdle,
+>   0 of 4 cases clear. Panel: 3 NO - agrees.`
+> - **Old records stay as they are.** Every row written before 4 Nov 2026 answered the old question. The two
+>   logs gain a last column, `question` (`ten_year_hurdle_v1` for new rows); an empty cell means the old
+>   question, and `python -m aristos_council.judges report` labels such rows "older question". They are never
+>   mixed into the new agreement figure (`score.agreement_text`).
+> - **The bar restarts.** The 12-month, 30-name bar below (and "The 12-month review plan") counts from
+>   **4 Nov 2026** for the new question. Nothing answered under the old one counts towards it.
+> - Scoring (`judges score`) still applies its BUY/HOLD/SELL rule to old rows only; a `YES`/`NO` row is "not
+>   scored" until the 12-month review writes down how a YES or NO is to be scored, before looking.
+>
+> The rest of this page describes the panel as built for the old question; where it says BUY, HOLD or SELL, or
+> "the verdict of record" as the lenses' majority, read it as the earlier design.
+
 A blind, multi-model panel on the company page. Tick **Judge panel (blind, no vote)**, directly under
 *Council opinion*, and three independent models — one from each of Anthropic, OpenAI and Google —
 are each shown the company's facts (the full statements, the readings, the news — everything the page
@@ -138,8 +170,10 @@ withheld for being long.
 
 **Pack details.** Bank and insurer packs show cash-flow lines as "not meaningful for banks and insurers"
 rather than plain figures. The debt lines are dated (the balance sheet of the quarter) and, under
-NET-DEBT-2, total debt is the statement's own Total Debt row with a separate "leases add …" line; the
-provider's own "Net Debt" row is dropped from the pack's balance sheet.
+NET-DEBT-2, total debt is the statement's own Total Debt row with a separate "leases add …" line (since
+ABSOLUTE-PAGE-1 the pack states the page's one debt sentence instead: "Debt = borrowings plus the long-term
+operating lease line, from the balance sheet of <Mon YYYY>"); the provider's own "Net Debt" row is dropped from
+the pack's balance sheet.
 
 **The split counts judges, not calls.** Each judge contributes exactly once - its stable verdict, or
 "unstable", "incomplete", "error" or "not run" - so one judge's two calls are never "HOLD 2":

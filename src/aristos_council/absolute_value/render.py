@@ -1,9 +1,11 @@
-"""The price-and-return section of the company page, in one place (ABSOLUTE-VALUE-1).
+"""The price test and the return range of the company page, in one place (ABSOLUTE-VALUE-1, ABSOLUTE-PAGE-1).
 
 The Streamlit page, the text download, the Markdown download and the HTML download all read the SAME
 blocks from here, so the four cannot drift. Plain English: no strategy or column names, and never the
-words "expected return", "target" or "proven". A reader who ignores the section loses nothing, and the
-title says it becomes the verdict only in the next phase.
+words "expected return", "target" or "proven". Two sections, sections 4 and 5 of the page: "The price
+test" (what the price asks of the business) and "The return range" (what a buyer would earn each year if
+the stated growth holds, the hurdle and the verdict). The readings that carry no verdict (earnings over
+price, earnings power value) are section 6's, via ``context_lines``.
 """
 from __future__ import annotations
 
@@ -11,9 +13,13 @@ from ..tools.price_context import format_money
 from .engine import (BELOW_HURDLE, CLEARS_HURDLE, EXCLUDED, HIGH_GROWTH_NOTE, NOT_COVERED, NOT_ENOUGH_DATA,
                      AbsoluteValue)
 
-SECTION_TITLE = "Price test and return (ABSOLUTE-1 phase 2; becomes the verdict in phase 3)"
-CAPTION = ("What today's price asks of the business, and what a buyer would earn each year if the stated "
-           "growth holds. This section changes no vote and no verdict yet.")
+PRICE_TEST_TITLE = "The price test"
+RETURN_TITLE = "The return range"
+SECTION_TITLE = PRICE_TEST_TITLE                      # the first of the two sections
+PRICE_TEST_CAPTION = "What today's price asks of the business: the base, the price and the growth it requires."
+RETURN_CAPTION = ("What a buyer would earn each year if the stated growth holds, against the hurdle. "
+                  "This is the verdict of record.")
+CAPTION = PRICE_TEST_CAPTION
 RETURN_LABEL = "Long-run owner's return if the growth holds"
 NOT_A_FORECAST = ("These are what the price returns if the stated growth repeats. They are not forecasts. "
                   "Past growth may not repeat. Forecasts can be wrong. The model's narration cannot change them.")
@@ -29,6 +35,7 @@ NOT_COVERED_LINE = ("Not covered: banks and insurers are outside this path. No r
 HEADERS_BASE = ("Year", "Free cash flow per share")
 HEADERS_RECORDS = ("Record", "Growth a year", "Note")
 HEADERS_RETURNS = ("Growth case", "Growth", RETURN_LABEL, "Against the hurdle")
+NO_FCF_TEXT = "not valued: no positive free cash flow"
 
 
 def _pct(v, places: int = 1) -> str:
@@ -55,11 +62,22 @@ def _stated(word: str, reason: str) -> str:
     return text if text.endswith(".") else text + "."
 
 
+def range_text(av: AbsoluteValue) -> str:
+    """"4.3% to 8.1%", or "above 60%" when both ends are the solver's bound (a return the solver could not
+    pin down is never printed as a made-up number)."""
+    have = [c for c in av.cases if c.available]
+    if not have:
+        return ""
+    lo, hi = min(have, key=lambda c: c.ret), max(have, key=lambda c: c.ret)
+    a, b = lo.ret_bound or _pct(lo.ret), hi.ret_bound or _pct(hi.ret)
+    return a if a == b else f"{a} to {b}"
+
+
 def _verdict_line(av: AbsoluteValue) -> str:
     v = av.verdict
     if v.state in (EXCLUDED, NOT_ENOUGH_DATA, NOT_COVERED):
         return f"Verdict: {_stated(v.word, v.reason)}"
-    return (f"Verdict: {v.word}, {v.count_text()}. The range is {_pct(v.low)} to {_pct(v.high)} a year, "
+    return (f"Verdict: {v.word}, {v.count_text()}. The range is {range_text(av)} a year, "
             f"against a hurdle of {_pct(av.hurdle.hurdle, 2)}.")
 
 
@@ -119,9 +137,6 @@ def _base_lines(av: AbsoluteValue) -> tuple[list, str]:
     return rows, text
 
 
-NO_FCF_TEXT = "not valued: no positive free cash flow"
-
-
 def _record_rows(av: AbsoluteValue) -> list[list[str]]:
     rows = []
     for c in av.cases[:3]:
@@ -152,7 +167,9 @@ def _return_rows(av: AbsoluteValue) -> list[list[str]]:
     return rows
 
 
-def _context_lines(av: AbsoluteValue) -> list[str]:
+def context_lines(av: AbsoluteValue) -> list[str]:
+    """Readings that carry no verdict and belong to section 6 (context, no vote): earnings over price and
+    the earnings power value. Empty when neither could be worked out."""
     ctx, ccy = av.context, av.price.quote_currency
     out = []
     ey = ctx.get("ebit_over_ev")
@@ -163,6 +180,13 @@ def _context_lines(av: AbsoluteValue) -> list[str]:
         ev = ctx.get("epv_enterprise_value")
         tail = f", against an enterprise value of {_money(ev, ccy, big=True)}" if ev is not None else ""
         out.append(f"Earnings power value at 9%: {_money(epv, ccy, big=True)}, an enterprise value{tail}.")
+    return out
+
+
+def _investment_lines(av: AbsoluteValue) -> list[str]:
+    """Investment intensity, which belongs to the price test (design section i, item 4)."""
+    ctx = av.context
+    out = []
     cd = ctx.get("capex_over_depreciation")
     if cd is not None:
         out.append(f"Capital spending is {cd:.1f} times depreciation and amortisation "
@@ -176,8 +200,8 @@ def _context_lines(av: AbsoluteValue) -> list[str]:
     return out
 
 
-def blocks(av: AbsoluteValue, outside_range: bool = False) -> list[tuple]:
-    """``[("p"|"note"|"strong"|"head", text) | ("table", headers, rows)]`` in page order."""
+def price_test_blocks(av: AbsoluteValue, outside_range: bool = False) -> list[tuple]:
+    """Section 4: ``[("p"|"note"|"strong"|"head", text) | ("table", headers, rows)]`` in page order."""
     out: list[tuple] = []
     if outside_range:
         out.append(("note", OUTSIDE_RANGE_LINE))
@@ -188,7 +212,7 @@ def blocks(av: AbsoluteValue, outside_range: bool = False) -> list[tuple]:
     rows, base_text = _base_lines(av)
     out += [("head", "The base"), ("table", list(HEADERS_BASE), rows), ("p", base_text),
             ("p", _price_line(av))]
-    out.append(("head", "The price test"))
+    out.append(("head", "What the price requires"))
     if av.yield_on_base is not None:
         out.append(("p", f"Free cash flow yield on the base: {_pct(av.yield_on_base)}."))
     if av.implied_growth is not None:
@@ -199,35 +223,57 @@ def blocks(av: AbsoluteValue, outside_range: bool = False) -> list[tuple]:
     out.append(("table", list(HEADERS_RECORDS), _record_rows(av)))
     if any(c.high_growth for c in av.cases):
         out.append(("note", f"Marked rates: {HIGH_GROWTH_NOTE}."))
-    ctx_lines = _context_lines(av)
-    out += [("p", ln) for ln in ctx_lines]
-    out.append(("head", "The return"))
-    out.append(("table", list(HEADERS_RETURNS), _return_rows(av)))
-    out.append(("p", _hurdle_line(av)))
-    out.append(("strong", _verdict_line(av)))
-    out.append(("p", _backtest_line(av)))
-    out.append(("note", NOT_A_FORECAST))
-    out.append(("note", EVIDENCE))
-    if av.debt_line and ctx_lines:
+    inv = _investment_lines(av)
+    out += [("p", ln) for ln in inv]
+    if av.debt_line and inv:
         out.append(("note", av.debt_line))
     return out
+
+
+def return_blocks(av: AbsoluteValue) -> list[tuple]:
+    """Section 5: the four cases, the hurdle, the verdict and the backtest-form verdict. Empty for a
+    company the method does not show (nothing to return)."""
+    if not av.shown:
+        return []
+    return [("table", list(HEADERS_RETURNS), _return_rows(av)), ("p", _hurdle_line(av)),
+            ("strong", _verdict_line(av)), ("p", _backtest_line(av)), ("note", NOT_A_FORECAST),
+            ("note", EVIDENCE)]
+
+
+def blocks(av: AbsoluteValue, outside_range: bool = False) -> list[tuple]:
+    """Both sections' blocks in page order (the price test, then the return range)."""
+    return price_test_blocks(av, outside_range) + return_blocks(av)
 
 
 def has_content(av) -> bool:
     return av is not None
 
 
-def text_lines(av: AbsoluteValue, outside_range: bool = False) -> list[str]:
-    """The text download. No blank line inside the block (the first-screen counter drops it whole)."""
-    out = [SECTION_TITLE.upper(), CAPTION]
-    for b in blocks(av, outside_range):
+def sections(av: AbsoluteValue, outside_range: bool = False) -> list[tuple]:
+    """``[(key, title, caption, blocks)]`` for sections 4 and 5, in page order, skipping an empty one."""
+    out = [("price test", PRICE_TEST_TITLE, PRICE_TEST_CAPTION, price_test_blocks(av, outside_range))]
+    ret = return_blocks(av)
+    if ret:
+        out.append(("return range", RETURN_TITLE, RETURN_CAPTION, ret))
+    return out
+
+
+def _table_lines(b) -> list[str]:
+    out = []
+    table = [list(b[1])] + [list(r) for r in b[2]]
+    widths = [max(len(str(r[i])) for r in table) for i in range(len(b[1]))]
+    for n, r in enumerate(table):
+        out.append("  " + "  ".join(str(c).ljust(widths[i]) for i, c in enumerate(r)).rstrip())
+        if n == 0:
+            out.append("  " + "  ".join("-" * w for w in widths))
+    return out
+
+
+def block_text_lines(blocks_: list[tuple]) -> list[str]:
+    out = []
+    for b in blocks_:
         if b[0] == "table":
-            table = [list(b[1])] + [list(r) for r in b[2]]
-            widths = [max(len(str(r[i])) for r in table) for i in range(len(b[1]))]
-            for n, r in enumerate(table):
-                out.append("  " + "  ".join(str(c).ljust(widths[i]) for i, c in enumerate(r)).rstrip())
-                if n == 0:
-                    out.append("  " + "  ".join("-" * w for w in widths))
+            out += _table_lines(b)
         elif b[0] == "head":
             out.append(f"{b[1]}:")
         else:
@@ -235,10 +281,14 @@ def text_lines(av: AbsoluteValue, outside_range: bool = False) -> list[str]:
     return out
 
 
-def markdown_lines(av: AbsoluteValue, outside_range: bool = False) -> list[str]:
-    out = [f"## {SECTION_TITLE}", "", f"*{CAPTION}*", ""]
-    for b in blocks(av, outside_range):
-        out += _md_block(b)
+def text_lines(av: AbsoluteValue, outside_range: bool = False) -> list[str]:
+    """The text download for sections 4 and 5, each under its own upper-case title, a blank line between
+    the two (no blank line inside a section)."""
+    out: list[str] = []
+    for n, (_key, title, caption, bl) in enumerate(sections(av, outside_range)):
+        if n:
+            out.append("")
+        out += [title.upper(), caption, *block_text_lines(bl)]
     return out
 
 
@@ -246,13 +296,20 @@ def _md_block(b) -> list[str]:
     if b[0] == "table":
         return (["| " + " | ".join(b[1]) + " |", "|" + "---|" * len(b[1])]
                 + ["| " + " | ".join(str(c).replace("|", "/") for c in r) + " |" for r in b[2]] + [""])
-    if b[0] == "head":
-        return [f"**{b[1]}**", ""]
-    if b[0] == "strong":
+    if b[0] in ("head", "strong"):
         return [f"**{b[1]}**", ""]
     if b[0] == "note":
         return [f"*{b[1]}*", ""]
     return [b[1], ""]
+
+
+def markdown_lines(av: AbsoluteValue, outside_range: bool = False) -> list[str]:
+    out: list[str] = []
+    for _key, title, caption, bl in sections(av, outside_range):
+        out += [f"## {title}", "", f"*{caption}*", ""]
+        for b in bl:
+            out += _md_block(b)
+    return out
 
 
 def markdown_block(b) -> str:
@@ -260,12 +317,9 @@ def markdown_block(b) -> str:
     return chr(10).join(_md_block(b)).rstrip()
 
 
-def html_section(av: AbsoluteValue, outside_range: bool, esc, table_html) -> str:
-    """``esc`` is the exporter's escaper and ``table_html(headers, rows)`` its table builder, so this
-    module imports nothing from the export package."""
-    out = [f'<section class="section" id="absolute-value"><h2>{esc(SECTION_TITLE)}</h2>',
-           f'<p class="note">{esc(CAPTION)}</p>']
-    for b in blocks(av, outside_range):
+def html_blocks(bl: list[tuple], esc, table_html) -> list[str]:
+    out = []
+    for b in bl:
         if b[0] == "table":
             out.append(table_html(list(b[1]), [[esc(str(c)) for c in r] for r in b[2]]))
         elif b[0] == "head":
@@ -276,4 +330,15 @@ def html_section(av: AbsoluteValue, outside_range: bool, esc, table_html) -> str
             out.append(f'<p class="note">{esc(b[1])}</p>')
         else:
             out.append(f"<p>{esc(b[1])}</p>")
-    return "".join(out) + "</section>"
+    return out
+
+
+def html_sections(av: AbsoluteValue, outside_range: bool, esc, table_html) -> list[str]:
+    """One ``<section>`` per page section. ``esc`` is the exporter's escaper and ``table_html(headers,
+    rows)`` its table builder, so this module imports nothing from the export package."""
+    out = []
+    for key, title, caption, bl in sections(av, outside_range):
+        out.append(f'<section class="section" id="{key.replace(" ", "-")}"><h2>{esc(title)}</h2>'
+                   f'<p class="note">{esc(caption)}</p>' + "".join(html_blocks(bl, esc, table_html))
+                   + "</section>")
+    return out

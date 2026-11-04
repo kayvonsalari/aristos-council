@@ -5,10 +5,10 @@
     "- *Could not account for:* *nothing.* `own knowledge`", and on MSFT/JPM
     "- *Key risk:* *A sustained slowdown ...* `own knowledge`".
 (b) a judge that answered on ONE call only ("incomplete") shows its answer plain - live JPM Gemini
-    rendered "- *The fact that drove it:* HOLD: JPMorgan trades at ..." under a head line that
-    already said "incomplete: HOLD on one call only".
+    rendered "- *The fact that drove it:* NO: JPMorgan trades at ..." under a head line that
+    already said "incomplete: NO on one call only".
 (c) side by side (an unstable judge) each side is closed on its own before the " | " - live VKTX
-    OpenAI rendered "*HOLD: ... * `own knowledge` *| BUY: ...* `own knowledge`".
+    OpenAI rendered "*NO: ... * `own knowledge` *| YES: ...* `own knowledge`".
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def _call(n, verdict, *, fact, reasoning, risk="A one-off could recur.", unexpla
 
 
 def _result(*judges):
-    return panel.PanelResult(ticker="CO", available=True, record=_record("HOLD"), judges=list(judges),
+    return panel.PanelResult(ticker="CO", available=True, record=_record("NO"), judges=list(judges),
                              agreement=panel.NO_READING)
 
 
@@ -57,7 +57,7 @@ GEMINI = _config().judges[2]
 # --------------------------------------------------------------------------- (a)
 def test_ko_openai_nothing_and_its_own_knowledge_tag_render_plain():
     """KO.US.md line 60 (live): "- *Could not account for:* *nothing.* `own knowledge`"."""
-    c = _call(1, "HOLD",
+    c = _call(1, "NO",
               fact="The company trades at a forward P/E of about 28x. [pack]",
               reasoning="Net debt is $27.9bn. [pack] High historical valuation limits upside at current price. "
                         "[own knowledge]",
@@ -65,14 +65,14 @@ def test_ko_openai_nothing_and_its_own_knowledge_tag_render_plain():
                    "into sustained higher organic sales growth. [own knowledge]",
               unexplained="nothing. [own knowledge]",
               change="A sustained increase in free cash flow to at least $8bn annually would change my "
-                     "verdict to BUY. [own knowledge]")
+                     "verdict to YES. [own knowledge]")
     j = panel.settle(OPENAI, [c, c])
     lines = _judge_lines(_result(j))
     assert "- *Could not account for:* nothing." in lines
     assert ("- *Key risk:* The view could be wrong if Coca-Cola converts recent distribution wins and "
             "marketing into sustained higher organic sales growth.") in lines
     assert ("- *Would change its mind if:* A sustained increase in free cash flow to at least $8bn "
-            "annually would change my verdict to BUY.") in lines
+            "annually would change my verdict to YES.") in lines
     # the tag stays where provenance matters
     assert ("- *Why:* Net debt is $27.9bn. *High historical valuation limits upside at current price.* "
             "`own knowledge`") in lines
@@ -85,7 +85,7 @@ def test_ko_openai_nothing_and_its_own_knowledge_tag_render_plain():
 def test_msft_key_risk_renders_plain():
     """Live MSFT/JPM: "- *Key risk:* *A sustained slowdown ...* `own knowledge`" (the rest of the
     sentence is filled in here)."""
-    c = _call(1, "HOLD", fact="Forward P/E is 30x. [pack]", reasoning="Azure grew. [pack]",
+    c = _call(1, "NO", fact="Forward P/E is 30x. [pack]", reasoning="Azure grew. [pack]",
               risk="A sustained slowdown in cloud spending would undercut the growth the price assumes. "
                    "[own knowledge]")
     lines = _judge_lines(_result(panel.settle(OPENAI, [c, c])))
@@ -98,7 +98,7 @@ def test_msft_key_risk_renders_plain():
 
 # --------------------------------------------------------------------------- (b)
 def test_jpm_gemini_incomplete_renders_its_one_answer_without_a_verdict_prefix():
-    ok = _call(1, "HOLD", fact="JPMorgan trades at 2.4x book value. [pack]",
+    ok = _call(1, "NO", fact="JPMorgan trades at 2.4x book value. [pack]",
                reasoning="Total revenue rose to $182.4bn in FY2025. [pack]",
                risk="Credit losses could rise faster than reserves.", unexplained="nothing",
                change="A fall in return on equity below 15%.")
@@ -106,7 +106,7 @@ def test_jpm_gemini_incomplete_renders_its_one_answer_without_a_verdict_prefix()
     j = panel.settle(GEMINI, [ok, err])
     assert j.status == panel.INCOMPLETE
     assert _judge_lines(_result(j)) == [
-        "**Gemini (gemini-test): incomplete: HOLD on one call only (confidence medium)**",
+        "**Gemini (gemini-test): incomplete: NO on one call only (confidence medium)**",
         "- *2 claims from the pack, 0 from own knowledge*",
         "- *The fact that drove it:* JPMorgan trades at 2.4x book value.",
         "- *Why:* Total revenue rose to $182.4bn in FY2025.",
@@ -118,13 +118,13 @@ def test_jpm_gemini_incomplete_renders_its_one_answer_without_a_verdict_prefix()
 
 # --------------------------------------------------------------------------- (c)
 def _vktx_unstable():
-    hold = _call(1, "HOLD", fact="Viking closed offerings raising about $575m. [pack]",
+    hold = _call(1, "NO", fact="Viking closed offerings raising about $575m. [pack]",
                  reasoning="Cash was $705.7m at FY2025 year-end. [pack] Phase 3 outcomes are binary. "
                            "[own knowledge]",
                  risk="A failed or unsafe Phase 3 readout for VK2735 would likely destroy the valuation. "
                       "[own knowledge]",
                  unexplained="The pack does not explain the R&D jump to $345.0m.")
-    buy = _call(2, "BUY", fact="Viking initiated the SUNRISE Phase 3 program. [own knowledge]",
+    buy = _call(2, "YES", fact="Viking initiated the SUNRISE Phase 3 program. [own knowledge]",
                 reasoning="Phase 3 has started. [own knowledge] Cash less debt was $497.6m. [pack]",
                 risk="A negative Phase 3 VK2735 result would remove the rationale. [own knowledge]",
                 unexplained="The planned use of the $575m is not detailed.")
@@ -135,29 +135,29 @@ def test_vktx_unstable_sides_are_each_closed_on_their_own_line():
     j = _vktx_unstable()
     assert j.status == panel.UNSTABLE
     assert _judge_lines(_result(j)) == [
-        "**OpenAI (gpt-test): unstable: HOLD / BUY (confidence medium / medium)**",
+        "**OpenAI (gpt-test): unstable: NO / YES (confidence medium / medium)**",
         "- *2 claims from the pack, 1 from own knowledge*",
-        "- *The fact that drove it:* \n  - *First answer: HOLD:* Viking closed offerings raising about $575m."
-        "\n  - *Second answer: BUY:* *Viking initiated the SUNRISE Phase 3 program.* `own knowledge`",
-        "- *Why:* \n  - *First answer: HOLD:* Cash was $705.7m at FY2025 year-end. *Phase 3 outcomes are "
-        "binary.* `own knowledge`\n  - *Second answer: BUY:* *Phase 3 has started.* `own knowledge` Cash less "
+        "- *The fact that drove it:* \n  - *First answer: NO:* Viking closed offerings raising about $575m."
+        "\n  - *Second answer: YES:* *Viking initiated the SUNRISE Phase 3 program.* `own knowledge`",
+        "- *Why:* \n  - *First answer: NO:* Cash was $705.7m at FY2025 year-end. *Phase 3 outcomes are "
+        "binary.* `own knowledge`\n  - *Second answer: YES:* *Phase 3 has started.* `own knowledge` Cash less "
         "debt was $497.6m.",
-        "- *Key risk:* \n  - *First answer: HOLD:* A failed or unsafe Phase 3 readout for VK2735 would likely "
-        "destroy the valuation.\n  - *Second answer: BUY:* A negative Phase 3 VK2735 result would remove the "
+        "- *Key risk:* \n  - *First answer: NO:* A failed or unsafe Phase 3 readout for VK2735 would likely "
+        "destroy the valuation.\n  - *Second answer: YES:* A negative Phase 3 VK2735 result would remove the "
         "rationale.",
-        "- *Could not account for:* \n  - *First answer: HOLD:* The pack does not explain the R&D jump to "
-        "$345.0m.\n  - *Second answer: BUY:* The planned use of the $575m is not detailed.",
-        "- *Would change its mind if:* \n  - *First answer: HOLD:* A cut to the dividend."
-        "\n  - *Second answer: BUY:* A cut to the dividend.",
+        "- *Could not account for:* \n  - *First answer: NO:* The pack does not explain the R&D jump to "
+        "$345.0m.\n  - *Second answer: YES:* The planned use of the $575m is not detailed.",
+        "- *Would change its mind if:* \n  - *First answer: NO:* A cut to the dividend."
+        "\n  - *Second answer: YES:* A cut to the dividend.",
     ]
 
 
 def test_every_judge_line_has_balanced_italics_and_backticks():
-    c = _call(1, "SELL", fact="Debt rose. [own knowledge]", reasoning="Margins fell. [pack] Peers cut. "
+    c = _call(1, "NO", fact="Debt rose. [own knowledge]", reasoning="Margins fell. [pack] Peers cut. "
               "[own knowledge]", risk="Rates fall. [own knowledge]", unexplained="nothing. [own knowledge]")
     res = _result(_vktx_unstable(), panel.settle(GEMINI, [c, c]))
     for ln in render.markdown_lines(res):
         assert _balanced(ln), ln
     html = render.html_section(res)
     assert html.count("<em>") == html.count("</em>")
-    assert "own knowledge</span></li><li><em>Second answer: BUY:" in html     # each side closed on its own line
+    assert "own knowledge</span></li><li><em>Second answer: YES:" in html     # each side closed on its own line

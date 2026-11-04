@@ -1,5 +1,5 @@
 """B24-D4 - a Forensic "doubted" that stands on ONE of three tests says so in words. The rule is untouched."""
-from aristos_council.company_cards import lens_rows, summary_chips
+from aristos_council.company_cards import lens_rows, relative_chips
 from aristos_council.company_report import LensVote, build_agreement
 from aristos_council.company_story import answer_lines, story_paragraphs, table_rows
 from tests.test_company_story import _report, _rank
@@ -35,7 +35,7 @@ def test_the_agreement_the_answer_the_chips_and_the_table_all_say_it():
     assert rep.agreement.check_notes["Forensic"] == NOTE
     assert f"Forensic reads doubted{NOTE}." in answer_lines(rep)[1]
     assert f"Forensic marks it doubted{NOTE} and does not vote." in dict(story_paragraphs(rep))["What happened."]
-    assert f">Forensic: doubted{NOTE}<" in summary_chips(rep)
+    assert f">Forensic: doubted{NOTE}<" in relative_chips(rep)          # the lens chips live in the relative view
     assert next(r for r in table_rows(rep) if r.lens == "Forensic").outcome.startswith(f"doubted{NOTE}")
     assert next(r for r in lens_rows(rep) if r["lens"] == "Forensic")["detail"].endswith(NOTE)
 

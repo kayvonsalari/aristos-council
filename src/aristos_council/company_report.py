@@ -61,8 +61,8 @@ from .tools.valuation_band import ordinal
 
 _ROOT = Path(__file__).resolve().parents[2]
 
-HOUSE_LINE = ("The math judges: each vote below is the lens's own verdict on this company ranked "
-              "among its peer group, and every lens counts once. Nothing here is a recommendation.")
+HOUSE_LINE = ("The math judges: the answer below comes from fixed rules applied to the company's accounts and its "
+              "price. The writing explains it and cannot change a number. Nothing here is a recommendation.")
 NO_LENS_REASON = "No lens is ticked, so there is nothing to vote."
 SUMMARY_NOT_ASKED = ""          # an unticked summary leaves NO section, not a placeholder
 NO_KEY_NOTE_OPINION = "Council opinion unavailable: no ANTHROPIC_API_KEY set"
@@ -1430,7 +1430,29 @@ def report_record(report: CompanyReport) -> dict:
         # unchanged. A reader reads it with .get("absolute").
         **({"absolute": report.check.absolute.as_dict()}
            if getattr(report.check, "absolute", None) is not None else {}),
+        # ABSOLUTE-PAGE-1 (phase 3): the verdict of record is now the absolute verdict. The relative result (the
+        # old lens-vote majority) is kept under its own key, and the design version is named. ADDITIVE: "votes"
+        # and "agreement" above keep their exact shape, so every saved file still reads, and the files already
+        # on disk are never rewritten.
+        "design_version": _page_design_version(),
+        "verdict_of_record": _page_verdict_record(report),
+        "relative": _page_relative_record(report),
     }
+
+
+def _page_design_version() -> str:
+    from .company_page import DESIGN_VERSION
+    return DESIGN_VERSION
+
+
+def _page_verdict_record(report) -> dict:
+    from .company_page import verdict_record
+    return verdict_record(report)
+
+
+def _page_relative_record(report) -> dict:
+    from .company_page import relative_record
+    return relative_record(report)
 
 
 def save_company_report(report: CompanyReport, runs_dir) -> Path:
@@ -1460,9 +1482,11 @@ def save_company_report(report: CompanyReport, runs_dir) -> Path:
 # table both moved toward the end; price-and-cash and valuation-band swapped relative
 # order. The text export, the HTML export and the screen renderer (app.py) all follow
 # this SAME order — a test pins it across all three.
-SECTION_ORDER = ("answer", "story", "gate", "absolute value", "lens table", "council opinion", "workings",
-                 "valuation band", "price and cash", "absolute readings", "what analysts say",
-                 "peers", "sources")
+# ABSOLUTE-PAGE-1: the page order (docs/DESIGN_absolute.md section i). The relative lens table, the agreement and
+# the peers table sit under "workings"; the lenses no longer decide anything on this page.
+SECTION_ORDER = ("answer", "story", "gate", "price test", "return range", "context", "judge panel",
+                 "council opinion", "workings", "valuation band", "price and cash", "absolute readings",
+                 "what analysts say", "relative view", "peers", "sources")
 
 
 def price_and_cash_lines(result) -> list[str]:
@@ -1616,29 +1640,38 @@ def story_text_lines(report: CompanyReport) -> list[str]:
     if page.note:
         lines.append(page.note)
     gate = getattr(report.check, "gate", None)
-    if gate is not None:                                  # ABSOLUTE-GATE-1, after the story, before the table
+    if gate is not None:                                  # section 3
         from .gate import render as _gate_render
         lines.append("")
         lines += _gate_render.text_lines(gate)
     absolute = getattr(report.check, "absolute", None)
-    if absolute is not None:                              # ABSOLUTE-VALUE-1, directly after the gate section
+    if absolute is not None:                              # sections 4 and 5
         from .absolute_value import render as _value_render
         lines.append("")
         lines += _value_render.text_lines(absolute, report.outside_tested_range)
+    from .company_page import context_text_lines          # section 6
     lines.append("")
-    lines += list(page.tag)
+    lines += context_text_lines(report)
+    return lines
+
+
+def relative_view_text_lines(report: CompanyReport) -> list[str]:
+    """The relative view (peer ranks) under the workings: the old two lines, the lens table with its
+    track-record column, and the notes under it. It no longer decides anything."""
+    from .company_page import RELATIVE_VIEW_CAPTION, RELATIVE_VIEW_TITLE
+    from .company_story import story_page
+
+    page = story_page(report)
+    lines = [RELATIVE_VIEW_TITLE.upper(), f"  {RELATIVE_VIEW_CAPTION}"]
+    lines += [f"  {ln}" for ln in page.relative_answer]
+    lines += [f"  {ln}" for ln in page.tag]
     if page.no_vote:
-        lines.append(page.no_vote)
+        lines.append(f"  {page.no_vote}")
     else:
-        lines += _text_table(page.headers, [r.cells() for r in page.rows])
-    if page.track_intro:
-        lines.append(page.track_intro)
-    if page.caption:
-        lines.append(page.caption)
-    if page.group_note:
-        lines.append(page.group_note)
-    if page.badge_note:
-        lines.append(page.badge_note)
+        lines += [f"  {ln}" for ln in _text_table(page.headers, [r.cells() for r in page.rows])]
+    for extra in (page.track_intro, page.caption, page.group_note, page.badge_note):
+        if extra:
+            lines.append(f"  {extra}")
     return lines
 
 
@@ -1673,6 +1706,9 @@ def workings_text_lines(report: CompanyReport) -> list[str]:
         lines.append("  not available")
     lines.append("")
 
+    lines.extend(relative_view_text_lines(report))
+    lines.append("")
+
     peer_block = peers_lines(c, columns=rank_columns(report), company_ticker=report.ticker)
     lines.extend(peer_block if peer_block else ["PEERS: none computed"])
     lines.append("")
@@ -1704,8 +1740,8 @@ def workings_text_lines(report: CompanyReport) -> list[str]:
 
 
 def format_company_report(report: CompanyReport) -> str:
-    """The report as text, in the page order: the answer, the story, one table, the council
-    opinion (only when ticked), then the workings (COMPANY-STORY-1)."""
+    """The report as text, in the page order: the answer, the story, the gate, the price test, the return
+    range, the context, the judge panel and the council opinion (only when ticked), then the workings."""
     c = report.check
     lines = [f"Company Report - {report.display}", HOUSE_LINE, ""]
     if report.unrateable:
@@ -1717,8 +1753,8 @@ def format_company_report(report: CompanyReport) -> str:
     lines.append("")
     if report.judge_panel is not None:
         from .judges import render as _judge_render
-        lines += [f"{_judge_render.SECTION_TITLE.upper()} (blind, no vote - the agreement above is "
-                  "the verdict of record)", *_judge_render.text_lines(report.judge_panel), ""]
+        lines += [f"{_judge_render.SECTION_TITLE.upper()} (blind, no vote; it changes nothing above)",
+                  *_judge_render.text_lines(report.judge_panel), ""]
     if report.council_opinion is not None:
         lines += ["COUNCIL OPINION (narration only - never a vote; the agreement above is "
                   "the verdict of record)", *council_opinion_lines(report), ""]
@@ -1733,50 +1769,71 @@ def format_company_report(report: CompanyReport) -> str:
 # --------------------------------------------------------------------------- #
 # The plain-English summary (opt-in; the only place a model is reached)
 # --------------------------------------------------------------------------- #
-COMPANY_PROMPT_VERSION = "reader_company_v1"
+COMPANY_PROMPT_VERSION = "reader_company_v2"
 _COMPANY_PROMPT = Path(__file__).resolve().parent / "agents" / "prompts" / f"{COMPANY_PROMPT_VERSION}.md"
+
+# ABSOLUTE-PAGE-1: the role each growth case plays on the page, for the summary's role check
+_CASE_ROLE = {"own_5_year": "record", "own_10_year": "record", "consensus": "forecast", "downside": "downside"}
+_CASE_ALIAS = {"own_5_year": "own 5-year growth", "own_10_year": "own 10-year growth",
+               "consensus": "analyst consensus", "downside": "downside case"}
 
 
 def company_facts_pack(report: CompanyReport) -> dict:
-    """Everything the summary writer may know, built from the numbers the page prints: the
-    agreement row, each lens's vote and rank, the peer group and its step, the absolute readings,
-    the analyst table and the valuation band. Nothing else, so the READER-5 checks - every number and
-    every company the summary names must be in THIS pack - mean something."""
+    """Everything the summary writer may know, built from what the page prints: the answer, the gate's rules
+    and warnings, the price test, the return range, the context readings, the analysts and the valuation band.
+    Nothing else, so the READER-5 checks - every number the summary writes must be in THIS pack (the page's own
+    tables), every company it names must be on the page, a gate rule or growth case keeps its role, and every
+    exclusion or warning that fired is named - mean something. No lens vote, rank or agreement is in it: the
+    relative view no longer decides anything and is not the summary's to explain."""
+    from .absolute_value import render as vr
+    from .company_page import answer_lines, context_blocks
+    from .gate.engine import FAIL, WARN
+    from .gate.render import rows as gate_rows
+
     c = report.check
-    group = c.peer_group
-    ag = report.agreement
-    lenses = [{"name": v.label, "asks": v.asks, "kind": v.kind, "votes": v.votes,
-               "role": v.role, "result": v.result(),
-               "verdict": v.word if v.ranked else "", "position": v.position,
-               "of": v.cohort_size or None,
-               "applies": v.ranked,
-               # BACKTEST-2 — the LABEL only (never the raw numbers): the summary may repeat
-               # this wording, but must never turn it into a claim the lens "predicts" anything.
-               "track_record_label": (v.badge.label if v.badge is not None else None)}
-              for v in report.votes]
     trend = c.analyst_trend
+    gate, av = getattr(c, "gate", None), getattr(c, "absolute", None)
+    first, second = answer_lines(report)
+
+    def rule(r, role):
+        return {"name": r.label, "role": role, "reading": r.reading, "limit": r.limit, "result": r.result,
+                "note": r.note}
+
+    gate_block = None
+    if gate is not None:
+        rules = [rule(r, "exclusion") for r in gate.rules]
+        warnings = [rule(w, "warning") for w in gate.warnings]
+        gate_block = {"state": gate.state, "reason": gate.reason, "rules": rules, "warnings": warnings,
+                      "debt_definition": gate.debt_line,
+                      "table": [list(r) for r in gate_rows(gate)] if (gate.rules or gate.warnings) else [],
+                      # the READER-5 fourth check for this page: every exclusion that failed and every warning
+                      # that fired must be named, by its exact name
+                      "to_name": [r.label for r in gate.rules if r.result == FAIL]
+                                 + [w.label for w in gate.warnings if w.result == WARN]}
+    price_test = return_range = None
+    hurdle_name = None
+    if av is not None:
+        price_test = {"lines": vr.block_text_lines(vr.price_test_blocks(av, report.outside_tested_range))}
+        ret = vr.return_blocks(av)
+        return_range = {
+            "cases": [{"name": cs.label, "alias": _CASE_ALIAS[cs.key], "role": _CASE_ROLE[cs.key],
+                       "growth": cs.growth_text or (f"{100 * cs.growth:.1f}%" if cs.growth is not None else ""),
+                       "return": (cs.ret_bound or f"{100 * cs.ret:.1f}%") if cs.ret is not None else "",
+                       "available": cs.available, "reason": cs.reason}
+                      for cs in av.cases],
+            "lines": vr.block_text_lines(ret),
+            "verdict": av.verdict.as_dict(), "word": av.verdict.word}
+        if av.hurdle.available:
+            # "US (USD)": the two-letter country code and the currency are names the summary may use
+            hurdle_name = f"{av.hurdle.currency} ({av.hurdle.bond_symbol[:2]})"
     return {
-        "company": {"name": report.display,
-                    "peer_group": (
-                        {"sentence": group.sentence(), "step": group.step,
-                         "size": len(group.members), "broad_sector_group": group.broad}
-                        if group is not None and group.available else
-                        {"sentence": report.no_vote_reason or "no peer group"})},
-        "lenses": lenses,
-        "agreement": ({
-            "available": True, "headline": ag.headline,
-            # AGREEMENT-COUNT-1: three separate counts, never one "voting lenses" that lumps a lens
-            # that did not apply in with the ones that voted
-            "lenses_that_voted": ag.n_voted, "lenses_that_did_not_apply": ag.n_not_applying,
-            "check_lenses_that_do_not_vote": ag.n_checks,
-            "buy_votes": ag.buy_votes, "buy_lenses": list(ag.buy), "hold_lenses": list(ag.hold),
-            "sell_lenses": list(ag.sell),
-            "does_not_apply": [f"{label} ({why})" for label, why in ag.not_applicable],
-            "checks": dict(ag.checks), "marks": list(ag.marks),
-            # the READER-5 fourth check for this page: a lens that voted BUY must be named
-            "buy_lenses_to_name": list(ag.buy),
-            "top_agreement": []} if ag is not None else
-            {"available": False, "reason": report.no_vote_reason}),
+        "company": {"name": report.display},
+        "currency_and_bond": ({"name": hurdle_name} if hurdle_name else None),
+        "answer": [first, second],
+        "gate": gate_block,
+        "price_test": price_test,
+        "return_range": return_range,
+        "context": [b[1] for b in context_blocks(report) if b[0] in ("p",)],
         "valuation_band": c.valuation_band,
         "absolute_readings": {
             "debt_and_cash": ((c.debt_and_cash.lines() + c.debt_and_cash.notes())

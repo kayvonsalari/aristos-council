@@ -98,7 +98,10 @@ def test_the_judge_pack_gives_three_dated_lines_and_drops_the_provider_net_debt(
     assert section[:3] == ["owes $52.0bn net of cash (balance sheet of Jun 2026)",
                            "total debt $154.0bn (balance sheet of Jun 2026)",
                            "cash and short-term investments $102.0bn (balance sheet of Jun 2026)"]
-    assert any(NET_DEBT_DEFINITION in ln for ln in section)
+    # ABSOLUTE-PAGE-1: the pack states the page's one debt sentence, not the older "leases add" wording
+    assert any("Debt = borrowings plus the long-term operating lease line, from the balance sheet of Jun 2026."
+               in ln for ln in section)
+    assert not any("leases add" in ln for ln in section)
     balance = dict(pack.sections)["Balance sheet"]
     assert not any(ln.startswith("Net Debt:") for ln in balance)
     assert any(ln.startswith("Total Debt:") for ln in balance)

@@ -204,6 +204,9 @@ def _user_message(facts: str, checks: list) -> str:
 
 
 COMPANY_FACTS_LEAD = "Other facts."
+# ABSOLUTE-PAGE-1: the five leads of a COMPANY page's model summary are the code story's own
+COMPANY_LEADS = ("What was asked.", "What the gate found.", "What the price requires.", "What to doubt.",
+                 "What this cannot tell you.")
 
 
 def reader_paragraphs(summary, *, company: bool = False) -> list[tuple[str, str]]:
@@ -211,6 +214,9 @@ def reader_paragraphs(summary, *, company: bool = False) -> list[tuple[str, str]
 
     ONE builder, so the HTML and the markdown render the same five paragraphs in the same
     order and cannot drift."""
+    if company:
+        return list(zip(COMPANY_LEADS, (summary.asked, summary.happened, summary.survived, summary.doubt,
+                                        summary.cannot_say)))
     return [
         ("What this run asked.", summary.asked),
         ("What happened.", summary.happened),

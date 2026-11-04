@@ -15,7 +15,7 @@ MIXED = ("Free cash flow fell to $5.3bn. [pack] Interest cover is 9.0 times. [pa
 
 
 def _three(reasons):
-    caller = _scripted({f: [_reply("HOLD", reason=r, fact="Free cash flow was $5.3bn. [pack]")] * 2
+    caller = _scripted({f: [_reply("NO", reason=r, fact="Free cash flow was $5.3bn. [pack]")] * 2
                         for f, r in zip(("anthropic", "openai", "google"), reasons)})
     return _run_panel(report_obj, caller)
 
@@ -60,7 +60,7 @@ def test_a_panel_where_nobody_answered_keeps_the_standing_note(report):
 def test_the_story_sentence_carries_no_source_tags(report):
     global report_obj
     report_obj = report
-    caller = _scripted({f: [_reply("HOLD", unexplained="The cause of the $21.3bn swing in other investing. [pack]")] * 2
+    caller = _scripted({f: [_reply("NO", unexplained="The cause of the $21.3bn swing in other investing. [pack]")] * 2
                         for f in ("anthropic", "openai", "google")})
     line = render.unexplained_line(_run_panel(report, caller))
     assert line.startswith("The judge panel could not account for: ")
@@ -141,7 +141,7 @@ def test_the_pack_labels_specials_apart_and_names_no_cut(report):
 def test_the_story_sentence_has_no_doubled_full_stop_after_a_tagged_sentence(report):
     global report_obj
     report_obj = report
-    caller = _scripted({f: [_reply("HOLD", unexplained="It is not fully explained in the pack. [pack]")] * 2
+    caller = _scripted({f: [_reply("NO", unexplained="It is not fully explained in the pack. [pack]")] * 2
                         for f in ("anthropic", "openai", "google")})
     line = render.unexplained_line(_run_panel(report, caller))
     assert line.endswith("not fully explained in the pack.") and ".." not in line and "[pack]" not in line

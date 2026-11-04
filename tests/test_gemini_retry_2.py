@@ -39,9 +39,9 @@ def _seq(*items):
 @pytest.mark.parametrize("exc", TRANSIENT, ids=["503", "429", "timeout"])
 def test_one_transient_failure_then_success_is_one_answer_after_one_retry(spec, exc):
     slept = []
-    caller = _seq(exc, _reply("HOLD"))
+    caller = _seq(exc, _reply("NO"))
     call = panel._ask_once(spec, "s", "u", caller, 1, sleep=slept.append)
-    assert call.status == "ok" and call.verdict == "HOLD" and call.error == ""
+    assert call.status == "ok" and call.verdict == "NO" and call.error == ""
     assert call.attempts == 2 and len(caller.calls) == 2
     assert slept == [panel.TRANSIENT_BACKOFF_SECONDS]
     assert str(exc) in call.error_detail          # kept for the log
@@ -52,7 +52,7 @@ def test_one_transient_failure_then_success_is_one_answer_after_one_retry(spec, 
                          ids=["503", "429", "timeout"])
 def test_a_second_transient_failure_is_recorded_as_the_error(spec, exc, label):
     slept = []
-    caller = _seq(exc, exc, _reply("BUY"))
+    caller = _seq(exc, exc, _reply("YES"))
     call = panel._ask_once(spec, "s", "u", caller, 1, sleep=slept.append)
     assert call.status == "error" and call.error == label and call.error_detail == str(exc)
     assert len(caller.calls) == 2 and len(slept) == 1
@@ -67,7 +67,7 @@ def test_a_second_transient_failure_is_recorded_as_the_error(spec, exc, label):
 ], ids=["400", "404", "no-credits", "dns"])
 def test_a_non_transient_failure_is_not_retried(spec, exc, label):
     slept = []
-    caller = _seq(exc, _reply("BUY"))
+    caller = _seq(exc, _reply("YES"))
     call = panel._ask_once(spec, "s", "u", caller, 1, sleep=slept.append)
     assert call.status == "error" and call.error == label
     assert len(caller.calls) == 1 and slept == []
@@ -81,7 +81,7 @@ def test_the_panel_retries_a_503_for_each_judge_and_settles_stable():
         seen.setdefault(spec.family, []).append(1)
         if len(seen[spec.family]) == 1:
             raise CallError("HTTP 503: high demand", status=503)
-        return _reply("HOLD")
+        return _reply("NO")
 
     slept = []
     judges = panel.run_judges("PACK", _config(3, 1), caller,
@@ -92,11 +92,11 @@ def test_the_panel_retries_a_503_for_each_judge_and_settles_stable():
 
 
 def test_a_recovered_retry_is_in_the_log_and_the_shown_verdict_carries_no_error():
-    call = panel._ask_once(FAMILIES[2], "s", "u", _seq(TRANSIENT[0], _reply("SELL")), 1,
+    call = panel._ask_once(FAMILIES[2], "s", "u", _seq(TRANSIENT[0], _reply("NO")), 1,
                            sleep=lambda s: None)
     j = panel.settle(FAMILIES[2], [call])
     res = panel.PanelResult(ticker="CO", available=True, judges=[j])
     (row,) = jlog.log_rows(res)
     row = dict(zip(jlog.LOG_COLUMNS, row))
-    assert row["call_status"] == "ok" and row["verdict"] == "SELL"
-    assert "503" in row["error_detail"] and j.verdict_text() == "SELL"
+    assert row["call_status"] == "ok" and row["verdict"] == "NO"
+    assert "503" in row["error_detail"] and j.verdict_text() == "NO"

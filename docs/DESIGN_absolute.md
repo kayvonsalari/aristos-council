@@ -378,6 +378,18 @@ The saved run says net cash of $7.3bn (cash and short-term investments $64.5bn, 
 - Step 1: the bond series probe. Done for this page (section g): the US ten-year answers HTTP 200 on the current plan. The probe should be repeated for each mapped series before it is relied on.
 - Depreciation field, diluted shares field, year-ago consensus field, bond series fetch with storage, free cash flow per share, the implied growth solver, the four cases, the return range and the verdict.
 
+### Status, 4 Nov 2026: phases 1 to 3 are built
+
+- **Phase 1** (gate): ABSOLUTE-GATE-1 to 3, merged (PRs #199, #200).
+- **Phase 2** (valuation, hurdle, return): ABSOLUTE-VALUE-1 and 2, merged (PR #201). The bond series are in `data/bond_series.yaml`; the Swiss
+  ten-year is `SW10Y` (`CH10Y` is Chile).
+- **Phase 3** (report and UI): ABSOLUTE-PAGE-1. The company page is rebuilt in the section i order; the absolute verdict is the verdict of record
+  on that page only; the lens majority and agreement table moved into the workings as "Relative view (peer ranks): no longer votes"; the judges
+  answer the section k question (YES, NO or ABSTAIN) and the old judge records are kept apart; the summary's facts pack and checker are re-pointed;
+  the sweep gained the section 3 rules. The Analyse tab's cohort and list runs are unchanged.
+- **Phase 4** (backtest): not started. Nothing yet shows that a company reading "clears hurdle" went on to do better, and the page says so.
+- **Decision 17 revised** by ABSOLUTE-PAGE-1's last commit: see the note under decision 17.
+
 ### Phase 3: report and UI
 
 - The page order in section i, code-written answer and story in new templates, the gate table, the price test, the return range. Judge question change (section k). Old lens table moved into the folded workings.
@@ -419,6 +431,9 @@ New decisions.
 15. Hurdle margin: 5.0 points over the bond. [Kroll 2026; Fernandez et al. 2025.]
 16. Bond source: EODHD bond series through the end-of-day endpoint, probed; US fallbacks ^TNX and FRED DGS10. [EODHD Macroeconomic Data API; FRED.]
 17. Downside case: two years at consensus then a straight line to the bond yield. Shape is judgment; reasons from Chan et al., Damodaran and Mauboussin.
+    **Revised in `valuation/absolute_value_v2.yaml` (ABSOLUTE-PAGE-1, last commit):** years 1 and 2 use the LOWER of the consensus rate and the own 5-year
+    rate (whichever exists if one is missing). When analysts forecast 50% a year, two years at that rate is not a downside. Version 1 stays on disk as the
+    record; Microsoft's downside case then starts at 17.2% (its own 5-year rate) and returns 4.6%, the same as the backtest form.
 18. Capital spending measure: capital spending over depreciation printed, plus abnormal investment. [Titman, Wei and Xie; Wall Street Prep.]
 19. Leverage: one warning, "highly leveraged", with two readings: net debt over EBITDA above 6 times, or cash flow over debt below 12% [S&P 2009 Table 2 and 2024 tables 17 to 19; Damodaran January 2026; Moody's utilities method]. Dividend cover: a warning only below 1.0 (not covered); 1.5 to 2.0 is printed context for thin to comfortable [Wall Street Prep; Stockopedia; AJ Bell]. Both are warnings, never exclusions.
 20. F-score: excludes 0 or 1, and only when all nine checks can be computed. [Piotroski 2000, Table 3; figures from the owner's earlier fetch, this pass's retry was refused.]

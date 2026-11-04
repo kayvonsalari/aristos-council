@@ -726,7 +726,7 @@ def test_the_section_has_four_exclusions_and_four_warnings_in_plain_english():
     assert [r[1] for r in rows] == ["exclusion"] * 4 + ["warning"] * 4
     text = "\n".join(render.text_lines(g))
     assert text.startswith(render.SECTION_TITLE.upper())
-    assert "does not change the verdict yet" in text.lower() and "Gate result: Qualifies" in text
+    assert "phase" not in text.lower() and "Gate result: Qualifies" in text
     assert "four warnings" in text and "Debt = borrowings plus the long-term operating lease line" in text
     for banned in ("accrual_ratio", "altman_z", "piotroski_f_score", "min_f_score", "strategy_id"):
         assert banned not in text
@@ -765,11 +765,13 @@ def test_a_company_report_carries_the_gate_in_every_download_and_the_record_is_a
     report.check.gate = None
     without = report_record(report)
     assert "gate" not in without
-    assert {k: v for k, v in with_gate.items() if k != "gate"} == without     # nothing else moved
+    # nothing else moved (the verdict of record is built from the gate, so it moves with it)
+    strip = lambda d: {k: v for k, v in d.items() if k not in ("gate", "verdict_of_record")}
+    assert strip(with_gate) == strip(without)
 
 
 @pytest.mark.min_group(3)
-def test_the_record_keys_are_the_v2_keys_plus_gate(tmp_path):
+def test_the_record_keys_are_the_v2_keys_plus_the_additive_blocks(tmp_path):
     from aristos_council.company_report import report_record
     from tests.test_company_report import RAW, _run
     keys = set(report_record(_run([RAW], tmp_path=tmp_path, save=False)))
@@ -778,4 +780,4 @@ def test_the_record_keys_are_the_v2_keys_plus_gate(tmp_path):
                     "track_record_caption", "track_record_summary", "lens_ranks", "sources", "seconds",
                     "cache", "summary_written", "council_opinion", "outside_tested_range",
                     "smallcap_cohort", "smallcap_floor_usd", "smallcap_band_note", "size_matched_peers",
-                    "price_and_cash", "gate", "absolute"}
+                    "price_and_cash", "gate", "absolute", "design_version", "verdict_of_record", "relative"}
