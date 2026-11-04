@@ -1,9 +1,10 @@
 """ABSOLUTE-VALUE-1 (docs/DESIGN_absolute.md sections d to g): free cash flow per share, the own-currency
 hurdle, implied growth, the four growth cases, the return range and the new verdict.
 
-Anchored to the design page's Microsoft worked example: base 8.99, price 521.91, bond 4.93%, hurdle 9.93%,
-implied growth 25.0%; returns own 5-year 17.2% -> 6.5%, consensus 16.0% -> 6.0%, own 10-year 21.2% -> 8.1%,
-downside -> 4.3%; backtest-form downside with 17.2% in years 1 and 2 -> 4.6%. No test reaches a real
+Anchored to the design page's Microsoft worked example, re-anchored by ABSOLUTE-PAGE-2 on cash from operations
+BEFORE working-capital changes (187,830m, capital spending 115,948m, shares 7,453m): base 9.64, price 521.91, bond
+4.93%, hurdle 9.93%, implied growth 24.0%; returns own 5-year 17.2% -> 6.8%, consensus 16.0% -> 6.3%, own 10-year
+21.2% -> 8.6%, downside -> 4.6%; backtest-form downside with 17.2% in years 1 and 2 -> 4.9%. No test reaches a real
 adapter: the bond, the exchange rate and the analyst data are fakes.
 """
 from __future__ import annotations
@@ -46,9 +47,13 @@ def msft(**over) -> Fundamentals:
             "capital_expenditure": [-115_948 * M, -64_551 * M, -44_477 * M],
             "diluted_shares": [7_453 * M, 7_465 * M, 7_469 * M],
             "depreciation_amortization": [38_534 * M, 29_433 * M, 20_958 * M],
-            "diluted_eps": [17.95, 13.64, 11.80]},
+            "diluted_eps": [17.95, 13.64, 11.80],
+            # ABSOLUTE-PAGE-2: the cash flow statement's change in working capital (positive = cash released), so cash
+            # from operations before it is 187,830m for FY2026
+            "change_in_working_capital": [-4_895 * M, -1_000 * M, -2_000 * M]},
         aligned_period_ends={"operating_cash_flow": ends, "capital_expenditure": ends,
-                             "diluted_shares": ends, "diluted_eps": ends, "depreciation_amortization": ends},
+                             "diluted_shares": ends, "diluted_eps": ends, "depreciation_amortization": ends,
+                             "change_in_working_capital": ends},
         capital_expenditure_annual=[-115_948 * M, -64_551 * M, -44_477 * M, -28_107 * M],
         total_revenue=[331_800 * M, 281_700 * M, 245_100 * M, 211_900 * M],
         depreciation_amortization_annual=[38_534 * M, 29_433 * M, 20_958 * M],
@@ -88,24 +93,27 @@ def run(f=None, *, gate=GATE_OK, price=521.91, fx=None, rec=None, tr=None, bond_
 # --------------------------------------------------------------------------- #
 # the two solvers against the worked example
 # --------------------------------------------------------------------------- #
-def test_implied_growth_is_25_percent_for_the_microsoft_example():
-    g = am.implied_growth(8.99, 521.91, 0.0993)
-    assert round(100 * g, 1) == 25.0
+BASE = (187_830 - 115_948) / 7_453                     # Microsoft FY2026, before working-capital changes: 9.64
+
+
+def test_implied_growth_is_24_percent_for_the_microsoft_example():
+    g = am.implied_growth(BASE, 521.91, 0.0993)
+    assert round(100 * g, 1) == 24.0
 
 
 def test_returns_for_each_growth_case_match_the_design_page():
-    ret = lambda rates: am.path_return(8.99, 521.91, rates)
-    assert round(100 * ret(am.constant_path(0.172)), 1) == 6.5
-    assert round(100 * ret(am.constant_path(0.160)), 1) == 6.0
+    ret = lambda rates: am.path_return(BASE, 521.91, rates)
+    assert round(100 * ret(am.constant_path(0.172)), 1) == 6.8
+    assert round(100 * ret(am.constant_path(0.160)), 1) == 6.4
     # the page shows the own 10-year rate as 21.2%; the unrounded rate behind that display is ~21.16%
-    assert round(100 * ret(am.constant_path(0.2116)), 1) == 8.1
+    assert round(100 * ret(am.constant_path(0.2116)), 1) == 8.6
 
 
-def test_downside_case_for_microsoft_is_4_3_and_the_backtest_form_is_4_6():
+def test_downside_case_for_microsoft_is_4_6_and_the_backtest_form_is_4_9():
     consensus = (24.14 / 17.95) ** 0.5 - 1                      # 15.97%, two steps from the last reported year
     down = am.downside_path(consensus, 0.04934)
-    assert round(100 * am.path_return(8.99, 521.91, down), 1) == 4.3
-    assert round(100 * am.path_return(8.99, 521.91, am.downside_path(0.172, 0.04934)), 1) == 4.6
+    assert round(100 * am.path_return(BASE, 521.91, down), 1) == 4.6
+    assert round(100 * am.path_return(BASE, 521.91, am.downside_path(0.172, 0.04934)), 1) == 4.9
 
 
 def test_the_downside_path_is_two_fast_years_then_a_straight_line_to_the_bond_by_year_10():
@@ -116,16 +124,16 @@ def test_the_downside_path_is_two_fast_years_then_a_straight_line_to_the_bond_by
 
 
 def test_a_solver_outside_its_range_says_none_not_a_guess():
-    assert am.implied_growth(8.99, 1.0, 0.0993) is None            # a price needing less than -10% a year
-    assert am.implied_growth(8.99, 1e6, 0.0993) is None            # more than +40% a year
-    assert am.implied_growth(-1.0, 100.0, 0.0993) is None and am.implied_growth(8.99, 100.0, 0.0) is None
-    assert am.path_return(8.99, 1e9, am.constant_path(0.1)) is None
+    assert am.implied_growth(BASE, 1.0, 0.0993) is None            # a price needing less than -10% a year
+    assert am.implied_growth(BASE, 1e6, 0.0993) is None            # more than +40% a year
+    assert am.implied_growth(-1.0, 100.0, 0.0993) is None and am.implied_growth(BASE, 100.0, 0.0) is None
+    assert am.path_return(BASE, 1e9, am.constant_path(0.1)) is None
     assert am.path_return(0.0, 100.0, am.constant_path(0.1)) is None
 
 
 def test_the_return_equation_is_consistent_with_the_value_it_inverts():
-    r = am.path_return(8.99, 521.91, am.constant_path(0.172))
-    assert am.path_value(8.99, am.constant_path(0.172), r) == pytest.approx(521.91, rel=1e-9)
+    r = am.path_return(BASE, 521.91, am.constant_path(0.172))
+    assert am.path_value(BASE, am.constant_path(0.172), r) == pytest.approx(521.91, rel=1e-9)
 
 
 # --------------------------------------------------------------------------- #
@@ -133,8 +141,9 @@ def test_the_return_equation_is_consistent_with_the_value_it_inverts():
 # --------------------------------------------------------------------------- #
 def test_the_microsoft_base_is_the_latest_year_because_it_is_lower_than_the_three_year_average():
     b = free_cash_flow_base(msft(), DEF)
-    assert [round(y.fcf_per_share, 2) for y in b.years] == [8.99, 9.59, 9.92]
-    assert round(b.average, 2) == 9.50 and round(b.base, 2) == 8.99
+    assert [round(y.fcf_per_share, 2) for y in b.years] == [9.64, 9.73, 10.18]
+    assert round(b.average, 2) == 9.85 and round(b.base, 2) == 9.64
+    assert b.pre_wc and round(b.wc_effect, 3) == round(-4_895 / 7_453, 3)
     assert b.chosen == "the latest year" and b.share_basis == "diluted shares"
     assert b.years[0].label == "the year to Jun 2026"
 
@@ -164,10 +173,11 @@ def test_a_company_with_no_diluted_count_uses_basic_shares_and_labels_it():
     f = msft(aligned_annual=aligned, aligned_period_ends={}, shares_outstanding_annual=[7_430 * M, 7_433 * M, 7_440 * M])
     # EODHD shape: nothing dated, every series positional
     f = msft(aligned_annual={}, aligned_period_ends={}, operating_cash_flow_annual=[182_935 * M, 136_162 * M, 118_548 * M],
-             shares_outstanding_annual=[7_430 * M, 7_433 * M, 7_440 * M])
+             shares_outstanding_annual=[7_430 * M, 7_433 * M, 7_440 * M],
+             change_in_working_capital_annual=[-4_895 * M, -1_000 * M, -2_000 * M])
     b = free_cash_flow_base(f, DEF)
     assert b.share_basis == "basic shares" and b.usable
-    assert round(b.latest, 2) == round((182_935 - 115_948) / 7_430, 2)
+    assert round(b.latest, 2) == round((182_935 + 4_895 - 115_948) / 7_430, 2)
 
 
 def test_a_non_positive_base_reads_not_valued_and_the_verdict_is_not_enough_data():
@@ -328,18 +338,18 @@ def test_the_bond_file_maps_each_currency_once_to_a_symbol_ending_gbond_ready():
 def test_the_four_cases_and_the_verdict_for_microsoft_are_the_design_pages():
     av = run()
     by_key = {c.key: c for c in av.cases}
-    assert round(100 * by_key["own_5_year"].ret, 1) == 6.5
-    assert round(100 * by_key["consensus"].growth, 1) == 16.0 and round(100 * by_key["consensus"].ret, 1) == 6.0
-    assert round(100 * by_key["own_10_year"].ret, 1) == 8.1
-    assert round(100 * by_key["downside"].ret, 1) == 4.3
-    assert round(100 * av.implied_growth, 1) == 25.0
+    assert round(100 * by_key["own_5_year"].ret, 1) == 6.8
+    assert round(100 * by_key["consensus"].growth, 1) == 16.0 and round(100 * by_key["consensus"].ret, 1) == 6.3
+    assert round(100 * by_key["own_10_year"].ret, 1) == 8.6
+    assert round(100 * by_key["downside"].ret, 1) == 4.6
+    assert round(100 * av.implied_growth, 1) == 24.0
     assert av.verdict.state == BELOW_HURDLE and av.verdict.count_text() == "0 of 4 cases clear"
-    assert (round(100 * av.verdict.low, 1), round(100 * av.verdict.high, 1)) == (4.3, 8.1)
+    assert (round(100 * av.verdict.low, 1), round(100 * av.verdict.high, 1)) == (4.6, 8.6)
     bt = av.backtest_verdict
     assert bt.state == BELOW_HURDLE and bt.count_text() == "0 of 3 cases clear"
-    assert round(100 * av.backtest_cases[2].ret, 1) == 4.6
+    assert round(100 * av.backtest_cases[2].ret, 1) == 4.9
     assert [c.key for c in av.backtest_cases] == ["own_5_year", "own_10_year", "downside"]
-    assert round(100 * av.yield_on_base, 1) == 1.7
+    assert round(100 * av.yield_on_base, 1) == 1.8
 
 
 def test_the_consensus_is_two_steps_from_the_last_reported_year_with_both_years_named():
@@ -504,7 +514,7 @@ def test_the_section_uses_the_owners_wording_and_never_the_forbidden_words():
 
 def test_the_verdict_names_the_state_the_count_and_the_range():
     text = "\n".join(vrender.text_lines(run()))
-    assert "Verdict: Qualifies, below hurdle, 0 of 4 cases clear. The range is 4.3% to 8.1% a year, " \
+    assert "Verdict: Qualifies, below hurdle, 0 of 4 cases clear. The range is 4.6% to 8.6% a year, " \
            "against a hurdle of 9.93%." in text
     assert "Backtest form" in text and "0 of 3 cases clear" in text
 

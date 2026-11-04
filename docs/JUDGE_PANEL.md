@@ -29,8 +29,15 @@
 > - Scoring (`judges score`) still applies its BUY/HOLD/SELL rule to old rows only; a `YES`/`NO` row is "not
 >   scored" until the 12-month review writes down how a YES or NO is to be scored, before looking.
 >
-> The rest of this page describes the panel as built for the old question; where it says BUY, HOLD or SELL, or
-> "the verdict of record" as the lenses' majority, read it as the earlier design.
+> - **Scoring (ABSOLUTE-PAGE-2, 4 Nov 2026).** `judges score` scores a `YES` as right when the share's total return over the
+>   scoring window (3, 6 and 12 months) exceeded the hurdle the verdict used (the bond yield of the company's currency plus
+>   5 points a year, recorded in the summary log's new last column `hurdle`, pro-rated: hurdle x months / 12), and a `NO` as right
+>   when it did not. `ABSTAIN` is never scored; a new row with no recorded hurdle is "no data". Rows of the older question keep
+>   the old BUY/HOLD/SELL rule against the cohort, and `score.csv` carries a `rule` column that says which rule scored each row.
+>
+> **Historical (dated 4 Nov 2026).** Everything below this note, and "Scoring" further down, describes the panel as built for the
+> OLD question: where it says BUY, HOLD or SELL, or "the verdict of record" as the lenses' majority, read it as the earlier
+> design, kept for the rows already in the logs. The old BUY/HOLD/SELL scoring rule applies to those rows only.
 
 A blind, multi-model panel on the company page. Tick **Judge panel (blind, no vote)**, directly under
 *Council opinion*, and three independent models — one from each of Anthropic, OpenAI and Google —

@@ -38,7 +38,10 @@ START_SLACK_DAYS = 7               # the price "on" the judgement date: first cl
 
 SCORE_COLUMNS = ("run_date", "ticker", "subject", "verdict", "window_months", "status",
                  "company_return", "benchmark_return", "excess_pp", "n_peers",
-                 "since_return", "since_excess_pp")
+                 "since_return", "since_excess_pp", "rule")
+RULE_OLD = "older question: BUY, HOLD or SELL against the cohort"
+RULE_NEW = "ten-year question: YES or NO against the hurdle"
+YES_NO = ("YES", "NO")
 
 RIGHT, WRONG, TOO_EARLY, NOT_SCORED, NO_DATA = "right", "wrong", "too early", "not scored", "no data"
 SCORABLE = ("BUY", "HOLD", "SELL")
@@ -107,6 +110,14 @@ def subjects_of(row: dict) -> list[tuple[str, str]]:
     return out
 
 
+def yes_no_outcome(verdict: str, total_return: float, hurdle: float, months: int) -> str:
+    """ABSOLUTE-PAGE-2: a YES is right when the share's total return over the window beat the hurdle (the bond yield
+    of its currency plus 5 points a year) pro-rated to the window (hurdle x months / 12); a NO is right when it did not.
+    ABSTAIN is never scored."""
+    beat = total_return > hurdle * months / 12.0
+    return RIGHT if (verdict == "YES") == beat else WRONG
+
+
 def score_rows(rows: list, prices: dict, today: date) -> list[dict]:
     """The score rows: one per (summary row, subject, window). ``prices`` maps ticker -> series."""
     out = []
@@ -123,8 +134,25 @@ def score_rows(rows: list, prices: dict, today: date) -> list[dict]:
                         "verdict": verdict, "window_months": months, "company_return": "",
                         "benchmark_return": "", "excess_pp": "", "n_peers": "",
                         "since_return": "" if since is None else f"{since:.4f}",
-                        "since_excess_pp": "" if since_ex is None else f"{since_ex:.2f}"}
+                        "since_excess_pp": "" if since_ex is None else f"{since_ex:.2f}",
+                        "rule": RULE_NEW if (row.get("question") or "") else RULE_OLD}
                 end = add_months(d0, months)
+                if (row.get("question") or "") and subject != "lenses" and verdict in YES_NO:
+                    if end > today:
+                        out.append({**base, "status": TOO_EARLY})
+                        continue
+                    try:
+                        hurdle = float(row.get("hurdle") or "")
+                    except ValueError:
+                        out.append({**base, "status": NO_DATA})           # no hurdle was recorded for this run
+                        continue
+                    ret = _return(company, d0, end)
+                    if ret is None:
+                        out.append({**base, "status": NO_DATA})
+                        continue
+                    out.append({**base, "status": yes_no_outcome(verdict, ret, hurdle, months),
+                                "company_return": f"{ret:.4f}"})
+                    continue
                 if verdict not in SCORABLE:
                     out.append({**base, "status": NOT_SCORED})
                 elif end > today:
@@ -196,6 +224,9 @@ def summary_text(scored: list[dict]) -> str:
     lines.append(f"Scored {n_rows} panel run(s). A BUY is right if the name beat its cohort by more than "
                  f"{BAND_PP:g} points, a SELL if it trailed by more than {BAND_PP:g}, a HOLD if it finished "
                  f"within {BAND_PP:g}; an abstention is never scored.")
+    lines.append(f"Rows answering the ten-year question: a YES is right if the share's total return over the window beat the "
+                 f"hurdle (the bond yield of its currency plus 5 points a year, pro-rated to the window), a NO if it did "
+                 f"not; an abstention is never scored. Older rows keep the rule above (score.csv labels each row's rule).")
     lines.append("")
     lines.append(f"{'subject':<8} {'window':>7} {'scored':>7} {'right':>6} {'wrong':>6} {'too early':>10} {'no data':>8}")
     for subject in ("lenses", *[n for _, n in FAMILY_COLUMNS]):

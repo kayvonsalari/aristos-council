@@ -1579,8 +1579,8 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
 
     if report.council_opinion is not None:
         parts.append('<section class="section"><h2>Council opinion</h2>'
-                     '<p class="note">Narration only — never a vote; the agreement above is '
-                     "the verdict of record.</p>")
+                     '<p class="note">Narration only — never a vote; it explains the lens ranks '
+                     "(the relative view), not the verdict at the top of the page.</p>")
         op = report.council_opinion
         if op.available:
             from .. import ai_text_check as _atc

@@ -1280,8 +1280,13 @@ additive `absolute` block, and (phase 3) `verdict_of_record`, `relative` and `de
 carry keeps its shape, and a saved file is never rewritten. Every number it uses is in `valuation/absolute_value_v2.yaml` (frozen; version 1 stays on disk as the record; a change is a new version). All
 arithmetic is in `tools/absolute_math.py`; `absolute_value/engine.py` only orchestrates.
 
-**The base: free cash flow per share.** (operating cash flow minus capital spending) / diluted weighted-average shares, each fiscal
-year read at the same year end. The base is the lower of the latest year and the three-year average; both are printed and the chosen one
+**The base: free cash flow per share.** (cash from operations BEFORE working-capital changes minus capital spending) / diluted weighted-average
+shares, each fiscal year read at the same year end (ABSOLUTE-PAGE-2, definition version 3; versions 1 and 2 used operating cash flow as
+reported). Cash from operations before working-capital changes = operating cash flow minus the cash flow statement's change in working capital
+(positive = cash released), the same measure the solvency rule uses; a missing working-capital line is "not enough data", never a guess. The
+latest year's working-capital effect per share is printed as its own line, and a yield on the base above 25% is marked "unusually high; check the
+cash flow lines". Companies with positive cash from operations but negative free cash flow after capital spending (regulated utilities in an
+investing phase) are not valued in this release; a dividend-based path is a later design. The base is the lower of the latest year and the three-year average; both are printed and the chosen one
 is named. With fewer than three usable years the latest is used and the page says the average needs three. Diluted shares come from the
 yfinance income statement ("Diluted Average Shares"); the EODHD income block carries no diluted count, so that path uses the
 outstanding-shares history and the page says "basic shares". A base at or below zero reads "not valued: no positive free cash flow" and
@@ -1313,7 +1318,8 @@ a year for ten years" (Chan, Karceski and Lakonishok 2003, Table I).
 
 **The verdict.** Excluded and Not covered come from the gate. Not enough data: the gate could not finish, fewer than two cases exist, there
 is no hurdle, no price or no base. Qualifies, below hurdle: at least one available case returns less than the hurdle. Qualifies, clears
-hurdle: every available case, the downside included, returns at least the hurdle. The page always prints "n of N cases clear" and the range
+hurdle: every available case, the downside included, returns at least the hurdle, and at least one own-record case (own 5-year or own 10-year)
+is available and clears; with no own-record case the verdict is not enough data, "no record of the company's own growth" (ABSOLUTE-PAGE-2). The page always prints "n of N cases clear" and the range
 (lowest to highest). The backtest-form verdict uses own 5-year, own 10-year and the downside case with the own 5-year fallback (no consensus)
 and is printed beside it.
 

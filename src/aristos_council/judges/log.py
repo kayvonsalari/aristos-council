@@ -40,11 +40,14 @@ _SUMMARY_V1 = (("run_date", "ticker", "pack_hash", "verdict_of_record", "lens_sp
                + ("panel_split", "panel_agreement"))
 _SUMMARY_V2 = _SUMMARY_V1 + ("judges_answered",)
 _SUMMARY_V3 = _SUMMARY_V2 + ("peers",)
-SUMMARY_COLUMNS = _SUMMARY_V3 + ("question",)
+_SUMMARY_V4 = _SUMMARY_V3 + ("question",)
+# ABSOLUTE-PAGE-2: the hurdle the verdict used (bond yield plus 5 points, a fraction), so a YES or NO can be scored
+# against it later. Empty when the price test gave no hurdle.
+SUMMARY_COLUMNS = _SUMMARY_V4 + ("hurdle",)
 # Earlier headers of the same files. A file carrying one of THESE is upgraded in place (the new
 # columns are appended, empty for old rows - nothing is reordered or lost); any other header is
 # still refused.
-_PREVIOUS = {LOG_NAME: (_LOG_V1, _LOG_V2, _LOG_V3), SUMMARY_NAME: (_SUMMARY_V1, _SUMMARY_V2, _SUMMARY_V3)}
+_PREVIOUS = {LOG_NAME: (_LOG_V1, _LOG_V2, _LOG_V3), SUMMARY_NAME: (_SUMMARY_V1, _SUMMARY_V2, _SUMMARY_V3, _SUMMARY_V4)}
 
 
 class LogHeaderMismatch(RuntimeError):
@@ -134,7 +137,8 @@ def summary_row(result: PanelResult) -> list:
     for family, _ in FAMILY_COLUMNS:
         row.extend(family_cell(by_family.get(family)))
     row += [result.split_line, result.agreement, judges_answered(result.judges),
-            ";".join(result.peers), result.question]
+            ";".join(result.peers), result.question,
+            "" if result.record.hurdle is None else f"{result.record.hurdle:.6f}"]
     return row
 
 

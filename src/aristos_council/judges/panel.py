@@ -139,6 +139,7 @@ class RecordSnapshot:
     split: str = ""                  # "1 of 4 cases clear"
     headline: str = ""               # the page's own first answer line
     n_voted: int = 0                 # kept for older callers; the verdict has no vote count
+    hurdle: Optional[float] = None   # the hurdle the verdict used (bond yield + 5 points, as a fraction), for scoring
 
     @property
     def comparable(self) -> bool:
@@ -204,8 +205,9 @@ def record_snapshot(absolute, headline: str = "") -> RecordSnapshot:
         return RecordSnapshot()
     v = absolute.verdict
     side = {"qualifies_clears_hurdle": CLEARS, "qualifies_below_hurdle": BELOW}.get(v.state, "")
+    hurdle = getattr(getattr(absolute, "hurdle", None), "hurdle", None)
     return RecordSnapshot(verdict=side, state=v.state, word=v.word, split=v.count_text(), headline=headline,
-                          n_voted=0)
+                          n_voted=0, hurdle=hurdle)
 
 
 def split_line(judges) -> str:

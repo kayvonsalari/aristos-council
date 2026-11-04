@@ -13,7 +13,7 @@ import yaml
 
 _ROOT = Path(__file__).resolve().parents[3]
 VALUATION_DIR = _ROOT / "valuation"
-DEFAULT_ID = "absolute_value_v2"
+DEFAULT_ID = "absolute_value_v3"
 CONSENSUS_ELSE_OWN_5 = "consensus_else_own_5_year"          # version 1: years 1 and 2 at the consensus rate
 LOWER_OF_CONSENSUS_AND_OWN_5 = "lower_of_consensus_and_own_5_year"      # version 2
 
@@ -41,6 +41,8 @@ class ValueDefinition:
     verdict_states: tuple
     raw: dict = field(default_factory=dict)
     downside_fast_rule: str = CONSENSUS_ELSE_OWN_5          # which rate the downside case starts at
+    base_before_working_capital: bool = False               # version 3: cash from operations BEFORE working-capital changes
+    yield_mark_above: float = 0.25                          # version 3: a yield on the base above this is marked
 
     @property
     def margin(self) -> float:
@@ -95,7 +97,9 @@ def parse_definition(doc: dict) -> ValueDefinition:
         fast_years=_num(cases.get("downside"), "fast_years", "cases.downside", int),
         high_growth_mark=_num(doc, "high_growth_mark", "root"),
         verdict_states=tuple(doc.get("verdict_states") or ()), raw=doc,
-        downside_fast_rule=_fast_rule(cases.get("downside")))
+        downside_fast_rule=_fast_rule(cases.get("downside")),
+        base_before_working_capital=(base.get("cash_from_operations") == "before_working_capital_changes"),
+        yield_mark_above=float(base.get("yield_mark_above") or 0.25))
 
 
 def load_definition(definition_id: str = DEFAULT_ID, directory: Path | str | None = None) -> ValueDefinition:

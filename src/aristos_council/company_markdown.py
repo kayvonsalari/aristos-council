@@ -79,7 +79,7 @@ def company_report_markdown(report) -> str:
     if report.council_opinion is not None:
         op = report.council_opinion
         out += [f"## {'Council opinion'}", "",
-                "*Narration only — never a vote; the agreement above is the verdict of record.*", ""]
+                "*Narration only — never a vote; it explains the lens ranks (the relative view), not the verdict at the top of the page.*", ""]
         if op.available:
             from .ai_text_check import count, top_line
             out += [f"*{top_line(count(op.narrative or ''))}*", ""]

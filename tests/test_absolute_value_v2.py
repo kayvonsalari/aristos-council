@@ -35,7 +35,8 @@ def downside(av):
 
 
 def test_version_2_is_the_default_and_version_1_stays_on_disk_unchanged_in_every_number():
-    assert load_definition().id == "absolute_value_v2" and load_definition().downside_fast_rule == LOWER_OF_CONSENSUS_AND_OWN_5
+    assert load_definition().id == "absolute_value_v3" and V2.id == "absolute_value_v2"
+    assert load_definition().downside_fast_rule == V2.downside_fast_rule == LOWER_OF_CONSENSUS_AND_OWN_5
     assert V1.id == "absolute_value_v1" and V1.downside_fast_rule == CONSENSUS_ELSE_OWN_5
     a, b = yaml.safe_load((ROOT / "valuation/absolute_value_v1.yaml").read_text(encoding="utf-8")), \
         yaml.safe_load((ROOT / "valuation/absolute_value_v2.yaml").read_text(encoding="utf-8"))
@@ -64,7 +65,7 @@ def test_microsoft_downside_starts_at_the_own_5_year_rate_and_returns_the_same_a
     d = downside(av)
     assert d.growth == pytest.approx(0.172)                            # starts at 17.2%, not 18.3%
     assert d.growth_text.startswith("17.2% for 2 years (own 5-year)")
-    assert round(100 * d.ret, 1) == 4.6
+    assert round(100 * d.ret, 1) == 4.9
     backtest_down = next(c for c in av.backtest_cases if c.key == DOWNSIDE)
     assert d.ret == pytest.approx(backtest_down.ret)                   # the same as the backtest form
     assert av.verdict.state == "qualifies_below_hurdle" and av.verdict.of == 4
@@ -82,7 +83,7 @@ def test_when_the_consensus_is_the_lower_rate_it_is_still_the_start_so_the_desig
     av = run()                                                         # consensus 16.0% < own 5-year 17.2%
     d = downside(av)
     assert d.growth == pytest.approx(0.1597, abs=1e-3) and d.growth_text.startswith("16.0% for 2 years (consensus)")
-    assert round(100 * d.ret, 1) == 4.3
+    assert round(100 * d.ret, 1) == 4.6
 
 
 def test_a_company_the_analysts_forecast_at_fifty_percent_has_a_downside_that_starts_at_its_own_record():
@@ -109,7 +110,7 @@ def test_a_missing_rate_falls_back_to_whichever_exists():
 
 
 def test_the_backtest_form_is_unchanged_by_the_revision():
-    for definition in (V1, V2):
+    for definition in (V1, V2):                    # both on the older base (operating cash flow as reported)
         av = run(tr=live_trend(), definition=definition)
         back = next(c for c in av.backtest_cases if c.key == DOWNSIDE)
         assert back.growth == pytest.approx(0.172) and round(100 * back.ret, 1) == 4.6

@@ -6,7 +6,7 @@ No verdict is given for CO: a missing item is neither a pass nor a fail.
 
 What was asked. The question: would a person who buys CO at today's price and holds it for ten years more likely than not earn more than the ten-year government bond yield (USD) plus 5 points a year? Two steps answer it: a gate that looks for broken accounts and unsafe debt, then a price test that works out what growth the price needs and what the shares return if that growth holds.
 What the gate found. Earnings quality could not be evaluated: net income and operating cash flow missing; solvency could not be evaluated: operating cash flow missing; accounting health could not be evaluated: counts only when all 9 checks can be computed; cash runway could not be evaluated: operating cash flow missing. No warning fired. Not evaluated: highly leveraged, distress score, cash runway.
-What the price requires. The price test has no base: operating cash flow, capital spending, share count missing for the latest year. The growth the price needs could not be worked out: not enough data: operating cash flow, capital spending, share count missing for the latest year.
+What the price requires. The price test has no base: operating cash flow, change in working capital, capital spending, share count missing for the latest year. The growth the price needs could not be worked out: not enough data: operating cash flow, change in working capital, capital spending, share count missing for the latest year.
 What to doubt. Not available: own 5-year growth (only 0 years of earnings per share reported; a compound rate needs at least 3); own 10-year growth (only 0 years of earnings per share reported; a compound rate needs at least 3); analyst consensus (EODHD_API_KEY is not set, so no analyst data was asked for); the downside case (no own 5-year rate to start from). The share count is the basic count, not the diluted one. This figure shows what today's price requires. Studies of company-level implied returns find they rank future returns only partly: where 1 would be perfect, the weakest model scores about 0.2 and the better ones 0.5 to 0.65, and four of five measures do no better than a fixed constant in the cross section. So the figure is a question put to the reader and not an answer. The gate and the cash yield carry the evidence; this figure carries the question.
 What this cannot tell you. These are what the price returns if the stated growth repeats. They are not a forecast and not advice. The method knows nothing of the company's plans, its management or today's news. On the form a backtest could test (no analyst figures) the verdict reads Not enough data. No backtest of this method exists yet, so nothing shows that companies with this reading went on to do better.
 
@@ -28,15 +28,15 @@ Debt = borrowings plus the long-term operating lease line, from the latest balan
 THE PRICE TEST
 What today's price asks of the business: the base, the price and the growth it requires.
 The base:
-  Year              Free cash flow per share
-  ----------------  --------------------------------------------------------------------------
-  the latest year   not available (operating cash flow, capital spending, share count missing)
-  the year before   not available (operating cash flow, capital spending, share count missing)
-  two years before  not available (operating cash flow, capital spending, share count missing)
-Base: not enough data: operating cash flow, capital spending, share count missing for the latest year.
+  Year              Cash flow per share, before working-capital changes
+  ----------------  -----------------------------------------------------------------------------------------------------
+  the latest year   not available (operating cash flow, change in working capital, capital spending, share count missing)
+  the year before   not available (operating cash flow, change in working capital, capital spending, share count missing)
+  two years before  not available (operating cash flow, change in working capital, capital spending, share count missing)
+Base: not enough data: operating cash flow, change in working capital, capital spending, share count missing for the latest year.
 Price: $264.45 a share.
 What the price requires:
-Implied growth: not enough data: operating cash flow, capital spending, share count missing for the latest year.
+Implied growth: not enough data: operating cash flow, change in working capital, capital spending, share count missing for the latest year.
   Record                            Growth a year  Note
   --------------------------------  -------------  -----------------------------------------------------------------------------
   Own 5-year earnings growth        not available  only 0 years of earnings per share reported; a compound rate needs at least 3
