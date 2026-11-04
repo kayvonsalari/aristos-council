@@ -26,7 +26,7 @@ from .tools.valuation_band import ordinal
 
 SECTION_ANSWER = "The answer"
 SECTION_STORY = "The story"
-SECTION_TABLE = "Lens by lens"
+SECTION_TABLE = "Lens by lens"            # the relative view's table (ABSOLUTE-PAGE-1: under the workings)
 SECTION_COUNCIL = "Council opinion"
 SECTION_WORKINGS = "Show the workings"
 
@@ -809,6 +809,7 @@ class StoryPage:
     summary_check: str = ""       # "AI text check: no issues found" above a model summary (B24-E9)
     badge_note: str = ""          # "Track record is from tests on X companies; ... a wider sector group" (B25-7)
     track_intro: str = ""         # BADGE-EXPLAIN-1: what the Track record column is, once, under the table
+    relative_answer: tuple = ()   # ABSOLUTE-PAGE-1: the old two lines (vote split, reasons), kept for the relative view
 
 
 def story_page(report) -> StoryPage:
@@ -818,11 +819,14 @@ def story_page(report) -> StoryPage:
         paragraphs = tuple(reader_paragraphs(summary.summary, company=True))
         model = True
     else:
-        paragraphs = tuple(story_paragraphs(report))
+        from .company_page import story_paragraphs as _new_story
+        paragraphs = tuple(_new_story(report))
         model = False
+    from .company_page import answer_lines as _new_answer
     from .company_report import NO_LENS_REASON
     return StoryPage(
-        answer=answer_lines(report), paragraphs=paragraphs, model_summary=model,
+        answer=_new_answer(report), paragraphs=paragraphs, model_summary=model,
+        relative_answer=answer_lines(report),
         note=summary_note(report),
         tag=tuple(small_company_tag(report)) + ((index_age_line(report),) if index_age_line(report) else ()),
         headers=tuple(TABLE_HEADERS), rows=tuple(table_rows(report)), caption=track_caption(report),

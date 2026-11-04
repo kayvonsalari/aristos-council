@@ -209,6 +209,22 @@ def _value_context(fi) -> dict:
             ctx["epv_enterprise_value"] = getattr(epv, "enterprise_value", None)
     except Exception:                                    # noqa: BLE001 - context only
         pass
+    # ABSOLUTE-PAGE-1 (section 6, context with no vote): the quality readings with the trough year named, and
+    # the price momentum. The same functions the lenses read; here they only describe.
+    try:
+        from .tools.quality_epv import gross_profitability, worst_year_roic_detail
+        roic, where = worst_year_roic_detail(fi.fundamentals)
+        if roic is not None:
+            ctx["worst_roic"], ctx["worst_roic_year"] = roic, where
+        gp, _note = gross_profitability(fi.fundamentals)
+        if gp is not None:
+            ctx["gross_profitability"] = gp
+    except Exception:                                    # noqa: BLE001 - context only
+        pass
+    for key, attr in (("momentum_12m", "return_12m"), ("momentum_6m", "return_6m")):
+        v = getattr(fi, attr, None)
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and v == v:
+            ctx[key] = float(v)
     return ctx
 
 def _latest_reference_run(runs_dir: Path, rank_strategy_id: str,

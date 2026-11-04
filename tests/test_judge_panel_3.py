@@ -130,7 +130,7 @@ def test_forensic_raw_numbers_are_present_without_the_label_or_ranks(report):
 # 2. own knowledge, labelled
 # =========================================================================== #
 def _full(**over):
-    doc = {"verdict": "HOLD", "confidence": "medium",
+    doc = {"verdict": "NO", "confidence": "medium",
            "driving_fact": "Free cash flow halved to $5.3bn in FY2025 [pack].",
            "reasoning": "Free cash flow fell in FY2024 [pack]. The company paid a one-off tax deposit that year [own knowledge].",
            "key_risk": "Valuation is at the top of its range.", "unexplained": "nothing",
@@ -141,7 +141,7 @@ def _full(**over):
 
 def test_a_fully_labelled_answer_parses_and_counts_its_own_knowledge_claims():
     got, why = ans.parse_answer(_full())
-    assert why == "" and got.verdict == "HOLD" and got.own_knowledge_claims == 1
+    assert why == "" and got.verdict == "NO" and got.own_knowledge_claims == 1
     assert ans.segments(got.reasoning) == [("Free cash flow fell in FY2024.", "pack"),
                                            ("The company paid a one-off tax deposit that year.", "own knowledge")]
 
@@ -168,7 +168,7 @@ def test_an_unlabelled_or_malformed_claim_is_a_format_error(over, fragment):
 
 
 def test_the_old_four_key_answer_is_no_longer_valid():
-    old = json.dumps({"verdict": "BUY", "confidence": "low", "reason": "r [pack]", "would_change_my_mind": "w"})
+    old = json.dumps({"verdict": "YES", "confidence": "low", "reason": "r [pack]", "would_change_my_mind": "w"})
     got, why = ans.parse_answer(old)
     assert got is None and "missing key" in why
 
@@ -205,10 +205,10 @@ def _judge(label, family, verdict, reasoning, status=panel.STABLE, unexplained="
 
 def _mixed_panel():
     mixed = "Cash fell [pack]. A one-off tax deposit explains it [own knowledge]."
-    res = panel.PanelResult(ticker="CO", available=True, record=_record("HOLD", "BUY 0 / HOLD 2 / SELL 0"),
-                            judges=[_judge("Claude", "anthropic", "HOLD", mixed),
-                                    _judge("OpenAI", "openai", "HOLD", mixed),
-                                    _judge("Gemini", "google", "HOLD", mixed)])
+    res = panel.PanelResult(ticker="CO", available=True, record=_record("BELOW"),
+                            judges=[_judge("Claude", "anthropic", "NO", mixed),
+                                    _judge("OpenAI", "openai", "NO", mixed),
+                                    _judge("Gemini", "google", "NO", mixed)])
     res.agreement = panel.panel_agreement(res.judges, res.record)
     return res
 
@@ -221,17 +221,21 @@ def test_own_knowledge_passages_are_marked_italic_with_a_tag_and_pack_passages_a
     assert "<em>Cash fell" not in html
 
 
-def test_the_agreement_line_names_the_record_with_lens_votes_never_judge_counts():
+def test_the_agreement_line_names_the_verdict_with_its_case_count_never_a_lens_vote():
     (line,) = render.summary_lines(_mixed_panel())
-    assert line == "Verdict of record HOLD (lens votes: 0 BUY, 2 HOLD, 0 SELL). Panel: 3 HOLD — agrees."
+    assert line == "Verdict: Qualifies, below hurdle, 0 of 4 cases clear. Panel: 3 NO \u2014 agrees."
 
 
 def test_the_agreement_line_in_the_other_cases():
     res = _mixed_panel()
-    res.judges[0] = _judge("Claude", "anthropic", "SELL", "x [pack].")
+    res.judges[0] = _judge("Claude", "anthropic", "YES", "x [pack].")
     res.agreement = panel.panel_agreement(res.judges, res.record)
-    assert render.summary_lines(res)[0].endswith("Panel: 1 SELL, 2 HOLD — mixed against the record.") or \
-        "Panel: 2 HOLD, 1 SELL" in render.summary_lines(res)[0]
+    assert render.summary_lines(res)[0].endswith("Panel: 1 YES, 2 NO \u2014 mixed against the verdict.")
+    # an excluded (or not covered, or not enough data) verdict has no side to set the panel against
+    res.record = _record("")
+    res.agreement = panel.panel_agreement(res.judges, res.record)
+    assert render.summary_lines(res)[0] == "Verdict: Excluded. Panel: 1 YES, 2 NO \u2014 no comparison."
+    res.record = _record("BELOW")
     res.judges = res.judges[:1] + [panel.JudgeResult("openai", "OpenAI", "m", status=panel.ERROR, note="429")]
     res.agreement = panel.panel_agreement(res.judges, res.record)
     assert "No panel reading: fewer than two judges answered." in render.summary_lines(res)[0]
@@ -249,12 +253,12 @@ def test_the_page_shows_one_card_per_judge_with_why_folded_and_own_knowledge_mar
     assert not at.exception
     md = "\n".join(str(m.value) for m in at.markdown)
     assert [e.label for e in at.expander] == ["Why", "Why", "Why"]                # reasoning folded, per judge
-    assert md.count("**Claude (m-anthropic)** — **HOLD** · confidence medium") == 1
+    assert md.count("**Claude (m-anthropic)** — **NO** · confidence medium") == 1
     assert "The fact that drove it:* A fact" in md and "Key risk:* A risk." in md
     assert "Could not account for:* nothing" in md and "Would change its mind if:* w" in md
     why = "\n".join(str(m.value) for e in at.expander for m in e.markdown)
     assert "*A one-off tax deposit explains it.* `own knowledge`" in why
-    assert "Verdict of record HOLD (lens votes: 0 BUY, 2 HOLD, 0 SELL). Panel: 3 HOLD — agrees." in md
+    assert "Verdict: Qualifies, below hurdle, 0 of 4 cases clear. Panel: 3 NO \u2014 agrees." in md
     assert any("no vote" in c.value or "have no" in c.value for c in at.caption)
 
 
@@ -280,12 +284,14 @@ def test_the_section_sits_between_the_lens_table_and_the_council_opinion_and_the
     assert "own knowledge" in md and "own knowledge" in html and "[own knowledge]" in txt
 
 
-def test_the_app_places_the_panel_right_under_the_lens_table():
+def test_the_app_places_the_panel_after_the_context_and_before_the_council_and_the_workings():
     src = open("app.py", encoding="utf-8").read()
     body = src[src.index("def _render_company_report"):src.index("def _render_judge_panel")]
-    assert body.index("company_cards.lens_table(report)") < body.index("_render_judge_panel(report.judge_panel)") \
-        < body.index("company_cards.stat_cards(report)") < body.index("Council opinion") \
+    assert body.index("CONTEXT_TITLE") < body.index("company_cards.stat_cards(report)") \
+        < body.index("_render_judge_panel(report.judge_panel") < body.index("Council opinion") \
         < body.index("SECTION_WORKINGS)")
+    # the lens table is only in the workings now
+    assert body.index("SECTION_WORKINGS)") < body.index("company_cards.lens_table(report)")
 
 
 # ---- "what to doubt" ---------------------------------------------------------------------------
@@ -298,14 +304,14 @@ def test_the_story_lists_what_the_judges_could_not_account_for_only_when_the_pan
     before = doubt(report)
     assert "could not account for" not in before
     res = _mixed_panel()
-    res.judges[0] = _judge("Claude", "anthropic", "HOLD", "x [pack].",
+    res.judges[0] = _judge("Claude", "anthropic", "NO", "x [pack].",
                            unexplained="Why free cash flow halved in FY2024 [pack]")
-    res.judges[1] = _judge("OpenAI", "openai", "HOLD", "x [pack].", unexplained="nothing")
+    res.judges[1] = _judge("OpenAI", "openai", "NO", "x [pack].", unexplained="nothing")
     report.judge_panel = res
     after = doubt(report)
-    assert after.endswith("The judge panel could not account for: Claude: Why free cash flow halved in "
-                          "FY2024.")                                     # STORY-TAG-LEAK-1: no [pack] in prose
-    assert after.startswith(before) or before in after
+    line = "The judge panel could not account for: Claude: Why free cash flow halved in FY2024."
+    assert line in after                                                 # STORY-TAG-LEAK-1: no [pack] in prose
+    assert after.replace(line + " ", "") == before                       # it is the only difference
     report.judge_panel = panel.PanelResult(available=False, note="n")
     assert doubt(report) == before                                       # a panel that did not run adds nothing
 
@@ -315,7 +321,7 @@ def test_the_story_lists_what_the_judges_could_not_account_for_only_when_the_pan
 # =========================================================================== #
 def test_lens_output_stays_identical_with_the_full_evidence_panel_on_or_off(tmp_path):
     caller = _scripted({"anthropic": [_full(unexplained="Why cash fell [pack]")],
-                        "openai": [_full(verdict="SELL")], "google": [_full(verdict="BUY")]})
+                        "openai": [_full(verdict="NO")], "google": [_full(verdict="YES")]})
     off = _run([RAW, "forensic_v1"], tmp_path=tmp_path / "a", save=False)
     on = _run([RAW, "forensic_v1"], tmp_path=tmp_path / "b", save=False, with_judges=True,
               judge_caller=caller, judge_config=_config(), judges_dir=tmp_path / "j", judge_environ=KEYS,
@@ -336,7 +342,7 @@ def test_lens_output_stays_identical_with_the_full_evidence_panel_on_or_off(tmp_
     for r in (on, off):
         r.seconds, r.cache, r.saved_to = 0.0, {}, ""
     t_on = re.sub(r"JUDGE PANEL.*?(?=\nSHOW THE WORKINGS)", "", format_company_report(on), flags=re.S)
-    t_on = re.sub(r" The judge panel could not account for: [^\n]*", "", t_on).replace("\n\n\n", "\n\n")
+    t_on = re.sub(r" The judge panel could not account for: Claude: Why cash fell\.", "", t_on).replace("\n\n\n", "\n\n")
     assert t_on == format_company_report(off)
 
 

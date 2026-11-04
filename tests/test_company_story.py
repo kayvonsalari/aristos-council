@@ -73,9 +73,12 @@ def _skip(label, reason=NO_PROFIT):
 
 
 def _story_text(rep) -> str:
-    """Everything sections 1-3 print, as one string (no renderer needed)."""
+    """Everything the page's answer, story and the relative view's lines print, as one string (no renderer
+    needed). ABSOLUTE-PAGE-1: the answer and story are the absolute verdict's; the old lens-vote answer and story
+    (``answer_lines`` and ``story_paragraphs`` here) describe the RELATIVE view, so both are read."""
     page = story_page(rep)
-    parts = [*page.answer, *(f"{lead} {text}" for lead, text in page.paragraphs), page.note,
+    parts = [*page.answer, *page.relative_answer, *(f"{lead} {text}" for lead, text in page.paragraphs),
+             *(f"{lead} {text}" for lead, text in story_paragraphs(rep)), page.note,
              *page.tag, page.no_vote, page.caption]
     parts += [" ".join(r.cells()) for r in page.rows]
     return "\n".join(p for p in parts if p)
@@ -240,9 +243,9 @@ def test_story_model_summary_withheld_keeps_the_story_and_says_why_in_one_line(t
     # SUMMARY-COUNT-1: the internal "Summary withheld: " prefix is not said twice on the page
     assert page.note == f"{SUMMARY_WITHHELD_PREFIX}: {rep.summary.note.removeprefix('Summary withheld: ').rstrip('. ')}."
     assert "number not in the facts: 777" in page.note
-    assert [lead for lead, _t in page.paragraphs][0] == "What this run asked."
+    assert [lead for lead, _t in page.paragraphs][0] == "What was asked."
     text = format_company_report(rep)
-    assert text.count(SUMMARY_WITHHELD_PREFIX) == 1 and NOT_A_PREDICTION in text
+    assert text.count(SUMMARY_WITHHELD_PREFIX) == 1 and "No backtest of this method exists yet" in text
     assert SUMMARY_WITHHELD_PREFIX in company_report_html(rep)
     assert SUMMARY_WITHHELD_PREFIX in company_report_markdown(rep)
 
@@ -256,8 +259,8 @@ def test_story_model_summary_written_replaces_the_story_never_two(tmp_path):
     assert page.model_summary and not page.note
     assert list(page.paragraphs) == reader_paragraphs(rep.summary.summary, company=True)
     for doc in (format_company_report(rep), company_report_html(rep), company_report_markdown(rep)):
-        assert "One test may not apply." in doc            # the model's own "doubt" paragraph
-        assert NOT_A_PREDICTION not in doc                 # the code-written story is not beside it
+        assert "One input is missing." in doc              # the model's own "doubt" paragraph
+        assert "The question: would a person who buys" not in doc     # the code-written story is not beside it
 
 
 def test_story_no_summary_ticked_shows_the_code_story_and_no_note():
@@ -364,10 +367,10 @@ def test_story_the_three_renderers_carry_the_same_answer_table_and_order(tmp_pat
         assert line in text and line in md and line.replace("&", "&amp;") in html
     for row in page.rows:
         assert row.outcome in text and row.outcome in md and row.outcome in html
-    # the table, then the fold, in every rendering
-    assert text.index("Vote or mark") < text.index("SHOW THE WORKINGS")
-    assert md.index("| Lens | Vote or mark | Track record | Reason |") < md.index("## Show the workings")
-    assert html.index("<h2>Lens by lens</h2>") < html.index('id="workings"')
+    # ABSOLUTE-PAGE-1: the table is the relative view, under the fold, in every rendering
+    assert text.index("Vote or mark") > text.index("SHOW THE WORKINGS")
+    assert md.index("| Lens | Vote or mark | Track record | Reason |") > md.index("## Show the workings")
+    assert html.index("<h2>Relative view (peer ranks): no longer votes</h2>") > html.index('id="workings"')
     # "what it asks" is a tooltip in the HTML and a footnote in the Markdown
     first = next(r for r in page.rows if r.asks)
     assert f'title="{first.asks}"' in html.replace("&#x27;", "'")
@@ -377,16 +380,16 @@ def test_story_the_three_renderers_carry_the_same_answer_table_and_order(tmp_pat
     assert "### Valuation band" in md and md.index("### Sources") > md.index("### Peers")
 
 
-def test_story_council_opinion_sits_under_the_table_above_the_fold_only_when_ticked(tmp_path):
+def test_story_council_opinion_sits_under_the_context_above_the_fold_only_when_ticked(tmp_path):
     rep = _real(tmp_path)
     assert "COUNCIL OPINION" not in format_company_report(rep)
     assert "Council opinion" not in company_report_html(rep)
     assert "Council opinion" not in company_report_markdown(rep)
     rep.council_opinion = CouncilOpinion(available=True, narrative="It ranked well.")
     text, html, md = format_company_report(rep), company_report_html(rep), company_report_markdown(rep)
-    assert text.index("Vote or mark") < text.index("COUNCIL OPINION") < text.index("SHOW THE WORKINGS")
-    assert html.index("<h2>Lens by lens</h2>") < html.index("<h2>Council opinion</h2>") < html.index('id="workings"')
-    assert md.index("## Lens by lens") < md.index("## Council opinion") < md.index("## Show the workings")
+    assert text.index("CONTEXT, NO VOTE") < text.index("COUNCIL OPINION") < text.index("SHOW THE WORKINGS")
+    assert html.index('id="context"') < html.index("<h2>Council opinion</h2>") < html.index('id="workings"')
+    assert md.index("## Context, no vote") < md.index("## Council opinion") < md.index("## Show the workings")
 
 
 def test_story_the_narration_check_is_one_folded_line_and_only_with_a_council_opinion(tmp_path):
@@ -542,18 +545,20 @@ def test_b22_b3_the_story_and_every_export_use_the_same_words(tmp_path):
         assert doc.count(note) == 1, "said once, under the lens table"
 
 
-def test_b22_b4_the_company_story_calls_its_facts_paragraph_other_facts(tmp_path):
-    """"What survived." held debt, growth and analysts - facts, not a shortlist's survivors."""
-    from aristos_council.company_story import LEADS
-    assert LEADS == ("What this run asked.", "What happened.", "Other facts.", "What to doubt.",
-                     "What this cannot tell you.")
+def test_b22_b4_the_company_story_never_calls_a_paragraph_what_survived(tmp_path):
+    """"What survived." belongs to a shortlist. The company page's leads (ABSOLUTE-PAGE-1) are the code story's
+    own, and the model's summary uses the same five."""
+    from aristos_council.company_page import LEADS
+    from aristos_council.reader import COMPANY_LEADS
+    assert LEADS == COMPANY_LEADS == ("What was asked.", "What the gate found.", "What the price requires.",
+                                      "What to doubt.", "What this cannot tell you.")
     probe = _run([RAW], tmp_path=tmp_path, save=False)
     rep = _run([RAW], tmp_path=tmp_path, with_summary=True, reader_runner=_Writer(_fields(probe)),
                save=False)
     leads = [lead for lead, _t in story_page(rep).paragraphs]
-    assert leads[2] == "Other facts." and "What survived." not in leads
+    assert leads[2] == "What the price requires." and "What survived." not in leads
     for doc in (format_company_report(rep), company_report_html(rep), company_report_markdown(rep)):
-        assert "What survived" not in doc and "Other facts." in doc
+        assert "What survived" not in doc and "What the price requires." in doc
     # the LIST summary keeps its own heading: there, names do survive a shortlist
     assert reader_paragraphs(rep.summary.summary)[2][0] == "What survived."
 

@@ -28,7 +28,10 @@ _LOG_V1 = ("run_date", "ticker", "judge_family", "model_name", "call_number", "v
            "confidence", "stable", "reason", "would_change_my_mind", "verdict_of_record",
            "lens_split", "pack_hash", "call_status")
 _LOG_V2 = _LOG_V1 + ("error_detail",)
-LOG_COLUMNS = _LOG_V2 + ("driving_fact", "key_risk", "unexplained", "own_knowledge_claims")
+_LOG_V3 = _LOG_V2 + ("driving_fact", "key_risk", "unexplained", "own_knowledge_claims")
+# ABSOLUTE-PAGE-1: one more column, the question the row answers. A row with it EMPTY (everything written before
+# 2026-11-04) answers the old question (BUY, HOLD or SELL) and is never mixed into the new agreement figure.
+LOG_COLUMNS = _LOG_V3 + ("question",)
 
 FAMILY_COLUMNS = (("anthropic", "claude"), ("openai", "openai"), ("google", "gemini"))
 _SUMMARY_V1 = (("run_date", "ticker", "pack_hash", "verdict_of_record", "lens_split",
@@ -36,11 +39,12 @@ _SUMMARY_V1 = (("run_date", "ticker", "pack_hash", "verdict_of_record", "lens_sp
                + tuple(c for _, name in FAMILY_COLUMNS for c in (f"{name}_verdict", f"{name}_confidence"))
                + ("panel_split", "panel_agreement"))
 _SUMMARY_V2 = _SUMMARY_V1 + ("judges_answered",)
-SUMMARY_COLUMNS = _SUMMARY_V2 + ("peers",)
+_SUMMARY_V3 = _SUMMARY_V2 + ("peers",)
+SUMMARY_COLUMNS = _SUMMARY_V3 + ("question",)
 # Earlier headers of the same files. A file carrying one of THESE is upgraded in place (the new
 # columns are appended, empty for old rows - nothing is reordered or lost); any other header is
 # still refused.
-_PREVIOUS = {LOG_NAME: (_LOG_V1, _LOG_V2), SUMMARY_NAME: (_SUMMARY_V1, _SUMMARY_V2)}
+_PREVIOUS = {LOG_NAME: (_LOG_V1, _LOG_V2, _LOG_V3), SUMMARY_NAME: (_SUMMARY_V1, _SUMMARY_V2, _SUMMARY_V3)}
 
 
 class LogHeaderMismatch(RuntimeError):
@@ -97,14 +101,15 @@ def log_rows(result: PanelResult) -> list[list]:
     for j in result.judges:
         stable = "yes" if j.status == STABLE else "no"
         if not j.calls:
-            rows.append([*common, j.family, j.model, 0, "NOT_RUN", "", stable, j.note, "", *tail, NOT_RUN, "", "", "", "", 0])
+            rows.append([*common, j.family, j.model, 0, "NOT_RUN", "", stable, j.note, "", *tail, NOT_RUN, "", "", "", "", 0,
+                         result.question])
             continue
         for c in j.calls:
             verdict = c.verdict if c.status == "ok" else {"invalid": "INVALID", "error": "ERROR"}.get(c.status, "")
             rows.append([*common, j.family, j.model, c.call_no, verdict, c.confidence, stable,
                          _cell(c.reason or c.error), _cell(c.would_change_my_mind), *tail, c.status,
                          _cell(c.error_detail), _cell(c.driving_fact), _cell(c.key_risk),
-                         _cell(c.unexplained), c.own_knowledge_claims])
+                         _cell(c.unexplained), c.own_knowledge_claims, result.question])
     return rows
 
 
@@ -129,7 +134,7 @@ def summary_row(result: PanelResult) -> list:
     for family, _ in FAMILY_COLUMNS:
         row.extend(family_cell(by_family.get(family)))
     row += [result.split_line, result.agreement, judges_answered(result.judges),
-            ";".join(result.peers)]
+            ";".join(result.peers), result.question]
     return row
 
 

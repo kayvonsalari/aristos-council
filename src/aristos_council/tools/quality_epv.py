@@ -88,6 +88,42 @@ def worst_year_roic(f, *, years: int = QUALITY_ROIC_YEARS,
     return min(per_year), f"lowest of {len(per_year)} fiscal years' return on invested capital"
 
 
+def worst_year_roic_detail(f, *, years: int = QUALITY_ROIC_YEARS,
+                           min_years: int = QUALITY_ROIC_MIN_YEARS) -> tuple[Optional[float], str]:
+    """``(worst ROIC, where it fell)`` over the same years ``worst_year_roic`` reads, with the trough year NAMED
+    ("the year to Dec 2022" when the provider dates its series, else "the year N before the latest"). Same
+    arithmetic as ``worst_year_roic`` (it returns the same minimum); ``(None, why)`` when it abstains."""
+    if f is None:
+        return None, "no fundamentals"
+    oi, ic = _clean(f.operating_income), _clean(f.invested_capital)
+    tax, pretax = _clean(f.tax_provision), _clean(f.pretax_income)
+    n = min(years, len(oi), len(ic))
+    tax_ok = len(tax) == len(pretax)
+    per_year: list[tuple[int, float]] = []
+    for i in range(n):
+        roic, _ = nopat_roic(oi[i], tax[i] if tax_ok and i < len(tax) else None,
+                             pretax[i] if tax_ok and i < len(pretax) else None, ic[i])
+        if roic is not None:
+            per_year.append((i, roic))
+    if len(per_year) < min_years:
+        return None, (f"only {plural(len(per_year), 'fiscal year')} of return on capital available "
+                      f"(needs {min_years})")
+    idx, value = min(per_year, key=lambda t: t[1])
+    ends = (getattr(f, "period_ends", None) or {}).get("operating_income") or []
+    if idx < len(ends) and len(str(ends[idx])) >= 7:
+        from datetime import datetime
+        try:
+            where = "the year to " + datetime.strptime(str(ends[idx])[:10], "%Y-%m-%d").strftime("%b %Y")
+        except ValueError:
+            where = ""
+    else:
+        where = ""
+    if not where:
+        where = ("the latest year" if idx == 0 else
+                 "the year before the latest" if idx == 1 else f"{idx} years before the latest")
+    return value, where
+
+
 def net_debt_to_ebit(f) -> tuple[Optional[float], str]:
     """Net debt ÷ latest-year operating profit (EBIT). LOW is better; net cash is NEGATIVE
     and ranks best. Abstains — and so ranks last under the lens's ``missing: worst`` — when

@@ -34,6 +34,9 @@ _V2_NEW_KEYS = {"schema_version", "outside_tested_range", "smallcap_cohort",
 
 # ABSOLUTE-GATE-1 (phase 1): one additive, display-only key. Every key above keeps its name and value.
 _GATE_KEYS = {"gate", "absolute"}   # ABSOLUTE-VALUE-1 adds the second, additive and display-only
+# ABSOLUTE-PAGE-1 (phase 3): the verdict of record is the absolute verdict; the relative result is kept apart; the
+# design version is named. All additive: every key above is unchanged, and a saved file is never rewritten.
+_PAGE_KEYS = {"design_version", "verdict_of_record", "relative"}
 
 
 def test_every_v1_key_is_still_present_unchanged(tmp_path):
@@ -54,7 +57,7 @@ def test_the_full_key_set_is_exactly_v1_plus_v2_nothing_else(tmp_path):
     sneaking in beside the ones this commit deliberately adds."""
     report = _run([RAW], tmp_path=tmp_path, save=False)
     record = report_record(report)
-    assert set(record) == _V1_KEYS | _V2_NEW_KEYS | _GATE_KEYS
+    assert set(record) == _V1_KEYS | _V2_NEW_KEYS | _GATE_KEYS | _PAGE_KEYS
 
 
 def test_schema_version_is_2(tmp_path):

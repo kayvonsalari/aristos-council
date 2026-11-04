@@ -31,6 +31,12 @@ STRATEGY_WORD = "'strategy' in reader text (the reader's word is 'lens')"
 BADGE_PARAGRAPH = "the price-badge paragraph pasted into a heading"
 STORY_WORDS = "an id, a column name or the word 'cohort' in the answer, the story or the lens table"
 STORY_FIRST_SCREEN = "the first screen runs past the fold"
+# ABSOLUTE-PAGE-1: the page is built around the absolute verdict. Sections 1-5 (answer, story, gate, price test,
+# return range) name no lens, by id, column or label; sections 1-6 (adding the context) never use the words
+# "expected return", "target" or "proven" and never the verdict words BUY, HOLD or SELL (those live only in the
+# relative view under the workings and in the judges' own answers).
+PAGE_LENS_NAMES = "a lens id, column name or label in sections 1 to 5 of the company page"
+PAGE_BANNED_WORDS = "'expected return', 'target', 'proven', BUY, HOLD or SELL in sections 1 to 6 of the company page"
 # 26: the design's 25 plus the ONE line BADGE-EXPLAIN-1 added under the lens table (what the Track record column
 # is). Nothing else on the first screen grew; the busiest report (BYD, nine lenses and a wider peer group) sits at 26.
 FIRST_SCREEN_MAX_LINES = 26
@@ -183,19 +189,65 @@ def story_findings(text: str, where: str) -> list[Finding]:
     return out
 
 
-# ABSOLUTE-GATE-1: the gate section sits between the story and the lens table and says of itself that a
-# reader who ignores it loses nothing. It is a skippable block, so it is not counted in the first-screen
-# budget (which is for the answer, the story and the lens table). It runs from its title line to the next
-# blank line.
-# ABSOLUTE-VALUE-1: the price-and-return section is skippable in the same way and is counted the same way.
-_GATE_BLOCK = re.compile(r"(?m)^(?:GATE|PRICE TEST AND RETURN) \(ABSOLUTE-1[^\n]*\n(?:[^\n]+\n)*\n?")
+# ABSOLUTE-PAGE-1: the first screen is the answer and the story. It ends where the gate section begins (the
+# gate, the price test, the return range and the context are tables a reader may skip).
+_FIRST_FOLD = re.compile(r"(?im)^(?:#+\s*)?the gate\s*$")
+_CONTEXT_HEADING = re.compile(r"(?im)^(?:#+\s*)?context, no vote\s*$")
+_AFTER_CONTEXT = re.compile(r"(?im)^(?:#+\s*)?(?:judge panel|council opinion|show the workings)\b")
 
 
 def first_screen_lines(text: str) -> int:
-    """Lines of the plain-text report before the fold - the design's "at most 25" - not counting the
-    skippable gate block."""
-    body = _GATE_BLOCK.sub("", story_sections(text) + "\n")
+    """Lines of the plain-text report before the fold - the design's "at most 25" - counting the answer and
+    the story only (the gate and every table after it are skippable)."""
+    body = story_sections(text) + "\n"
+    m = _FIRST_FOLD.search(body)
+    if m:
+        body = body[:m.start()]
     return len(body.rstrip("\n").split("\n"))
+
+
+def sections_1_to_5(text: str) -> str:
+    """The company page from its start to where section 6 (context, no vote) begins: the answer, the story, the
+    gate, the price test and the return range. The whole text when there is no context heading."""
+    m = _CONTEXT_HEADING.search(text)
+    return text if m is None else text[:m.start()]
+
+
+def sections_1_to_6(text: str) -> str:
+    """Sections 1 to 5 and the context: everything before the judge panel, the council opinion and the workings."""
+    m = _CONTEXT_HEADING.search(text)
+    if m is None:
+        return story_sections(text)
+    after = _AFTER_CONTEXT.search(text, m.end())
+    return text[:after.start()] if after else story_sections(text)
+
+
+_PAGE_BANNED = re.compile(r"\b(?:expected returns?|targets?|proven)\b", re.I)
+_PAGE_VERDICT_WORDS = re.compile(r"\b(?:BUY|HOLD|SELL)\b")
+
+
+def page_lens_findings(text: str, where: str, lens_labels=()) -> list[Finding]:
+    """No lens id, no column name and no lens label (the lens's display name) in sections 1 to 5."""
+    body = sections_1_to_5(text)
+    out = list(internal_id_findings(body, where))
+    out += [Finding(PAGE_LENS_NAMES, where, ln.strip()[:140]) for ln in _lines(body)
+            if _COLUMN_NAMES.search(ln)]
+    for label in sorted({str(x) for x in lens_labels if x}, key=len, reverse=True):
+        for ln in _lines(body):
+            if re.search(rf"(?<![\w]){re.escape(label)}(?![\w])", ln):
+                out.append(Finding(PAGE_LENS_NAMES, where, f"{label}: {ln.strip()[:120]}"))
+                break
+    return out
+
+
+def page_banned_word_findings(text: str, where: str) -> list[Finding]:
+    """Never "expected return", "target", "proven", BUY, HOLD or SELL in sections 1 to 6."""
+    body = sections_1_to_6(text)
+    out = []
+    for ln in _lines(body):
+        if _PAGE_BANNED.search(ln) or _PAGE_VERDICT_WORDS.search(ln):
+            out.append(Finding(PAGE_BANNED_WORDS, where, ln.strip()[:140]))
+    return out
 
 
 def first_screen_findings(text: str, where: str) -> list[Finding]:

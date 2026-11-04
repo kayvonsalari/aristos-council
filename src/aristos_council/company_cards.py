@@ -123,6 +123,25 @@ def header_card(report) -> str:
 # summary chips
 # --------------------------------------------------------------------------- #
 def summary_chips(report) -> str:
+    """ABSOLUTE-PAGE-1: the chips under the header are the verdict of record (the absolute verdict) and the
+    valuation band. The lens-vote chips moved to the relative view under the workings."""
+    from .company_page import verdict_state, verdict_word
+    state = verdict_state(report)
+    kind = {"qualifies_clears_hurdle": "buy", "qualifies_below_hurdle": "hold", "excluded": "sell"}.get(state, "na")
+    chips: list[str] = []
+    word = verdict_word(report) or {"excluded": "Excluded", "not_covered": "Not covered",
+                                    "not_enough_data": "Not enough data"}.get(state, "")
+    if word:
+        chips.append(ui.chip(word, kind))
+    av = getattr(report.check, "absolute", None)
+    if av is not None and av.verdict.of and state.startswith("qualifies"):
+        chips.append(ui.chip(av.verdict.count_text(), "na"))
+    chips.append(ui.chip(band_word(getattr(report.check, "band_percentile", None)), "na"))
+    return ui.chip_row(chips)
+
+
+def relative_chips(report) -> str:
+    """The lens-vote chips (the old header row), shown only under "Relative view" in the workings."""
     ag = getattr(report, "agreement", None)
     chips: list[str] = []
     if ag is not None:

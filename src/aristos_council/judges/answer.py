@@ -1,6 +1,7 @@
 """JUDGE-PANEL-3 - the one answer shape a judge may give, and its strict validation.
 
-A judge answers with ONE JSON object: ``verdict`` (BUY|HOLD|SELL|ABSTAIN), ``confidence``
+A judge answers with ONE JSON object: ``verdict`` (YES|NO|ABSTAIN - the answer to the ten-year question of
+docs/DESIGN_absolute.md section k; BUY|HOLD|SELL belonged to the question before ABSOLUTE-PAGE-1), ``confidence``
 (low|medium|high), ``driving_fact`` (the ONE fact that drove the verdict most), ``reasoning`` (up
 to 150 words), ``key_risk``, ``unexplained`` (the most important thing in the pack it could not
 account for, or "nothing") and ``would_change_my_mind``.
@@ -18,7 +19,8 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-VERDICTS = ("BUY", "HOLD", "SELL", "ABSTAIN")
+VERDICTS = ("YES", "NO", "ABSTAIN")
+OLD_VERDICTS = ("BUY", "HOLD", "SELL", "ABSTAIN")      # the answers to the old question, as old records hold them
 CONFIDENCES = ("low", "medium", "high")
 KEYS = ("verdict", "confidence", "driving_fact", "reasoning", "key_risk", "unexplained",
         "would_change_my_mind")

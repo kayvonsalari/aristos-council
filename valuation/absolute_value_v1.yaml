@@ -1,3 +1,7 @@
+# SUPERSEDED by valuation/absolute_value_v2.yaml (ABSOLUTE-PAGE-1, 2026-11-04): version 2 changes ONE thing, the first two
+# years of the downside case (the lower of the consensus rate and the own 5-year rate). This file is kept unchanged as the
+# record of version 1; nothing loads it by default any more.
+#
 # ABSOLUTE-VALUE-1 (phase 2 of docs/DESIGN_absolute.md, revision 3) - the valuation definition, version 1.
 # Every number the price test, the hurdle, the four growth cases and the verdict use is on this page.
 # Immutable once merged: a change is absolute_value_v2.yaml, never an edit (the same rule as strategy

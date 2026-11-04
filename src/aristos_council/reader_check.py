@@ -239,7 +239,18 @@ _ROLE_WORDS = {
 _COPULA = r"^[\s,:;(\u2013\u2014-]*(?:is|are|was|were)?[\s]*(?:an?|the)?[\s]*"
 
 
-def _role_claim(sentence: str, name: str, others=()):
+# ABSOLUTE-PAGE-1: the role words for the company page's gate rules and growth cases. A gate rule is an exclusion
+# (it can remove a company) or a warning (it never does); a growth case is a record (the company's own history),
+# a forecast (the analysts') or the downside case (a stress path).
+_GATE_ROLE_WORDS = {
+    "exclusion": "exclusion", "exclusions": "exclusion", "exclusion rule": "exclusion", "exclusion check": "exclusion",
+    "warning": "warning", "warnings": "warning",
+    "record": "record", "records": "record", "own record": "record", "forecast": "forecast",
+    "analyst forecast": "forecast", "downside": "downside", "downside case": "downside",
+}
+
+
+def _role_claim(sentence: str, name: str, others=(), words=None):
     """The role a sentence claims for ``name``, as "check" or "picker", or None.
 
     Read only from the sentence the NAME appears in, because a summary that says "one test
@@ -283,9 +294,10 @@ def _role_claim(sentence: str, name: str, others=()):
     # summary — the exact failure READER-5 exists to end — so the role word has to sit in
     # the copular position: right after the name, optionally through "is/are/was/were" and
     # an article, and nothing else.
-    for phrase in sorted(_ROLE_WORDS, key=len, reverse=True):
+    table = _ROLE_WORDS if words is None else words
+    for phrase in sorted(table, key=len, reverse=True):
         if re.match(_COPULA + re.escape(phrase) + r"\b", window):
-            return _ROLE_WORDS[phrase]
+            return table[phrase]
     return None
 
 
@@ -302,6 +314,20 @@ def _pack_roles(pack) -> dict:
             continue
         out[name] = "picker" if lens.get("votes") else "check"
     return out
+
+
+def _gate_case_roles(pack) -> dict:
+    """``{name (lower case): role}`` for the company page's gate rules and growth cases. A name that plays two
+    roles (the cash runway is both an exclusion and a warning) is left out: a claim about it cannot be wrong."""
+    seen: dict = {}
+    gate = (pack or {}).get("gate") or {}
+    for item in list(gate.get("rules") or []) + list(gate.get("warnings") or []):
+        seen.setdefault((item.get("name") or "").strip().lower(), set()).add(item.get("role"))
+    for case in ((pack or {}).get("return_range") or {}).get("cases") or []:
+        for nm in (case.get("name"), case.get("alias")):
+            if nm:
+                seen.setdefault(nm.strip().lower(), set()).add(case.get("role"))
+    return {k: next(iter(v)) for k, v in seen.items() if k and len(v) == 1}
 
 
 def _sentences(text: str) -> list:
@@ -409,6 +435,16 @@ def check_summary(summary, pack: dict) -> ReaderCheck:
                 said = "a check" if claimed == "check" else "a picker"
                 if (name, said) not in mismatched:
                     mismatched.append((name, said))
+    # 3b. ABSOLUTE-PAGE-1 - a gate rule or a growth case given the wrong role: a warning called an exclusion,
+    # the downside case called the analysts' forecast.
+    gate_roles = _gate_case_roles(pack)
+    for sentence in _sentences(text):
+        for name, role in gate_roles.items():
+            claimed = _role_claim(sentence, name, others=gate_roles, words=_GATE_ROLE_WORDS)
+            if claimed is not None and claimed != role:
+                said = f"an {claimed}" if claimed in ("exclusion",) else f"a {claimed}"
+                if (name, said) not in mismatched:
+                    mismatched.append((name, said))
     if mismatched:
         problems.append("role mismatch: "
                         + "; ".join(f"{n} called {w}" for n, w in mismatched))
@@ -438,6 +474,14 @@ def check_summary(summary, pack: dict) -> ReaderCheck:
                      if label and label.lower() not in text.lower()]
     if unnamed_votes:
         problems.append("BUY vote not mentioned: " + ", ".join(unnamed_votes))
+
+    # 4c. ABSOLUTE-PAGE-1 - an exclusion that failed, or a warning that fired, left unmentioned. Naming what
+    # stopped or qualified the company is the strongest single fact the gate produces. Only a company pack
+    # carries the key.
+    unmentioned = [label for label in ((pack or {}).get("gate") or {}).get("to_name") or []
+                   if label and label.lower() not in text.lower()]
+    if unmentioned:
+        problems.append("exclusion or warning not mentioned: " + ", ".join(unmentioned))
 
     # 5. SUMMARY-COUNT-1 - a count of lenses, or a lens given a reason, that the lens table
     # contradicts. Live (Ford): "six because ... no operating profit" over a table showing five.

@@ -8,8 +8,18 @@ from typing import Optional
 
 _ROOT = Path(__file__).resolve().parents[3]
 CONFIG_PATH = _ROOT / "data" / "judges.yaml"
-PROMPT_PATH = Path(__file__).resolve().parent / "judge_prompt_v2.md"
-PROMPT_VERSION = "judge_prompt_v2"
+PROMPT_PATH = Path(__file__).resolve().parent / "judge_prompt_v3.md"
+PROMPT_VERSION = "judge_prompt_v3"
+# ABSOLUTE-PAGE-1 (docs/DESIGN_absolute.md section k): the question the judges answer. A record carries the
+# name of the question it answered; a record with none (every row written before 2026-11-04) answers the OLD
+# question (BUY, HOLD or SELL) and is never mixed into the new agreement figure.
+QUESTION_VERSION = "ten_year_hurdle_v1"
+OLD_QUESTION_VERSION = "buy_hold_sell_v2"
+QUESTION_START_DATE = "2026-11-04"      # the 12-month, 30-name bar of docs/JUDGE_PANEL.md restarts on this date
+QUESTION_TEXT = ("Using only the evidence pack and anything you know about the company, which you must label, would "
+                 "a person who buys this company at today's price and holds it for ten years more likely than not "
+                 "earn more than the ten-year government bond yield of the company's currency plus 5 points a year? "
+                 "Answer YES, NO or ABSTAIN, with a confidence and the one fact that decided it.")
 
 FAMILIES = ("anthropic", "openai", "google")
 DEFAULT_CALLS_PER_JUDGE = 2
@@ -70,6 +80,13 @@ def load_config(path: Optional[Path] = None) -> PanelConfig:
         raise ValueError("judges.yaml: one judge per model family")
     calls = int(doc.get("calls_per_judge") or DEFAULT_CALLS_PER_JUDGE)
     return PanelConfig(judges=tuple(judges), calls_per_judge=max(1, calls), timeout_seconds=timeout)
+
+
+def question_of(record) -> str:
+    """The question a saved panel record (a dict) or a log row answered: its ``question``, or - for every record
+    written before 4 Nov 2026, which has none - the OLD question (BUY, HOLD or SELL)."""
+    got = record.get("question") if isinstance(record, dict) else getattr(record, "question", "")
+    return got or OLD_QUESTION_VERSION
 
 
 def prompt_text() -> str:

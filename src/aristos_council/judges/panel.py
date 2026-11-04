@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from typing import Callable, Optional
 
 from .answer import VERDICTS, parse_answer
-from .config import PanelConfig, JudgeSpec, load_config, prompt_text
+from .config import QUESTION_VERSION, PanelConfig, JudgeSpec, load_config, prompt_text
 
 NOT_RUN = "not_run"
 STABLE = "stable"
@@ -37,9 +37,13 @@ DISAGREES = "disagrees"
 MIXED = "mixed"
 NO_STABLE = "no_stable_judge"
 NO_READING = "no_panel_reading"
-NO_RECORD = "no_record"          # no lens voted: the panel is shown, there is nothing to compare with
-NO_VOTE_TEXT = "no lens vote"    # what the verdict-of-record column of the logs reads then
+# ABSOLUTE-PAGE-1: the panel is compared with the verdict only when the verdict is "clears hurdle" (a YES agrees)
+# or "below hurdle" (a NO agrees). Excluded, not covered and not enough data show "no comparison".
+NO_COMPARISON = "no_comparison"
+NO_RECORD = NO_COMPARISON        # the name the earlier code and tests used for the same status
+NO_VERDICT_TEXT = "no verdict"   # what the verdict-of-record column of the logs reads when there is none
 MIN_JUDGES_ANSWERED = 2          # a panel is only read when at least this many judges were stable
+CLEARS, BELOW = "CLEARS", "BELOW"
 
 NO_KEY_TEXT = "not run — no key"
 RETRY_NOTE = ("\n\nYour previous reply was not a valid answer. Reply again with ONLY the single JSON "
@@ -128,16 +132,22 @@ class JudgeResult:
 
 @dataclass
 class RecordSnapshot:
-    """The verdict of record at the moment the panel ran: the lenses' own split, quoted."""
-    verdict: str = ""                # BUY | HOLD | SELL | MIXED | "" (no vote)
-    split: str = ""                  # "BUY 2 / HOLD 1 / SELL 0"
-    headline: str = ""               # the agreement table's own sentence
-    n_voted: int = 0
+    """The verdict of record at the moment the panel ran: the absolute verdict (the gate and the price test)."""
+    verdict: str = ""                # CLEARS | BELOW | "" (excluded, not covered, not enough data: nothing to compare)
+    state: str = ""                  # the verdict's own state, e.g. "qualifies_below_hurdle"
+    word: str = ""                   # "Qualifies, below hurdle"
+    split: str = ""                  # "1 of 4 cases clear"
+    headline: str = ""               # the page's own first answer line
+    n_voted: int = 0                 # kept for older callers; the verdict has no vote count
+
+    @property
+    def comparable(self) -> bool:
+        return self.verdict in (CLEARS, BELOW)
 
     @property
     def cell(self) -> str:
-        """What the logs' verdict-of-record column holds: the verdict, or "no lens vote"."""
-        return self.verdict or NO_VOTE_TEXT
+        """What the logs' verdict-of-record column holds: the verdict's words, or "no verdict"."""
+        return self.word or NO_VERDICT_TEXT
 
 
 @dataclass
@@ -157,6 +167,7 @@ class PanelResult:
     pack_hash: str = ""
     pack_version: str = ""
     prompt_version: str = ""
+    question: str = QUESTION_VERSION        # which question the judges answered (older records have none)
     record: RecordSnapshot = field(default_factory=RecordSnapshot)
     judges: list = field(default_factory=list)
     agreement: str = NO_STABLE
@@ -185,24 +196,20 @@ class PanelResult:
 # --------------------------------------------------------------------------- #
 # the verdict of record, as the panel sees it
 # --------------------------------------------------------------------------- #
-def record_snapshot(agreement) -> RecordSnapshot:
-    """The lenses' split and - when ONE verdict holds a strict majority of the lenses that voted -
-    that verdict. No strict majority is MIXED: the record itself is divided, and the panel is not
-    asked to pick a side of it. (Same strict >50% rule as the MAJORITY_OVERRIDE veto.)"""
-    if agreement is None or not getattr(agreement, "n_voted", 0):
+def record_snapshot(absolute, headline: str = "") -> RecordSnapshot:
+    """The verdict of record as the panel sees it, from the page's ``AbsoluteValue``: "clears hurdle" is CLEARS,
+    "below hurdle" is BELOW, and every other state (or no price test at all) is left without a side, so the
+    page prints "no comparison"."""
+    if absolute is None:
         return RecordSnapshot()
-    b, h, s = len(agreement.buy), len(agreement.hold), len(agreement.sell)
-    n = b + h + s
-    verdict = "MIXED"
-    for word, count in (("BUY", b), ("HOLD", h), ("SELL", s)):
-        if count * 2 > n:
-            verdict = word
-    return RecordSnapshot(verdict=verdict, split=f"BUY {b} / HOLD {h} / SELL {s}",
-                          headline=agreement.headline, n_voted=n)
+    v = absolute.verdict
+    side = {"qualifies_clears_hurdle": CLEARS, "qualifies_below_hurdle": BELOW}.get(v.state, "")
+    return RecordSnapshot(verdict=side, state=v.state, word=v.word, split=v.count_text(), headline=headline,
+                          n_voted=0)
 
 
 def split_line(judges) -> str:
-    """"2 BUY, 1 ABSTAIN" - what the stable judges said, then the judges that did not settle."""
+    """"2 YES, 1 ABSTAIN" - what the stable judges said, then the judges that did not settle."""
     counts = {w: 0 for w in VERDICTS}
     other = {UNSTABLE: 0, NOT_RUN: 0, INVALID: 0, ERROR: 0, INCOMPLETE: 0}
     for j in judges:
@@ -219,8 +226,8 @@ def split_line(judges) -> str:
 
 
 def stable_verdicts(judges) -> list[str]:
-    """The stable judges' BUY/HOLD/SELL verdicts (an ABSTAIN takes no side)."""
-    return [j.verdict for j in judges if j.status == STABLE and j.verdict in ("BUY", "HOLD", "SELL")]
+    """The stable judges' YES/NO answers (an ABSTAIN takes no side)."""
+    return [j.verdict for j in judges if j.status == STABLE and j.verdict in ("YES", "NO")]
 
 
 def judges_answered(judges) -> int:
@@ -230,34 +237,31 @@ def judges_answered(judges) -> int:
 
 
 def panel_agreement(judges, record: RecordSnapshot) -> str:
-    """agrees | disagrees | mixed | no_stable_judge | no_panel_reading. No averaging: each stable
-    judge is compared with the record on its own, and only when at least two judges answered -
-    one judge's answer is not a panel."""
+    """agrees | disagrees | mixed | no_stable_judge | no_panel_reading | no_comparison. No averaging: each stable
+    judge is compared with the verdict on its own (YES against "clears hurdle", NO against "below hurdle"), and
+    only when at least two judges answered - one judge's answer is not a panel."""
     if judges_answered(judges) < MIN_JUDGES_ANSWERED:
         return NO_READING
     sides = stable_verdicts(judges)
     if not sides:
         return NO_STABLE
-    if record.verdict not in ("BUY", "HOLD", "SELL", "MIXED"):
-        return NO_RECORD
-    if record.verdict in ("BUY", "HOLD", "SELL"):
-        same = sum(1 for v in sides if v == record.verdict)
-        if same == len(sides):
-            return AGREES
-        if same == 0:
-            return DISAGREES
+    if not record.comparable:
+        return NO_COMPARISON
+    expected = "YES" if record.verdict == CLEARS else "NO"
+    same = sum(1 for v in sides if v == expected)
+    if same == len(sides):
+        return AGREES
+    if same == 0:
+        return DISAGREES
     return MIXED
 
 
 def _record_phrase(record: RecordSnapshot) -> str:
-    """The phrase 'the verdict of record (HOLD: BUY 0, HOLD 2, SELL 0)': the verdict word AND the
-    lenses' own count, so the line never leaves a reader to translate "BUY on 0 of 2 votes" into a word."""
-    if not record.verdict:
-        return "the verdict of record"
-    counts = record.split.replace(" / ", ", ")
-    if record.verdict == "MIXED":
-        return f"the verdict of record (the lenses are split: {counts})"
-    return f"the verdict of record ({record.verdict}: {counts})"
+    """"the verdict (Qualifies, below hurdle, 0 of 4 cases clear)": the words AND the count."""
+    if not record.word:
+        return "the verdict"
+    extra = f", {record.split}" if record.split else ""
+    return f"the verdict ({record.word}{extra})"
 
 
 def agreement_line(status: str, record: RecordSnapshot) -> str:
@@ -268,11 +272,12 @@ def agreement_line(status: str, record: RecordSnapshot) -> str:
         return f"The panel disagrees with {rec}."
     if status == MIXED:
         return f"The panel is mixed against {rec}."
-    if status == NO_RECORD:
-        return "There is no verdict of record to compare with: no lens voted."
+    if status == NO_COMPARISON:
+        return (f"No comparison: the verdict is {record.word or 'not given'}, which has no YES or NO to set the "
+                "panel against.")
     if status == NO_READING:
         return "No panel reading: fewer than two judges answered."
-    return "The judges that answered all abstained, so there is nothing to compare with the verdict of record."
+    return "The judges that answered all abstained, so there is nothing to compare with the verdict."
 
 
 def needs_reading(status: str) -> bool:
@@ -417,15 +422,16 @@ def run_panel(report, *, fundamentals=None, config: Optional[PanelConfig] = None
 
     started = time.perf_counter()
     stamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
-    result = PanelResult(ticker=report.ticker, run_at=stamp, prompt_version=PROMPT_VERSION)
+    result = PanelResult(ticker=report.ticker, run_at=stamp, prompt_version=PROMPT_VERSION,
+                         question=QUESTION_VERSION)
     try:
         if getattr(report, "unrateable", False):
             result.note = f"no data for this company ({report.check.data_integrity.note})"
             return result
-        # JUDGE-PANEL-3: the panel runs whether or not a lens voted (loss-makers and turnarounds
-        # are exactly where a second reading is wanted). With no vote the record is empty, the
-        # logs say "no lens vote", and there is nothing for the panel to agree or disagree with.
-        record = record_snapshot(report.agreement)
+        # JUDGE-PANEL-3: the panel runs whether or not the verdict reaches a side (loss-makers and turnarounds
+        # are exactly where a second reading is wanted). ABSOLUTE-PAGE-1: the verdict it is compared with is the
+        # absolute verdict - computed by code before the panel runs, and never put into the pack.
+        record = record_snapshot(getattr(report.check, "absolute", None))
         result.record = record
         config = config or load_config()
         pack = build_blind_pack(report, fundamentals, statements, news, strategies_dir=strategies_dir)

@@ -1561,11 +1561,10 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
     c = report.check
     stamp = _local_stamp(run_start)
     header_tail = f'<p class="house">{_esc(HOUSE_LINE)}</p>'
-    parts = ['<header class="doc"><p class="kicker">Aristos · company report · one '
-             "company against its peer group</p>"
+    # ABSOLUTE-PAGE-1: the header names no lens (the lenses no longer decide anything; they sit in the relative view)
+    parts = ['<header class="doc"><p class="kicker">Aristos · company report · what the price requires</p>'
              f"<h1>{_esc(report.display)}</h1>"
-             + _kv([("lenses", ", ".join(_esc(v.label) for v in report.votes) or "none ticked"),
-                    ("run", _esc(stamp))])
+             + _kv([("run", _esc(stamp))])
              + header_tail + "</header>"]
     if report.unrateable:
         parts.append(_callout(f"UNRATEABLE — {c.data_integrity.note}. No data, so no votes and no "
@@ -1612,7 +1611,7 @@ def _story_html(report) -> str:
     """COMPANY-STORY-1 sections 1-3 from the ONE ``StoryPage`` every renderer reads: the two-line
     answer, the story (or the model's summary in its place), one lens table whose "what it asks"
     captions are tooltips."""
-    from ..company_story import SECTION_ANSWER, SECTION_STORY, SECTION_TABLE, badge_tip, story_page
+    from ..company_story import SECTION_ANSWER, SECTION_STORY, story_page
     from ..reader import READER_SECTION_NOTE, READER_SECTION_TITLE
 
     page = story_page(report)
@@ -1630,15 +1629,31 @@ def _story_html(report) -> str:
     out.append("".join(body) + "</section>")
 
     gate = getattr(report.check, "gate", None)
-    if gate is not None:                                  # ABSOLUTE-GATE-1, after the story, before the table
+    if gate is not None:                                  # section 3
         from ..gate import render as _gate_render
         out.append(_gate_render.html_section(gate, _esc, _table))
     absolute = getattr(report.check, "absolute", None)
-    if absolute is not None:                              # ABSOLUTE-VALUE-1, directly after the gate section
+    if absolute is not None:                              # sections 4 and 5
         from ..absolute_value import render as _value_render
-        out.append(_value_render.html_section(absolute, report.outside_tested_range, _esc, _table))
+        out += _value_render.html_sections(absolute, report.outside_tested_range, _esc, _table)
 
-    table = [f'<section class="section" id="lenses"><h2>{_esc(SECTION_TABLE)}</h2>']
+    from ..absolute_value.render import html_blocks     # section 6
+    from ..company_page import CONTEXT_TITLE, context_blocks
+    out.append(f'<section class="section" id="context"><h2>{_esc(CONTEXT_TITLE)}</h2>'
+               + "".join(html_blocks(context_blocks(report), _esc, _table)) + "</section>")
+    return _JOIN.join(out)
+
+
+def _relative_view_html(report) -> str:
+    """The relative view (peer ranks) under the workings: the old two lines, the lens table whose "what it
+    asks" captions are tooltips, and the track-record notes. It no longer decides anything."""
+    from ..company_page import RELATIVE_VIEW_CAPTION, RELATIVE_VIEW_TITLE
+    from ..company_story import badge_tip, story_page
+
+    page = story_page(report)
+    table = [f'<section class="section" id="relative-view"><h2>{_esc(RELATIVE_VIEW_TITLE)}</h2>'
+             f'<p class="note">{_esc(RELATIVE_VIEW_CAPTION)}</p>']
+    table += [f"<p>{_esc(ln)}</p>" for ln in page.relative_answer]
     table += [f'<p class="note">{_esc(line)}</p>' for line in page.tag]
     if page.no_vote:
         table.append(f'<p class="note">{_esc(page.no_vote)}</p>')
@@ -1652,16 +1667,10 @@ def _story_html(report) -> str:
                      if tip_b else _esc(r.badge))
             rows.append([lens, _esc(r.outcome), badge, _esc(r.reason)])
         table.append(_table(list(page.headers), rows))
-    if page.track_intro:
-        table.append(f'<p class="note">{_esc(page.track_intro)}</p>')
-    if page.caption:
-        table.append(f'<p class="note">{_esc(page.caption)}</p>')
-    if page.group_note:
-        table.append(f'<p class="note">{_esc(page.group_note)}</p>')
-    if page.badge_note:
-        table.append(f'<p class="note">{_esc(page.badge_note)}</p>')
-    out.append("".join(table) + "</section>")
-    return _JOIN.join(out)
+    for extra in (page.track_intro, page.caption, page.group_note, page.badge_note):
+        if extra:
+            table.append(f'<p class="note">{_esc(extra)}</p>')
+    return "".join(table) + "</section>"
 
 
 def _workings_html(report) -> str:
@@ -1683,6 +1692,7 @@ def _workings_html(report) -> str:
     inner.append(_analyst_forecasts_html(c)
                  or '<section class="section"><h2>What analysts say</h2>'
                     '<p class="note">not available</p></section>')
+    inner.append(_relative_view_html(report))
     inner.append(_company_peers_html(c, rank_columns(report), report.ticker))
     line = narration_check_line(report)
     if line:

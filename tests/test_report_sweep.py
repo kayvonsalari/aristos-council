@@ -278,6 +278,70 @@ def test_the_story_rules_fire_on_the_shapes_they_name():
     assert not sweep.first_screen_findings("\n".join(["line"] * 20) + fold, "x")
 
 
+# --------------------------------------------------------------------------- #
+# ABSOLUTE-PAGE-1: the page built around the absolute verdict
+# --------------------------------------------------------------------------- #
+def _company_exports(reports):
+    for where, kind, text in _each_export(reports):
+        if where.startswith("company "):
+            yield where, kind, text, reports[where.split(" / ")[0]]["company"]
+
+
+def test_sections_1_to_5_name_no_lens_id_column_or_label(sweep_reports):
+    """The answer, the story, the gate, the price test and the return range, in all four renderers (the text, the
+    HTML and the Markdown here; the Streamlit page reads the same blocks), name no lens - by id, by column name or
+    by display label. A lens may be named only from section 6 on."""
+    found, kinds = [], set()
+    for where, kind, text, report in _company_exports(sweep_reports):
+        kinds.add(kind)
+        # a one-word label that is also plain English ("Growth", "Quality") cannot be told from the word itself, so
+        # only the labels that are unmistakably a lens's name are matched (the same limit the id rule documents)
+        labels = [v.label for v in report.votes if " " in v.label or v.label == "Forensic"]
+        found += sweep.page_lens_findings(text, where, labels)
+    assert kinds == {"text", "html", "company md"}
+    _assert_clean(found, sweep.PAGE_LENS_NAMES)
+
+
+def test_sections_1_to_6_never_say_expected_return_target_proven_buy_hold_or_sell(sweep_reports):
+    found = []
+    for where, kind, text, _report in _company_exports(sweep_reports):
+        found += sweep.page_banned_word_findings(text, where)
+    _assert_clean(found, sweep.PAGE_BANNED_WORDS)
+
+
+def test_the_sections_are_found_where_the_page_puts_them(sweep_reports):
+    """The two section cuts the rules above rest on really split the page: the context heading is there, the
+    relative view is below the fold, and the vote words live only below section 6."""
+    for where, kind, text, report in _company_exports(sweep_reports):
+        low = text.lower()
+        assert "context, no vote" in low, where
+        assert "relative view (peer ranks): no longer votes" in low, where
+        head5, head6 = sweep.sections_1_to_5(text), sweep.sections_1_to_6(text)
+        assert len(head5) < len(head6) < len(text), where
+        assert "relative view" not in head6.lower(), where
+
+
+def test_the_new_page_rules_fire_on_the_shapes_they_name():
+    ctx = "\nCONTEXT, NO VOTE\nWhere it sits among rivals:\nMagic Formula RAW: 4th of 13.\n"
+    fold = "SHOW THE WORKINGS\nHOLD by majority: two of two votes say HOLD (Magic Formula RAW).\n"
+    ok = "The answer\nQualifies, below hurdle: the price returns 4.3% to 8.1% a year if growth holds." + ctx + fold
+    assert not sweep.page_lens_findings(ok, "x", ["Magic Formula RAW"])
+    assert not sweep.page_banned_word_findings(ok, "x")
+    # a lens label in section 3 is a finding; in section 6 it is not
+    assert sweep.page_lens_findings("The story\nMagic Formula RAW ranks it 4th." + ctx + fold, "x",
+                                    ["Magic Formula RAW"])
+    assert sweep.page_lens_findings("The story\nranked by magic_formula_raw_v1" + ctx + fold, "x")
+    assert sweep.page_lens_findings("The story\nBUY votes: 2" + ctx + fold, "x")
+    # the banned words, in section 5 or in section 6
+    for bad in ("an expected return of 7%", "the analysts' target is $5", "a proven method", "rated BUY",
+                "a HOLD", "then SELL"):
+        assert sweep.page_banned_word_findings(f"The answer\n{bad}\n" + ctx + fold, "x"), bad
+        assert sweep.page_banned_word_findings("The answer\nfine.\n" + ctx.replace("Magic", bad + " Magic") + fold,
+                                               "x"), bad
+    # ...and below the context they are allowed (the relative view and the judges' answers)
+    assert not sweep.page_banned_word_findings("The answer\nfine.\n" + ctx + fold + "target proven BUY\n", "x")
+
+
 def test_the_multi_lens_progress_line_names_lenses_not_ids(tmp_path):
     """19B B2: "Grading with magic_formula_momentum_v1 (1 of 9)" put a record key on the screen."""
     adapter = FrozenAdapter(FIX / "frozen")

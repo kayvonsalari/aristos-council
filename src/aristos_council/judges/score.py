@@ -25,6 +25,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Callable, Optional
 
+from .config import QUESTION_START_DATE, QUESTION_VERSION
 from .log import FAMILY_COLUMNS, judges_dir
 from .report import read_summary
 
@@ -234,6 +235,25 @@ def write_scores(scored: list[dict], directory=None) -> Path:
     return path
 
 
+def agreement_text(rows: list) -> str:
+    """ABSOLUTE-PAGE-1: the agreement figure for the TEN-YEAR question only. A summary row whose ``question`` is
+    empty (everything written before 2026-11-04) answered the older BUY, HOLD or SELL question; it is counted
+    apart and never mixed into this figure. The 12-month, 30-name bar of docs/JUDGE_PANEL.md restarts on the
+    question's first day."""
+    new = [r for r in rows if (r.get("question") or "") == QUESTION_VERSION]
+    old = len(rows) - len(new)
+    counts: dict = defaultdict(int)
+    for r in new:
+        counts[(r.get("panel_agreement") or "").strip()] += 1
+    none = len(new) - sum(counts[k] for k in ("agrees", "disagrees", "mixed"))
+    lines = [f"Agreement with the verdict (the ten-year question, since {QUESTION_START_DATE}): "
+             f"{counts['agrees']} agree, {counts['disagrees']} disagree, {counts['mixed']} mixed, "
+             f"{none} no comparison, out of {len(new)} panel run(s).",
+             f"{old} earlier run(s) answered the older BUY, HOLD or SELL question and are not counted in that figure.",
+             f"The 12-month, {VOTE_BAR_NAMES}-name bar restarted on {QUESTION_START_DATE}."]
+    return "\n".join(lines)
+
+
 def needed_tickers(rows: list) -> set:
     out = set()
     for r in rows:
@@ -269,4 +289,4 @@ def run_score(directory=None, *, today: Optional[date] = None, fetcher: Optional
         fetcher = production_fetcher(start, today, today)
     prices = {t: fetcher(t) for t in sorted(needed_tickers(rows))}
     scored = score_rows(rows, prices, today)
-    return scored, summary_text(scored), write_scores(scored, directory)
+    return scored, summary_text(scored) + "\n\n" + agreement_text(rows), write_scores(scored, directory)

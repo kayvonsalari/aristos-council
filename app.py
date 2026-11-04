@@ -3372,11 +3372,11 @@ def _render_peers(result, columns=None, company_ticker: str = "", *,
 
 
 def _render_company_report(report) -> None:
-    """The Company Report page, in the ONE order every surface uses (TAB-MERGE-1 part 2
-    commit 2): summary (if asked for) → agreement headline and table → each lens's vote
-    → valuation band → price and cash → absolute readings → analyst forecasts → council
-    opinion (if asked for) → the full peers table → Sources. The text and HTML exports
-    follow the same order."""
+    """The Company Report page, in the ONE order every surface uses (ABSOLUTE-PAGE-1): the answer, the story (or the
+    model's summary), the gate, the price test, the return range, the context with no vote, the judge panel and the
+    council opinion (each only if asked for), then "Show the workings", which holds the relative view (the lens
+    ranks that no longer vote), the inputs, the peers table and Sources. The text, HTML and Markdown exports follow
+    the same order."""
     import pandas as pd
 
     from aristos_council.company_report import (HOUSE_LINE, NO_LENS_REASON,
@@ -3415,7 +3415,7 @@ def _render_company_report(report) -> None:
 
     # COMPANY-STORY-1 - the answer, the story (or the model's summary in its place), one table.
     # ONE ``StoryPage`` feeds the page, the text, the HTML and the Markdown, so they cannot drift.
-    from aristos_council.company_story import (SECTION_ANSWER, SECTION_STORY, SECTION_TABLE,
+    from aristos_council.company_story import (SECTION_ANSWER, SECTION_STORY,
                                                SECTION_WORKINGS, narration_check_line,
                                                story_page, table_rows)
     from aristos_council.reader import READER_SECTION_NOTE, READER_SECTION_TITLE
@@ -3436,7 +3436,7 @@ def _render_company_report(report) -> None:
         st.caption(page.note)
 
     _gate = getattr(check, "gate", None)
-    if _gate is not None:                                   # ABSOLUTE-GATE-1, after the story, before the table
+    if _gate is not None:                                   # section 3, the gate
         from aristos_council.gate import render as _gate_render
         st.subheader(_gate_render.SECTION_TITLE)
         st.caption(_gate_render.CAPTION)
@@ -3447,52 +3447,39 @@ def _render_company_report(report) -> None:
             st.caption(_gate.debt_line)
 
     _absolute = getattr(check, "absolute", None)
-    if _absolute is not None:                               # ABSOLUTE-VALUE-1, directly after the gate section
+    if _absolute is not None:                               # sections 4 and 5, the price test and the return range
         from aristos_council.absolute_value import render as _value_render
-        st.subheader(_value_render.SECTION_TITLE)
-        st.caption(_value_render.CAPTION)
-        for _b in _value_render.blocks(_absolute, report.outside_tested_range):
-            if _b[0] == "head":
-                st.markdown(f"**{_b[1]}**")
-            elif _b[0] == "note":
-                st.caption(_b[1])
-            elif _b[0] == "strong":
-                st.markdown(f"**{_b[1]}**")
-            elif _b[0] == "table":
-                st.markdown(_value_render.markdown_block(_b))
-            else:
-                st.markdown(_b[1])
+        for _key, _title, _caption, _blocks in _value_render.sections(_absolute, report.outside_tested_range):
+            st.subheader(_title)
+            st.caption(_caption)
+            for _b in _blocks:
+                if _b[0] == "head":
+                    st.markdown(f"**{_b[1]}**")
+                elif _b[0] == "note":
+                    st.caption(_b[1])
+                elif _b[0] == "strong":
+                    st.markdown(f"**{_b[1]}**")
+                elif _b[0] == "table":
+                    st.markdown(_value_render.markdown_block(_b))
+                else:
+                    st.markdown(_b[1])
 
-    st.subheader(SECTION_TABLE)
-    for line in page.tag:
-        st.caption(line)
-    if page.no_vote:
-        st.info(page.no_vote)
-    else:
-        # UI-POLISH-1: the vote is a verdict chip (its WORD always shown), the track record a small
-        # outlined label, the reason muted. The same cells as before, in an HTML table that wraps long
-        # reasons (LENS-TABLE-WRAP-1) and scrolls sideways inside its own box on a phone.
-        st.markdown(company_cards.lens_table(report), unsafe_allow_html=True)
-        asked = [r for r in page.rows if r.asks]
-        if asked:
-            with st.expander("What each lens asks"):
-                for r in asked:
-                    st.markdown(f"**{r.lens}** — {r.asks}")
-    if page.track_intro:                                   # BADGE-EXPLAIN-1
-        st.caption(page.track_intro)
-    if page.caption:
-        st.caption(page.caption)
-    if page.group_note:                                    # B22-B3
-        st.caption(page.group_note)
-    if page.badge_note:                                    # B25-7
-        st.caption(page.badge_note)
-
-    # JUDGE-PANEL-3: directly under the lens table, above the cards, the council opinion and the workings
-    if getattr(report, "judge_panel", None) is not None:      # only when it was ticked
-        _render_judge_panel(report.judge_panel)
-
-    if not page.no_vote:                                   # four small cards, above the workings
+    # section 6, context with no vote: quality, momentum, valuation, analysts, where it sits among rivals
+    from aristos_council.company_page import CONTEXT_TITLE, RELATIVE_VIEW_CAPTION, RELATIVE_VIEW_TITLE, context_blocks
+    st.subheader(CONTEXT_TITLE)
+    for _b in context_blocks(report):
+        if _b[0] == "head":
+            st.markdown(f"**{_b[1]}**")
+        elif _b[0] == "note":
+            st.caption(_b[1])
+        else:
+            st.markdown(_b[1])
+    if not page.no_vote:                                   # four small cards, with the context readings
         st.markdown(company_cards.stat_cards(report), unsafe_allow_html=True)
+
+    # section 7: directly under the context, above the council opinion and the workings
+    if getattr(report, "judge_panel", None) is not None:      # only when it was ticked
+        _render_judge_panel(report.judge_panel, absolute=_absolute)
 
     if report.council_opinion is not None:                # only when it was ticked
         st.subheader("Council opinion")
@@ -3530,6 +3517,32 @@ def _render_company_report(report) -> None:
         _render_price_and_cash(check)
         _render_absolute_readings(check, with_analyst=False)
         _render_analyst_forecasts(check)
+
+        # the relative view: the lens ranks that used to decide the verdict, with their track records
+        st.subheader(RELATIVE_VIEW_TITLE)
+        st.caption(RELATIVE_VIEW_CAPTION)
+        for _line in page.relative_answer:
+            st.markdown(_line)
+        for line in page.tag:
+            st.caption(line)
+        if page.no_vote:
+            st.info(page.no_vote)
+        else:
+            st.markdown(company_cards.relative_chips(report), unsafe_allow_html=True)
+            st.markdown(company_cards.lens_table(report), unsafe_allow_html=True)
+            asked = [r for r in page.rows if r.asks]
+            if asked:
+                with st.expander("What each lens asks"):
+                    for r in asked:
+                        st.markdown(f"**{r.lens}** — {r.asks}")
+        if page.track_intro:                                   # BADGE-EXPLAIN-1
+            st.caption(page.track_intro)
+        if page.caption:
+            st.caption(page.caption)
+        if page.group_note:                                    # B22-B3
+            st.caption(page.group_note)
+        if page.badge_note:                                    # B25-7
+            st.caption(page.badge_note)
 
         from aristos_council.peer_table import rank_columns
         _render_peers(check, rank_columns(report), report.ticker, nested=True)
@@ -3579,11 +3592,11 @@ def _render_company_report(report) -> None:
                            mime="text/markdown", key="cc_report_download_md")
 
 
-def _render_judge_panel(panel) -> None:
-    """JUDGE-PANEL-1/3 - one card per judge (verdict, confidence, the fact that drove it, the
+def _render_judge_panel(panel, absolute=None) -> None:
+    """JUDGE-PANEL-1/3 - one card per judge (answer, confidence, the fact that drove it, the
     reasoning folded under "Why", key risk, what it could not account for, what would change its
-    mind), then ONE line: the verdict of record with the lenses' votes, the panel's split and
-    whether it agrees. No average, no combined verdict. Own-knowledge passages are italic with a
+    mind), then ONE line: the verdict, the panel's split and whether it agrees (YES against
+    "clears hurdle", NO against "below hurdle"; anything else is "no comparison"). No average, no combined verdict. Own-knowledge passages are italic with a
     small tag. Built from ``judges.render`` so the page and every download say the same thing."""
     from aristos_council.judges import render as jr
 

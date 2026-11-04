@@ -36,7 +36,10 @@ VERDICT_TOKENS = ("buy", "hold", "sell")
 BADGE_WORDS = ("proven", "promising", "no edge", "untested", "worked against you", "track record",
                "badge", "doubted", "no concern", "shortlist", "shortlisted", "verdict", "lens",
                "lenses", "council", "narrator", "agreement", "vote", "votes", "voted", "priced high",
-               "ranked", "rank")
+               "ranked", "rank",
+               # ABSOLUTE-PAGE-1: the code's own answer to the question the judges are asked - the hurdle, the
+               # growth the price needs and the return range - never reaches the pack
+               "hurdle", "implied growth", "return range")
 # Lens display names that are ordinary English words. They are checked by the unit test and by
 # the runtime scan everywhere EXCEPT the identity and peer-name sections, where a company can
 # legitimately be called "... Financials Inc".
@@ -300,7 +303,8 @@ def _debt_cash(report, fundamentals=None) -> list[str]:
     debt = getattr(report.check, "debt_and_cash", None)
     if debt is None:
         return []
-    from ..abs_readings import NET_DEBT_DEFINITION, _balance_sheet_date
+    from ..abs_readings import _balance_sheet_date
+    from ..tools.gate_readings import debt_definition_line
     when = _balance_sheet_date(fundamentals)
     dated = {r.text() for r in (debt.net_debt, debt.total_debt, debt.cash, debt.leases)
              if getattr(r, "available", False)}
@@ -308,9 +312,11 @@ def _debt_cash(report, fundamentals=None) -> list[str]:
              for x in list(debt.lines())]
     notes = [_clean(x) for x in list(debt.notes())]
     if dated:
-        notes.append(f"Net debt here is {NET_DEBT_DEFINITION}. The balance sheet above is at each "
-                     f"fiscal year-end; the provider's own 'Net Debt' line, which leaves out short-term "
-                     f"investments, is not shown.")
+        # ABSOLUTE-PAGE-1: the one debt sentence the page and the gate use (borrowings plus the long-term
+        # operating lease line), not the older "leases add" wording
+        notes.append(f"{debt_definition_line(fundamentals)} Net debt is that debt less cash and short-term "
+                     f"investments. The balance sheet above is at each fiscal year-end; the provider's own "
+                     f"'Net Debt' line, which leaves out short-term investments, is not shown.")
     return lines + notes
 
 

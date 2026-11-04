@@ -36,7 +36,7 @@ def test_an_error_row_shows_a_short_label_in_the_verdict_column_and_nothing_else
            panel.JudgeCall(2, "error", error="no credits", error_detail='{"secret": "raw body"}')]
     j = panel.settle(_config().judges[1], err)
     assert j.status == panel.ERROR and j.verdict_text() == "error: no credits"
-    res = panel.PanelResult(ticker="CO", available=True, record=_record("BUY"), judges=[j],
+    res = panel.PanelResult(ticker="CO", available=True, record=_record("YES"), judges=[j],
                             agreement=panel.NO_READING)
     row = render.cards(res)[0]
     assert row["verdict"] == "error: no credits"
@@ -49,9 +49,9 @@ def test_an_error_row_shows_a_short_label_in_the_verdict_column_and_nothing_else
 
 
 def test_the_raw_error_body_goes_to_the_log_in_error_detail(tmp_path, report):
-    caller = _scripted({"anthropic": [_reply("BUY")],
+    caller = _scripted({"anthropic": [_reply("YES")],
                         "openai": [CallError('HTTP 429: {"type": "insufficient_quota"}', status=429)],
-                        "google": [_reply("BUY")]})
+                        "google": [_reply("YES")]})
     result = _run_panel(report, caller)
     folder = jlog.write_log(result, tmp_path / "judges")
     rows = _rows(folder / jlog.LOG_NAME)
@@ -68,22 +68,22 @@ def test_the_split_counts_judges_not_calls():
         r.calls = ([panel.JudgeCall(1, "ok", v), panel.JudgeCall(2, "ok", v)] if v
                    else [panel.JudgeCall(1, "error", error="x"), panel.JudgeCall(2, "error", error="x")])
         return r
-    assert panel.split_line([j(panel.STABLE, "HOLD"), j(panel.ERROR), j(panel.ERROR)]) == "1 HOLD, 2 error"
-    assert panel.split_line([j(panel.STABLE, "HOLD"), j(panel.UNSTABLE), j(panel.ERROR)]) == \
-        "1 HOLD, 1 unstable, 1 error"
+    assert panel.split_line([j(panel.STABLE, "NO"), j(panel.ERROR), j(panel.ERROR)]) == "1 NO, 2 error"
+    assert panel.split_line([j(panel.STABLE, "NO"), j(panel.UNSTABLE), j(panel.ERROR)]) == \
+        "1 NO, 1 unstable, 1 error"
 
 
 def test_a_panel_is_only_read_when_two_judges_answered():
-    rec = _record("BUY")
-    assert panel.panel_agreement(_stable("BUY"), rec) == panel.NO_READING
+    rec = _record("YES")
+    assert panel.panel_agreement(_stable("YES"), rec) == panel.NO_READING
     assert panel.agreement_line(panel.NO_READING, rec) == "No panel reading: fewer than two judges answered."
-    assert panel.panel_agreement(_stable("BUY", "BUY"), rec) == panel.AGREES
-    assert panel.judges_answered(_stable("ABSTAIN", "BUY")) == 2          # an abstention is an answer
+    assert panel.panel_agreement(_stable("YES", "YES"), rec) == panel.AGREES
+    assert panel.judges_answered(_stable("ABSTAIN", "YES")) == 2          # an abstention is an answer
 
 
 def test_one_error_one_unstable_one_stable_gives_no_panel_reading_and_no_narrator_call(report):
-    caller = _scripted({"anthropic": [_reply("HOLD")],                        # stable
-                        "openai": [_reply("BUY"), _reply("SELL")],              # unstable
+    caller = _scripted({"anthropic": [_reply("NO")],                        # stable
+                        "openai": [_reply("YES"), _reply("NO")],              # unstable
                         "google": [CallError("HTTP 503: busy", status=503)]})   # error
     asked = []
 
@@ -95,14 +95,14 @@ def test_one_error_one_unstable_one_stable_gives_no_panel_reading_and_no_narrato
     by = {j.family: j.status for j in result.judges}
     assert by == {"anthropic": panel.STABLE, "openai": panel.UNSTABLE, "google": panel.ERROR}
     assert result.agreement == panel.NO_READING and asked == [] and result.reading is None
-    assert result.split_line == "1 HOLD, 1 unstable, 1 error"
+    assert result.split_line == "1 NO, 1 unstable, 1 error"
     assert "No panel reading: fewer than two judges answered." in "\n".join(render.text_lines(result))
     row = dict(zip(jlog.SUMMARY_COLUMNS, jlog.summary_row(result)))
     assert row["judges_answered"] == 1 and row["panel_agreement"] == panel.NO_READING
 
 
 def test_two_stable_judges_are_a_panel_even_when_the_third_failed(report):
-    caller = _scripted({"anthropic": [_reply("SELL")], "openai": [_reply("SELL")],
+    caller = _scripted({"anthropic": [_reply("NO")], "openai": [_reply("NO")],
                         "google": [CallError("HTTP 404: gone", status=404)]})
     result = _run_panel(report, caller)
     assert panel.judges_answered(result.judges) == 2 and result.agreement != panel.NO_READING

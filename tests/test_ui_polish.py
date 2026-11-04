@@ -246,14 +246,20 @@ def test_the_company_page_has_header_chips_chip_table_and_four_cards(tmp_path):
     assert html.count('class="ar-card"') == 4
 
 
-def test_chips_show_the_word_and_the_counts_match_the_agreement(tmp_path):
-    from aristos_council.company_cards import lens_rows, summary_chips
+def test_chips_show_the_verdict_and_the_relative_chips_match_the_agreement(tmp_path):
+    """ABSOLUTE-PAGE-1: the chips under the header are the verdict of record and the band; the lens-vote chips
+    are the relative view's (under the workings) and still count what the agreement counts."""
+    from aristos_council.company_cards import lens_rows, relative_chips, summary_chips
     report = _company_report(tmp_path)
     chips = summary_chips(report)
+    assert any(w in chips for w in ("Excluded", "Not covered", "Not enough data", "Qualifies, below hurdle",
+                                    "Qualifies, clears hurdle"))
+    assert not any(f">{n} {w}<" in chips for n in range(1, 6) for w in ("BUY", "HOLD", "SELL"))
+    rel = relative_chips(report)
     ag = report.agreement
     for key, word in (("buy", "BUY"), ("hold", "HOLD"), ("sell", "SELL")):
         n = len(getattr(ag, key))
-        assert (f">{n} {word}<" in chips) is bool(n)          # only counts above zero
+        assert (f">{n} {word}<" in rel) is bool(n)            # only counts above zero
     for row in lens_rows(report):
         assert row["word"], "a vote is never shown by colour alone"
 
