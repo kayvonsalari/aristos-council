@@ -3544,6 +3544,13 @@ def _render_company_report(report) -> None:
         if page.badge_note:                                    # B25-7
             st.caption(page.badge_note)
 
+        from aristos_council.absolute_backtest.lookup import workings_lines as _bt_lines
+        _bt = _bt_lines(getattr(report, "cohort_slug", None))
+        if _bt:
+            st.subheader("Backtest of this method in this industry")
+            for _bt_line in _bt:
+                st.markdown(f"- {_bt_line}")
+
         from aristos_council.peer_table import rank_columns
         _render_peers(check, rank_columns(report), report.ticker, nested=True)
 
