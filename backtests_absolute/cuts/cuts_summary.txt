@@ -1,0 +1,68 @@
+VALIDATION (the rebuilt full 12-month results against result.json and the form files)
+  largest difference in ex_basket over 58 industries x 3 forms: 0.0000 points
+  luck: mean absolute difference 0.0000, largest 0.0000
+  rounds whose chosen names equal the form file: form 2 6322/6322, form 3 6322/6322
+  pooled form 1: ex_basket -0.77  luck 99.2%  (SUMMARY.csv has the same)
+  pooled form 2: ex_basket -0.44  luck 26.0%  (SUMMARY.csv has the same)
+  pooled form 3: ex_basket -0.98  luck 55.4%  (SUMMARY.csv has the same)
+
+CUT 1: by period (12-month hold, points a year over the industry basket)
+  form,period,industries,rounds,years,ex_basket_pts,ex_index_pts,luck_pct,winning_years
+  1,2016-2020 entries,58,2958,5,-0.45,+3.21,20.6,0 of 5
+  1,2021-2025 entries,58,3364,5,-1.10,+0.81,100.0,0 of 5
+  1,all entries,58,6322,10,-0.77,+2.01,99.2,0 of 10
+  2,2016-2020 entries,56,2856,5,-1.96,+0.96,91.6,1 of 5
+  2,2021-2025 entries,58,3364,5,+1.09,+3.14,2.2,3 of 5
+  2,all entries,58,6322,10,-0.44,+2.05,26.0,4 of 10
+  3,2016-2020 entries,54,2754,5,-1.81,+2.06,87.4,0 of 5
+  3,2021-2025 entries,57,3306,5,-0.15,+1.10,23.2,2 of 5
+  3,all entries,58,6322,10,-0.98,+1.58,55.4,2 of 10
+
+CUT 2: basket size
+  form,restriction,industries,rounds,median_names_held,share_rounds_under_4_pct,ex_basket_pts,luck_pct,winning_years
+  2,all rounds (as published),58,6322,6.0,17.8,-0.44,26.0,4 of 10
+  2,rounds holding 4 or more names,58,5198,7.0,0.0,-0.57,32.0,5 of 10
+  2,industries with 4+ names in 80%+ of rounds,39,4251,8.0,1.2,-1.43,81.2,2 of 10
+  3,all rounds (as published),58,6322,6.0,32.0,-0.98,55.4,2 of 10
+  3,rounds holding 4 or more names,56,4297,7.0,0.0,-0.43,21.2,3 of 10
+  3,industries with 4+ names in 80%+ of rounds,26,2834,8.0,6.2,-0.84,51.6,4 of 10
+
+CUT 3: the gate's own contribution
+  variant,industries,rounds,median_names_held,ex_basket_pts,luck_pct,winning_years
+  form 2: cheapest third of the gate-passers,58,6322,6.0,-0.44,26.0,4 of 10
+  cheapest third of all eligible names (no gate),58,6322,6.0,-0.45,26.0,4 of 10
+  names the gate takes out of the cheapest third: 998 name-rounds, mean 12-month return 12.9% against the basket's 14.1% in the same rounds
+  names both versions hold: 40639 name-rounds, mean 12-month return 14.4% against the basket's 14.3% in the same rounds
+
+ENTRY YEAR (form, year, ex_basket)
+  form,entry_year,ex_basket_pts
+  1,2016,-0.53
+  1,2017,-0.58
+  1,2018,-0.39
+  1,2019,-0.50
+  1,2020,-0.28
+  1,2021,-1.57
+  1,2022,-1.11
+  1,2023,-0.97
+  1,2024,-0.95
+  1,2025,-0.87
+  2,2016,-1.40
+  2,2017,-0.29
+  2,2018,-2.25
+  2,2019,-8.04
+  2,2020,+2.16
+  2,2021,+2.47
+  2,2022,+2.73
+  2,2023,-0.38
+  2,2024,-0.55
+  2,2025,+1.16
+  3,2016,-3.06
+  3,2017,-0.66
+  3,2018,-1.74
+  3,2019,-1.76
+  3,2020,-1.80
+  3,2021,+4.24
+  3,2022,+0.89
+  3,2023,-1.07
+  3,2024,-2.04
+  3,2025,-2.80

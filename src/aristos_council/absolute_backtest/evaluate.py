@@ -7,6 +7,7 @@ gives no filing date, counted by the adapter), sizes it, runs the gate (version 
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from typing import Callable, Optional
 
@@ -30,6 +31,57 @@ def share_jumps(f) -> list[int]:
 
 
 RECENT_PERIODS = 3          # a split-sized jump among the newest periods spoils the free cash flow base
+
+# Ratios a split is made of (a jump of the share count is taken for a split only when it is within SPLIT_TOLERANCE of one).
+SPLIT_RATIOS = tuple(sorted({float(k) for k in (2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 30, 40, 50, 100)}
+                            | {1.0 / k for k in (2, 3, 4, 5, 6, 7, 8, 10, 12, 15, 20, 25, 30, 40, 50, 100)}))
+SPLIT_TOLERANCE = 0.12
+
+
+def nearest_split_ratio(ratio: float) -> Optional[float]:
+    """The split ratio a share-count jump of ``ratio`` stands for, or None when it is near none (a merger, a large issue
+    or buyback, a spin-off: not a split, so not restated)."""
+    best = min(SPLIT_RATIOS, key=lambda r: abs(ratio / r - 1.0))
+    return best if abs(ratio / best - 1.0) <= SPLIT_TOLERANCE else None
+
+
+def later_split_factor(f, full) -> Optional[float]:
+    """The product of the splits in the provider's full record AFTER the newest period visible in ``f`` (1.0 when none),
+    or None when a jump there is not a split ratio.
+
+    The provider's share counts are as reported; the closes are adjusted to today's shares. A period reported before a
+    split therefore needs its shares multiplied by the split to stand on the same basis as the price."""
+    scalars = getattr(full, "period_scalars", None) or {}
+    visible = getattr(f, "period_scalars", None) or {}
+    if not scalars or not visible:
+        return None
+    newest = max(visible)
+    later = [(p, (scalars[p] or {}).get("shares_outstanding")) for p in sorted(scalars) if p >= newest]
+    counts = [c for _, c in later if c and c > 0]
+    factor = 1.0
+    for a, b in zip(counts, counts[1:]):
+        r = b / a
+        if SPLIT_RATIO_BAND[0] <= r <= SPLIT_RATIO_BAND[1]:
+            continue
+        nice = nearest_split_ratio(r)
+        if nice is None:
+            return None
+        factor *= nice
+    return factor
+
+
+def restate_shares(f, factor: float):
+    """``f`` with every share count of the visible accounts multiplied by ``factor`` (the provider's as-reported counts
+    brought to today's basis). Uniform, so ratios between periods, and with them the earnings-per-share growth, are unchanged."""
+    def scale(xs):
+        return [None if v is None else v * factor for v in (xs or [])]
+    scalars = {p: ({**s, "shares_outstanding": s["shares_outstanding"] * factor} if (s or {}).get("shares_outstanding") else s)
+               for p, s in (f.period_scalars or {}).items()}
+    aligned = {k: (scale(v) if k in ("shares_outstanding", "diluted_shares") else v)
+               for k, v in (getattr(f, "aligned_annual", None) or {}).items()}
+    return replace(f, period_scalars=scalars, aligned_annual=aligned,
+                   shares_outstanding_annual=scale(getattr(f, "shares_outstanding_annual", None)),
+                   diluted_shares_annual=scale(getattr(f, "diluted_shares_annual", None)))
 
 
 def asof_growth_history(f) -> GrowthHistory:
@@ -112,7 +164,14 @@ def evaluate_name(ticker: str, d: date, asof: AsOfAdapter, full, tape, *, cap_to
     reading = dict(eligible=eligible, gate_state=state, size_basis=basis, no_accounts=no_accounts)
     if not eligible or gate is None or state != QUALIFIES:
         return NameReading(ticker, **reading)
-    if withheld or any(i < RECENT_PERIODS for i in share_jumps(f)):
+    recent_jump = any(i < RECENT_PERIODS for i in share_jumps(f))
+    if withheld and not recent_jump:
+        # a split AFTER the visible accounts (so, at the round date, in the future): restate, never withhold, so that the
+        # names that later split are in the forms exactly as often as the names that did not
+        factor = later_split_factor(f, full)
+        if factor is not None:
+            f, withheld = restate_shares(f, factor), False
+    if withheld or recent_jump:
         return NameReading(ticker, split_withheld=True, backtest_state=NOT_ENOUGH_DATA, **reading)
     quote_fx = None
     if currency_relation(getattr(f, "currency", ""), getattr(f, "financial_currency", ""))[0] == "mixed":

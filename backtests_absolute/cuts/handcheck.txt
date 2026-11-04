@@ -1,0 +1,12 @@
+== MSFT (tech_systems_software) on 2019-10-31
+pipeline: eligible=True gate=qualifies backtest=qualifies_below_hurdle base_yield=0.02169698245924867 no_hurdle=False no_fx=False split_withheld=False size_basis=shares x price
+  pipeline's hurdle leg: US10Y yield 0.016894 on 2019-10-31
+  newest visible period in the pipeline's as-of read: 2019-06-30
+  independent bond US10Y: 1.6894 on 2019-10-31; hurdle 0.0669
+  independent base yield = 0.02170
+== 0700.HK (comms_interactive_media_gaming) on 2019-10-31
+pipeline: eligible=True gate=qualifies backtest=qualifies_clears_hurdle base_yield=0.026498608719485763 no_hurdle=False no_fx=False split_withheld=False size_basis=shares x price, scaled to dollars
+  pipeline's hurdle leg: CN10Y yield 0.03281 on 2019-10-31
+  newest visible period in the pipeline's as-of read: 2018-12-31
+  price in statement currency = 295.7315 / 1.1108230352401733 = 266.2274; bond CN10Y 3.281 on 2019-10-31; hurdle 0.0828
+  independent base yield = 0.02650
