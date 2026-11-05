@@ -322,34 +322,12 @@ def test_company_run_with_summary_and_council_unticked_makes_zero_model_calls(mo
     assert not at.exception, at.exception
 
 
-@needs_local_saved_list
-def test_council_ticked_with_zero_lenses_still_makes_zero_model_calls(monkeypatch):
-    """COUNCIL-OPINION-1's own guard (``write_council_opinion``: no votes -> an early
-    returned note, never a model call) survives this merge — pinned here at the UI
-    layer, where the pre-ticked default lens is explicitly UNTICKED first."""
-    from aristos_council.agents import runners as runners_mod
-
-    def _boom(*a, **kw):
-        raise AssertionError("council-ticked, zero-vote run reached a narration runner")
-
-    monkeypatch.setattr(runners_mod, "production_runners", _boom)
-    _patch_real_adapter(monkeypatch)
-    _patch_no_news(monkeypatch)
-
+def test_the_company_page_can_no_longer_be_run_with_zero_lenses():
+    """ABSOLUTE-UI-1: the company page has no lens tick boxes, so a "council ticked, zero lenses" run cannot be
+    made there (COUNCIL-OPINION-1's own guard, ``write_council_opinion``, is tested where it lives)."""
     at = _company_mode(_run_tab())
-    for c in list(at.checkbox):
-        key = str(getattr(c, "key", "") or "")
-        if key.startswith("opt_lens_company_"):
-            c.set_value(False)
-    at.run()
-    assert not any(c.value for c in at.checkbox
-                  if str(getattr(c, "key", "")).startswith("opt_lens_company_"))
-
-    next(c for c in at.checkbox
-        if str(getattr(c, "key", "")) == "opt_council_company").set_value(True).run()
-    at.text_input(key="cc_ticker").set_value("CO").run()
-    at.button(key="cc_run").click().run()
-    assert not at.exception, at.exception
+    assert not [c for c in at.checkbox if str(getattr(c, "key", "") or "").startswith("opt_lens_company_")]
+    assert any(str(getattr(c, "key", "")) == "opt_council_company" for c in at.checkbox)
 
 
 def test_list_run_with_council_opinion_unticked_makes_zero_model_calls(monkeypatch, tmp_path):

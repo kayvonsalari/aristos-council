@@ -29,13 +29,16 @@ def _set_lens(at, kind, sid, value):
 # --------------------------------------------------------------------------- #
 def test_lens_ticks_and_the_list_text_survive_company_list_and_stocks_etfs_switches():
     at = _company_mode(_run_tab())
-    assert _ticked(at, "company") == [VM]                    # the seeded default
-    _set_lens(at, "company", RAW, True)
-    assert _ticked(at, "company") == sorted([RAW, VM])
-    _set_lens(at, "company", VM, False)
-    assert _ticked(at, "company") == [RAW]
+    assert _ticked(at, "company") == []                      # ABSOLUTE-UI-1: the company page has no lens boxes
+    _list_mode(at)
+    assert _ticked(at, "list") == [VM]                       # the seeded default, on the list input
+    _set_lens(at, "list", RAW, True)
+    _set_lens(at, "list", VM, False)
+    assert _ticked(at, "list") == [RAW]
 
-    _list_mode(at)                                           # Company -> list: ticks follow
+    at.radio(key="run_input_kind").set_value("Company").run()    # list -> Company -> list: the ticks are kept
+    assert _ticked(at, "company") == []
+    _list_mode(at)
     assert _ticked(at, "list") == [RAW]
     at.text_area(key="uni_tickers").set_value("AAPL\nMSFT").run()
     assert not at.exception
@@ -51,8 +54,6 @@ def test_lens_ticks_and_the_list_text_survive_company_list_and_stocks_etfs_switc
     assert _ticked(at, "list") == [RAW]
     assert at.text_area(key="uni_tickers").value == "AAPL\nMSFT"
 
-    at.radio(key="run_input_kind").set_value("Company").run()
-    assert _ticked(at, "company") == [RAW]                   # list -> Company: same ticks
 
 
 def test_the_company_ticker_text_survives_a_trip_through_list_mode():
@@ -91,17 +92,35 @@ def test_click_through_carries_the_lists_lenses_and_the_picker_shows_names(monke
     next(b for b in at.button if str(b.key) == "single_open_company_button").click().run()
     assert not at.exception, at.exception
     assert at.session_state["run_input_kind"] == "Company"
-    assert _ticked(at, "company") == [RAW]                   # not "No lens is ticked"
+    assert _ticked(at, "company") == []                      # ABSOLUTE-UI-1: no lens boxes on the company page
     run = next(b for b in at.button if str(b.key) == "cc_run")
     assert not run.disabled and "cc_report" not in at.session_state
 
 
-def test_company_mode_with_no_lens_ticked_blocks_the_run_with_the_list_sentence():
+def test_the_company_page_has_no_lens_tick_boxes_and_the_run_is_never_blocked_for_want_of_one():
+    """ABSOLUTE-UI-1: every relative lens runs on the company page, so there is nothing to untick and no
+    "Pick at least one strategy." sentence."""
     at = _company_mode(_run_tab())
-    _set_lens(at, "company", VM, False)
     assert _ticked(at, "company") == []
-    assert next(b for b in at.button if str(b.key) == "cc_run").disabled
-    assert any("Pick at least one strategy." in str(i.value) for i in at.info)
+    assert not [c for c in at.checkbox if str(getattr(c, "key", "")).startswith("opt_lens_company_")]
+    at.text_input(key="cc_ticker").set_value("MU").run()
+    assert not next(b for b in at.button if str(b.key) == "cc_run").disabled
+    assert not any("Pick at least one strategy." in str(i.value) for i in at.info)
+    # the judge panel and the plain-English summary are the tick boxes that remain
+    keys = {str(getattr(c, "key", "")) for c in at.checkbox}
+    assert {"opt_summary_company", "opt_judges_company"} <= keys
+
+
+def test_the_lens_descriptions_toggle_is_off_on_the_company_page_with_a_note_and_live_on_the_list_page():
+    from app import LENS_DESC_COMPANY_NOTE
+    at = _company_mode(_run_tab())
+    toggle = next(t for t in at.toggle if t.label == "Show lens descriptions")
+    assert toggle.disabled
+    assert any(LENS_DESC_COMPANY_NOTE in str(c.value) for c in at.sidebar.caption)
+    _list_mode(at)
+    toggle = next(t for t in at.toggle if t.label == "Show lens descriptions")
+    assert not toggle.disabled
+    assert not any(LENS_DESC_COMPANY_NOTE in str(c.value) for c in at.sidebar.caption)
 
 
 def test_the_list_result_shows_no_ids_and_no_lens_jargon_block_for_readers(monkeypatch):
@@ -135,7 +154,7 @@ def test_the_one_ticker_hint_has_an_open_as_company_button_that_does_not_run():
     assert not at.exception, at.exception
     assert at.session_state["run_input_kind"] == "Company"
     assert at.text_input(key="cc_ticker").value == "EL.PA"
-    assert _ticked(at, "company") == sorted([RAW, VM])               # the ticked lenses were kept
+    assert _ticked(at, "company") == []                              # ABSOLUTE-UI-1: no lens boxes on the company page
     assert "cc_report" not in at.session_state               # nothing ran
 
 

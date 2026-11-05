@@ -1,5 +1,7 @@
 Company Report - CO Corp (CO)
-The math judges: the answer below comes from fixed rules applied to the company's accounts and its price. The writing explains it and cannot change a number. Nothing here is a recommendation.
+What the price requires, and what the record shows
+context: ranked among rivals on 1 measure
+The gate and the price test decide: the answer below comes from fixed rules applied to the company's accounts and its price. The writing explains it and cannot change a number. Nothing here is a recommendation.
 
 Not enough data: accrual ratio (net income and operating cash flow missing); solvency (operating cash flow missing).
 No verdict is given for CO: a missing item is neither a pass nor a fail.
@@ -69,7 +71,7 @@ Operating profit over enterprise value: 0.0%.
 Analysts:
 Analyst forecasts are not shown: EODHD_API_KEY is not set, so no analyst data was asked for.
 Where it sits among rivals:
-Magic Formula RAW: 10th of 14.
+Magic Formula RAW: where it sits among rivals on return on invested capital, earnings yield and 12-month price momentum: 10th of 14.
 
 SHOW THE WORKINGS
 

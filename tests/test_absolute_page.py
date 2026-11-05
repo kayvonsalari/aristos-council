@@ -299,19 +299,23 @@ def test_the_return_range_section_holds_the_cases_the_hurdle_the_verdict_and_the
 # --------------------------------------------------------------------------- #
 # section 6: context, no vote
 # --------------------------------------------------------------------------- #
-def _vote(label, status="ranked", verdict="buy", position=3, size=14, reason=""):
+def _vote(label, status="ranked", verdict="buy", position=3, size=14, reason="", measures=""):
     return LensVote(strategy_id="x_v1", label=label, status=status, verdict=verdict, position=position,
-                    cohort_size=size, reason=reason)
+                    cohort_size=size, reason=reason, measures=measures)
 
 
 def test_where_it_sits_among_rivals_is_one_line_per_lens_with_a_rank_and_no_vote_word():
     rep = fake_report(gate_ok(), absolute(gate_ok()), votes=[
-        _vote("Value + Momentum", verdict="buy", position=3, size=14),
+        _vote("Value + Momentum", verdict="buy", position=3, size=14,
+              measures="earnings yield and 12-month price momentum"),
         _vote("Magic Formula RAW", verdict="sell", position=13, size=14),
-        _vote("Defensive Income", status="excluded", reason="no dividend paid")])
+        _vote("Defensive Income", status="excluded", reason="no dividend paid", measures="net payout yield")])
     lines = cp.rivals_lines(rep)
-    assert lines == ["Value + Momentum: 3rd of 14.", "Magic Formula RAW: 13th of 14.",
-                     "Defensive Income: not ranked (no dividend paid)."]
+    # ABSOLUTE-UI-1: each line reads "where it sits among rivals on <what it measures>"
+    assert lines == ["Value + Momentum: where it sits among rivals on earnings yield and 12-month price momentum: "
+                     "3rd of 14.",
+                     "Magic Formula RAW: where it sits among rivals: 13th of 14.",
+                     "Defensive Income: where it sits among rivals on net payout yield: not ranked (no dividend paid)."]
     assert not BANNED_CASE.search(" ".join(lines))
 
 
@@ -333,7 +337,9 @@ def test_the_context_carries_the_quality_trough_year_and_the_momentum_and_no_vot
 # the page order, in the text, the Markdown and the HTML
 # --------------------------------------------------------------------------- #
 def _order(text, headings):
-    low = text.lower()
+    from aristos_council.company_report import HOUSE_LINE
+    # ABSOLUTE-UI-1: the house line in the header says "the gate and the price test decide"; it is not a heading
+    low = text.replace(HOUSE_LINE, "").lower()
     at = [low.find(h.lower()) for h in headings]
     assert all(i >= 0 for i in at), dict(zip(headings, at))
     assert at == sorted(at), dict(zip(headings, at))
@@ -369,7 +375,10 @@ def test_the_html_download_follows_the_new_page_order(full_report):
 
 def test_the_answer_comes_before_the_story_and_the_lens_table_is_only_in_the_workings(full_report):
     text = format_company_report(full_report)
-    first_lines = [ln for ln in text.splitlines() if ln.strip()][2:4]
+    from aristos_council.company_report import HOUSE_LINE
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    start = lines.index(HOUSE_LINE) + 1                      # the title, kicker, context row and house line come first
+    first_lines = lines[start:start + 2]
     assert first_lines == list(cp.answer_lines(full_report))
     head = text[:text.lower().index("show the workings")]
     assert "Track record" not in head and "Vote or mark" not in head

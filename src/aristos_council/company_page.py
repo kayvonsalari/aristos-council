@@ -297,17 +297,28 @@ def story_paragraphs(report) -> list[tuple[str, str]]:
 # --------------------------------------------------------------------------- #
 # Section 6 - context, no vote
 # --------------------------------------------------------------------------- #
+def context_row(report) -> str:
+    """ABSOLUTE-UI-1: the header's context line. The relative lenses all run and appear only as context, so the
+    header counts them: "context: ranked among rivals on 5 measures"."""
+    n = sum(1 for v in report.votes if v.ranked)
+    if n:
+        return f"context: ranked among rivals on {n} {'measure' if n == 1 else 'measures'}"
+    return "context: not ranked among rivals"
+
+
 def rivals_lines(report) -> list[str]:
-    """"Where it sits among rivals": one line per relative lens with its rank and no vote word."""
+    """"Where it sits among rivals": one line per relative lens, in the form "where it sits among rivals on <what it
+    measures>", with its rank and no vote word."""
     out = []
     for v in report.votes:
+        on = f" on {v.measures}" if getattr(v, "measures", "") else ""
         if v.ranked:
             where = (f"{ordinal(v.position)} of {v.cohort_size}" if v.position and v.cohort_size
                      else f"ranked among {v.cohort_size}" if v.cohort_size else "ranked")
-            out.append(f"{v.label}: {where}.")
+            out.append(f"{v.label}: where it sits among rivals{on}: {where}.")
         else:
             why = _first_reason(v.reason or v.result())
-            out.append(f"{v.label}: not ranked ({why}).")
+            out.append(f"{v.label}: where it sits among rivals{on}: not ranked ({why}).")
     return out
 
 

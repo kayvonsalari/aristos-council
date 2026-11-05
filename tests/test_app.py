@@ -480,9 +480,10 @@ def test_legacy_surfaces_are_not_rendered_and_the_validation_toggle_is_gone():
     assert "Run a council" not in _header_blob(at)
     assert "Edits council-strategy YAMLs" not in _info_blob(at)
     assert not any("Legacy" in str(t.label) for t in at.tabs)
-    # the v2 product IS the landing (the Analyse tab's lens grid renders, in either
-    # input mode — this test is about legacy visibility, not about which mode)
-    assert _LensGrid(at, "opt_lens_company_").options
+    # the v2 product IS the landing: the company page (the default input) shows its run button and, since
+    # ABSOLUTE-UI-1, NO lens tick boxes; the lens grid lives on the cohort / list input
+    assert any(b.label.startswith("▶ Run company check") for b in at.button)
+    assert not _LensGrid(at, "opt_lens_company_").options
 
 
 def _dropdown(at, label):
@@ -587,11 +588,11 @@ def test_both_strategy_pickers_list_the_live_strategies():
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(_APP), default_timeout=60).run()
     assert not at.exception
-    cc = _LensGrid(at, "opt_lens_company_").options       # Company Check: the SAME component, its own keys
+    # ABSOLUTE-UI-1: the company page has no lens tick boxes; it runs every lens the ONE picker offers
+    assert not _LensGrid(at, "opt_lens_company_").options
     _list_mode(at)
     rank = _strategy_picker(at).options
-    assert list(rank) == list(cc)                                    # one picker, one set
-    for opts in (rank, cc):
+    for opts in (rank,):
         assert "Growth" in opts                                      # plain names now
         assert any("RAW" in o for o in opts)                         # canonical raw
         assert any("Financials" in o for o in opts)                  # financials lens (FIN-1)
@@ -622,8 +623,7 @@ def test_company_check_has_no_strategy_dropdown_and_no_reference_universe_picker
     labels = {str(s.label) for s in at.selectbox}
     assert "Strategy (lens screen + factors)" not in labels
     assert "Reference universe (for factor context)" not in labels
-    cc_boxes = _LensGrid(at, "opt_lens_company_")
-    assert cc_boxes.options and len(cc_boxes.ticked) == 1            # one pre-ticked, like the Run tab
+    assert not _LensGrid(at, "opt_lens_company_").options            # ABSOLUTE-UI-1: no lens tick boxes
     ticks = {str(c.label) for c in at.checkbox}
     assert "Plain-English summary" in ticks                          # the Run tab's and the page's
     summary = next(c for c in at.checkbox if str(getattr(c, "key", "")) == "opt_summary_company")

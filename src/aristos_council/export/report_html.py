@@ -1555,19 +1555,19 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
     opinion (if asked for), the full peers table, Sources. The same objects the text
     export prints, so the two cannot drift."""
     from ..company_check import company_sources
-    from ..company_report import HOUSE_LINE, NO_LENS_REASON, OUTSIDE_TESTED_RANGE_LINE
+    from ..company_report import HOUSE_LINE, KICKER, NO_LENS_REASON, OUTSIDE_TESTED_RANGE_LINE, context_row
     from ..peer_table import rank_columns
 
     c = report.check
     stamp = _local_stamp(run_start)
     header_tail = f'<p class="house">{_esc(HOUSE_LINE)}</p>'
     # ABSOLUTE-PAGE-1: the header names no lens (the lenses no longer decide anything; they sit in the relative view)
-    parts = ['<header class="doc"><p class="kicker">Aristos · company report · what the price requires</p>'
+    parts = [f'<header class="doc"><p class="kicker">Aristos · company report · {_esc(KICKER.lower())}</p>'
              f"<h1>{_esc(report.display)}</h1>"
-             + _kv([("run", _esc(stamp))])
+             + _kv([("run", _esc(stamp)), ("context", _esc(context_row(report).removeprefix("context: ")))])
              + header_tail + "</header>"]
     if report.unrateable:
-        parts.append(_callout(f"UNRATEABLE — {c.data_integrity.note}. No data, so no votes and no "
+        parts.append(_callout(f"UNRATEABLE — {c.data_integrity.note}. No data, so no ranking and no "
                               "readings.", kind="alert"))
         parts.append(_footer())
         return _document(title=f"Company Report — {report.display}", body=_JOIN.join(parts))
