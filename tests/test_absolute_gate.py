@@ -780,4 +780,5 @@ def test_the_record_keys_are_the_v2_keys_plus_the_additive_blocks(tmp_path):
                     "track_record_caption", "track_record_summary", "lens_ranks", "sources", "seconds",
                     "cache", "summary_written", "council_opinion", "outside_tested_range",
                     "smallcap_cohort", "smallcap_floor_usd", "smallcap_band_note", "size_matched_peers",
-                    "price_and_cash", "gate", "absolute", "design_version", "verdict_of_record", "relative"}
+                    "price_and_cash", "gate", "absolute", "design_version", "verdict_of_record", "relative",
+                    "kicker", "house_line", "context_row"}   # ABSOLUTE-UI-1: the header wording, additive

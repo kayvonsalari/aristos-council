@@ -61,8 +61,11 @@ from .tools.valuation_band import ordinal
 
 _ROOT = Path(__file__).resolve().parents[2]
 
-HOUSE_LINE = ("The math judges: the answer below comes from fixed rules applied to the company's accounts and its "
-              "price. The writing explains it and cannot change a number. Nothing here is a recommendation.")
+HOUSE_LINE = ("The gate and the price test decide: the answer below comes from fixed rules applied to the company's "
+              "accounts and its price. The writing explains it and cannot change a number. Nothing here is a "
+              "recommendation.")
+# ABSOLUTE-UI-1: the one kicker above the company page's title, in every rendering and in the saved record.
+KICKER = "What the price requires, and what the record shows"
 NO_LENS_REASON = "No lens is ticked, so there is nothing to vote."
 SUMMARY_NOT_ASKED = ""          # an unticked summary leaves NO section, not a placeholder
 NO_KEY_NOTE_OPINION = "Council opinion unavailable: no ANTHROPIC_API_KEY set"
@@ -109,6 +112,7 @@ class LensVote:
     label: str
     kind: str = "selector"            # "selector" votes; "check" marks
     asks: str = ""
+    measures: str = ""                # ABSOLUTE-UI-1: what the lens measures, plain words ("earnings yield and momentum")
     status: str = "absent"            # ranked | excluded | unrateable | fetch_error | absent | no_group
     verdict: str = ""                 # buy / hold / sell when ranked
     position: Optional[int] = None
@@ -1006,6 +1010,32 @@ def _n_no_data(result) -> Optional[int]:
             + len(getattr(result, "fetch_errors", None) or []) + unread)
 
 
+def context_row(report) -> str:
+    """ABSOLUTE-UI-1: the header's one context line ("context: ranked among rivals on 5 measures")."""
+    from .company_page import context_row as _row
+    return _row(report)
+
+
+_PROPER_FIRST_WORDS = frozenset({"Altman", "Piotroski"})
+
+
+def lens_measures(strategy) -> str:
+    """ABSOLUTE-UI-1: what a lens measures, in plain words, from its own factor list ("return on invested capital,
+    earnings yield and 12-month price momentum"). "" when the strategy lists no known factor."""
+    from .factors import FACTOR_REGISTRY
+    names = [f.name for f in (getattr(strategy, "factors", None) or ()) if f.name in FACTOR_REGISTRY]
+    labels = []
+    for n in names:
+        label = re.sub(r"\s*\([^)]*\)", "", FACTOR_REGISTRY[n].label).split(",")[0].strip()
+        if label:
+            first = label.split(" ")[0]
+            keep = first.isupper() or first in _PROPER_FIRST_WORDS        # "ROIC ...", "Altman Z-Score"
+            labels.append(label if keep else label[:1].lower() + label[1:])
+    if not labels:
+        return ""
+    return labels[0] if len(labels) == 1 else ", ".join(labels[:-1]) + " and " + labels[-1]
+
+
 def votes_from_multi(multi, ticker: str) -> list[LensVote]:
     """The company's outcome under every lens of a ``MultiStrategyResult``."""
     target = ticker.upper()
@@ -1017,6 +1047,7 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
         base = dict(strategy_id=sid, label=multi.strategy_names.get(sid, "") or sid,
                     kind=getattr(strategy, "kind", "selector") or "selector",
                     asks=(getattr(strategy, "asks", "") or "").strip(),
+                    measures=lens_measures(strategy),
                     buy_rule="; ".join(buy_requirement_lines(
                         getattr(strategy, "buy_requires", None))))
         cell = row.cells.get(sid) if row is not None else None
@@ -1370,6 +1401,8 @@ def report_record(report: CompanyReport) -> dict:
         "schema_version": 2,
         "kind": "company_report", "ticker": report.ticker, "company": report.display,
         "run_at": report.run_at, "lenses": list(report.lens_ids),
+        "kicker": KICKER, "house_line": HOUSE_LINE,       # ABSOLUTE-UI-1: the same wording as every rendering
+        "context_row": context_row(report),
         "peer_snapshot": peer_snapshot(group) if group is not None and group.subject else None,
         "peer_sentence": group.sentence() if group is not None else "",
         "universe": list(report.universe),
@@ -1750,9 +1783,9 @@ def format_company_report(report: CompanyReport) -> str:
     """The report as text, in the page order: the answer, the story, the gate, the price test, the return
     range, the context, the judge panel and the council opinion (only when ticked), then the workings."""
     c = report.check
-    lines = [f"Company Report - {report.display}", HOUSE_LINE, ""]
+    lines = [f"Company Report - {report.display}", KICKER, context_row(report), HOUSE_LINE, ""]
     if report.unrateable:
-        lines += [f"UNRATEABLE - {c.data_integrity.note}. No data, so no votes and no readings.",
+        lines += [f"UNRATEABLE - {c.data_integrity.note}. No data, so no ranking and no readings.",
                   c.pointer]
         return "\n".join(lines)
 

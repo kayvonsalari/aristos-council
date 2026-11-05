@@ -33,13 +33,14 @@ def _bullets(lines) -> list[str]:
 def company_report_markdown(report) -> str:
     """The Markdown export of ONE company report."""
     from .company_check import analyst_forecast_lines, absolute_reading_lines, company_sources
-    from .company_report import HOUSE_LINE, price_and_cash_lines
+    from .company_report import HOUSE_LINE, KICKER, context_row, price_and_cash_lines
     from .peer_table import rank_columns
 
     c = report.check
-    out = [f"# Company Report — {report.display}", "", f"*{HOUSE_LINE}*", ""]
+    out = [f"# Company Report — {report.display}", "", f"**{KICKER}**", "", f"*{context_row(report)}*", "",
+           f"*{HOUSE_LINE}*", ""]
     if report.unrateable:
-        out += [f"**UNRATEABLE** — {c.data_integrity.note}. No data, so no votes and no readings.",
+        out += [f"**UNRATEABLE** — {c.data_integrity.note}. No data, so no ranking and no readings.",
                 "", c.pointer]
         return "\n".join(out) + "\n"
 

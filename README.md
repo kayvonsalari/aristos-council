@@ -454,18 +454,19 @@ analyse them."* — so the exclusion is a next step rather than a dead end.
 
 ## Company Report (the Analyse tab's Company mode)
 
-One ticker against its **own** peer group — not against a list you pick. The Analyse tab
-opens on this mode by default: type a name or ticker (the find box fills the ticker from
-the local market index, offline), tick one or more lenses, run. Each ticked lens runs
-exactly as it would over a list — the company's vote is its verdict in that one-name run,
-"BUY — 3rd of 14" or "does not apply — `<reason>`" when the lens's own screen excludes
-it — and every ticked lens is an equal vote (SHORTLIST-3); a **check** lens (Forensic)
-marks and never votes. The agreement rule the Run side uses decides the verdict of record;
-the page then shows, in order: the plain-English summary (if ticked), the agreement
-headline and each lens's vote (with its backtested track record, shown in the "Track record" column and attached ONLY to a
-lens that actually voted — a "does not apply" row never carries one), the valuation band,
-price and cash, debt and growth, what analysts say, the Council opinion (if ticked), the
-full peers table (the company's own row visibly highlighted), and Sources.
+One ticker, checked on its accounts and its price (**what the price requires, and what the record shows**). The Analyse
+tab opens on this mode by default: type a name or ticker (the find box fills the ticker from the local market index,
+offline) and run. **There are no lens tick boxes on this page** (ABSOLUTE-UI-1). The gate and the price test decide the
+answer, and nothing on the page is a recommendation. Every relative lens runs automatically against the company's own peer
+group and appears only as context ("where it sits among rivals on `<what it measures>`", counted in the header as
+"context: ranked among rivals on N measures") and, in full, in the workings under "Relative view (peer ranks): no longer
+votes", with its backtested track record. The tick boxes that remain are the plain-English summary, the council opinion and
+the judge panel (each off by default). The sidebar's "Show lens descriptions" switch applies to cohort and list runs only and
+is greyed out here, with a one-line note saying why. The page shows, in order: the answer, the story, the gate, the price
+test, the return range, the context with no vote (including where the company sits among rivals), the judge panel and the
+council opinion (if ticked), and the workings (valuation band, price and cash, debt and growth, what analysts say, the
+relative view, the full peers table with the company's own row highlighted, and Sources). The text, Markdown and HTML
+downloads and the saved record use the same header wording.
 
 **Under $5bn**, the find box (or a live, cached fetch for a hand-typed ticker the local
 index doesn't know) decides automatically: an info line states the market cap and runs the

@@ -37,6 +37,8 @@ _GATE_KEYS = {"gate", "absolute"}   # ABSOLUTE-VALUE-1 adds the second, additive
 # ABSOLUTE-PAGE-1 (phase 3): the verdict of record is the absolute verdict; the relative result is kept apart; the
 # design version is named. All additive: every key above is unchanged, and a saved file is never rewritten.
 _PAGE_KEYS = {"design_version", "verdict_of_record", "relative"}
+# ABSOLUTE-UI-1: the saved record carries the same header wording as every rendering (additive, display-only).
+_PAGE_KEYS |= {"kicker", "house_line", "context_row"}
 
 
 def test_every_v1_key_is_still_present_unchanged(tmp_path):
