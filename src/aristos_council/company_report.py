@@ -1897,6 +1897,8 @@ def company_facts_pack(report: CompanyReport) -> dict:
     # item 16: whether THIS report carries a backtest of the method for the company's industry, and the one
     # sentence the page itself prints about it. The summary must agree with it (summary_contradictions).
     from .absolute_backtest.lookup import NO_RESULT, cannot_sentence, workings_lines
+    from .company_page import rivals_lines
+    rivals = set(rivals_lines(report))
     slug = getattr(report, "cohort_slug", None)
     has_backtest = bool(workings_lines(slug))
     backtest = {"exists": has_backtest,
@@ -1909,7 +1911,10 @@ def company_facts_pack(report: CompanyReport) -> dict:
         "gate": gate_block,
         "price_test": price_test,
         "return_range": return_range,
-        "context": [b[1] for b in context_blocks(report) if b[0] in ("p",)],
+        # PILOT-STRIP-1 (found in the paid test, 2026-11-20): the "where it sits among rivals" lines were in
+        # here, so two of six live summaries spoke of "the income lenses" and "the sector rankings", which this
+        # pack's own contract (above) says it does not hold. They are left out; the other context readings stay.
+        "context": [b[1] for b in context_blocks(report) if b[0] in ("p",) and b[1] not in rivals],
         "valuation_band": c.valuation_band,
         "absolute_readings": {
             "debt_and_cash": ((c.debt_and_cash.lines() + c.debt_and_cash.notes())

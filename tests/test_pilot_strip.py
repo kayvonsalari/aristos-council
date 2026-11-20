@@ -499,3 +499,13 @@ def test_the_new_prompt_is_v3_and_v2_is_still_on_disk():
     text = cr.company_prompt_text()
     assert "Nothing you write contradicts the report" in text and "backtest.exists" in text
     assert "in exactly this order" in text and "name all\n  four" in text
+
+
+def test_the_summarys_facts_pack_holds_no_lens_or_rank_line(full_report):
+    """Paid test of 2026-11-20: Haiku wrote "not ranked in the income lenses" (MSFT) and "outside two of the sector
+    rankings" (KO). The lines came from the pack's own context block; the pack must not hold them."""
+    from aristos_council.company_report import company_facts_pack
+    assert cp.rivals_lines(full_report)                                  # the page does print them
+    context = company_facts_pack(full_report)["context"]
+    assert context and not any("where it sits among rivals" in ln for ln in context)
+    assert not set(context) & set(cp.rivals_lines(full_report))
