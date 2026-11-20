@@ -138,7 +138,8 @@ def _toggle(at, label):
 
 
 def _lens_boxes(at):
-    return [c for c in at.checkbox if c.key and c.key.startswith("opt_lens_company_")]
+    # ABSOLUTE-UI-1: the company page has no lens boxes; the lens grid (and its descriptions toggle) is the list page's
+    return [c for c in at.checkbox if c.key and c.key.startswith("opt_lens_list_")]
 
 
 def _lens_captions(at):
@@ -157,6 +158,7 @@ def test_the_display_heading_holds_the_lens_description_toggle_and_no_validation
 def test_off_shows_names_only_with_the_summary_as_the_tooltip_and_on_restores_it():
     import app
     at = _app_test()
+    next(r for r in at.radio if r.label == "Input").set_value("Cohort / list").run()
     boxes = _lens_boxes(at)
     assert boxes and all(b.help for b in boxes), "every lens keeps its one-line summary as help"
     first_asks = boxes[0].help
@@ -189,8 +191,11 @@ def test_the_toggle_behaves_the_same_in_cohort_list_mode():
 def test_the_top_of_the_page_has_the_one_short_line_and_no_machinery_lines():
     at = _app_test()
     text = _everything_on_screen(at)
-    assert ("Check one company against its rivals, or rank a list. "
-            "Every lens is one equal vote.") in text
+    # ABSOLUTE-UI-1: the company page (the default) is not a vote; the list page keeps the old line
+    from app import COMPANY_TOP_LINE, TOP_LINE
+    assert COMPANY_TOP_LINE in text and "Every lens is one equal vote" not in text
+    next(r for r in at.radio if r.label == "Input").set_value("Cohort / list").run()
+    assert TOP_LINE in _everything_on_screen(at)
     assert "Verdict: deterministic ranker" not in text
     assert "Narrative: LLM (non-judging)" not in text
     assert "Screen → rank → gates" not in text and "only narrates" not in text
@@ -323,8 +328,9 @@ def test_how_lenses_are_graded_lives_inside_sources_and_downloads_stay(tmp_path)
 def test_the_start_state_is_a_quiet_panel_with_three_steps_and_a_hint():
     at = _app_test()
     html = _html_blob(at)
-    assert "Check one company against its rivals" in html
-    for step in ("1. Find a company", "2. Tick lenses", "3. Run, free"):
+    assert "What the price requires, and what the record shows" in html
+    assert "Tick lenses" not in html and "casts one equal vote" not in html
+    for step in ("1. Find a company", "2. Choose any extras", "3. Run, free"):
         assert f'<span class="ar-step">{step}</span>' in html
     assert "Want to rank a whole list? Switch to Cohort / list." in html
     assert "class=\"ar-big" not in html and "class=\"ar-table\"" not in html   # no result chrome before a run
@@ -407,11 +413,12 @@ def test_the_light_logo_has_a_dark_wordmark():
 # --------------------------------------------------------------------------- #
 def test_u3_the_paid_extras_sit_below_the_lens_grid_under_their_own_heading():
     at = _app_test()
+    next(r for r in at.radio if r.label == "Input").set_value("Cohort / list").run()
     html = _html_blob(at)
     assert "Optional extras (paid AI calls)" in html
     labels = [c.label for c in at.checkbox]
     extras = [i for i, l in enumerate(labels) if l in ("Plain-English summary", "Council opinion")]
-    lenses = [i for i, c in enumerate(at.checkbox) if c.key and c.key.startswith("opt_lens_company_")]
+    lenses = [i for i, c in enumerate(at.checkbox) if c.key and c.key.startswith("opt_lens_list_")]
     assert extras and lenses and min(extras) > max(lenses)
     assert all(c.help for c in at.checkbox if c.label in ("Plain-English summary", "Council opinion"))
 
@@ -576,12 +583,23 @@ def test_b24_e9_the_page_marks_flagged_sentences_and_keeps_the_full_list_in_the_
     assert "AI text check: no issues found" in [str(c.value) for c in _render(report).caption]
 
 
-def test_b24_e9_a_model_summary_gets_the_ai_text_check_line(tmp_path):
+def test_b24_e9_a_model_summary_gets_no_ai_text_check_line_when_nothing_is_wrong(tmp_path):
+    """PILOT-STRIP-1 item 11 (this test used to pin the opposite): a summary that reached the page passed its
+    checks, so "AI text check: no issues found" said nothing and is gone. A problem still shows a line: the
+    summary is withheld and "Summary withheld: <why>" stands where it would have been."""
     from tests.test_company_report import RAW, _Writer, _fields, _run
     probe = _run([RAW], tmp_path=tmp_path, save=False)
     rep = _run([RAW], tmp_path=tmp_path, with_summary=True, reader_runner=_Writer(_fields(probe)), save=False)
     assert rep.summary.available
-    assert "AI text check: no issues found" in [str(c.value) for c in _render(rep).caption]
+    caps = [str(c.value) for c in _render(rep).caption]
+    assert not any("AI text check" in c for c in caps)
+    bad = dict(_fields(probe))
+    bad["doubt"] = bad["doubt"] + " Its profit grew 777 percent."
+    held = _run([RAW], tmp_path=tmp_path, with_summary=True, reader_runner=_Writer(bad), save=False)
+    assert not held.summary.available
+    at = _render(held)
+    shown = [str(e.value) for kind in ("caption", "markdown", "info", "warning") for e in getattr(at, kind)]
+    assert any("withheld" in c and "number not in the facts: 777" in c for c in shown), held.summary.note
 
 
 def test_b24_e9_the_marker_has_amber_css_and_reads_on_hover_or_tap():

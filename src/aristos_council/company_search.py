@@ -113,6 +113,14 @@ _COUNTRY_NAMES: dict[str, str] = {
 }
 
 
+_LEADING_ARTICLES = ("the ",)
+
+
+def _loose(folded: str) -> str:
+    """Letters and digits only: "coca-cola", "coca cola" and "cocacola" compare equal."""
+    return re.sub(r"[^0-9a-z]+", "", folded)
+
+
 def _ticker_base(ticker: str) -> str:
     """"2330.TW" -> "2330" — the exchange suffix stripped, so a ticker search ranks a company
     by its OWN identity rather than by which exchange happened to list it."""
@@ -124,6 +132,18 @@ def _name_start_rank(name_folded: str, needle: str) -> Optional[int]:
     ("Boyd" for "BYD" does not: only a real prefix counts), else None. Word starts split on
     anything that is not a letter or digit, so "AT&T" and "Rolls-Royce" have words."""
     if name_folded.startswith(needle):
+        return 0
+    # PILOT-STRIP-1 item 8 (live: "Coca-Cola" listed the bottler Coca-Cola Europacific Partners first and The
+    # Coca-Cola Company, eight times its size, below it): a leading article is not part of what a reader types,
+    # so "The Coca-Cola Company" starts with "coca-cola" exactly as the bottler does, and the tie then goes to
+    # market cap, largest first. A query that itself starts with the article ("the trade desk") matched above.
+    for article in _LEADING_ARTICLES:
+        if name_folded.startswith(article) and name_folded[len(article):].startswith(needle):
+            return 0
+    # ...and punctuation is not either: "coca cola" finds "Coca-Cola" (it used to find only Coca Cola HBC).
+    loose_needle, loose_name = _loose(needle), _loose(name_folded)
+    if loose_needle and (loose_name.startswith(loose_needle)
+                         or any(loose_name.startswith(_loose(a) + loose_needle) for a in _LEADING_ARTICLES)):
         return 0
     words = re.split(r"[^0-9a-z]+", name_folded)
     return 1 if any(w.startswith(needle) for w in words[1:] if w) else None
@@ -221,6 +241,7 @@ def search_companies(query: str, *, limit: int = MAX_MATCHES, root=None,
     cohort membership; neither is re-read. ``rows`` (tests only) injects a fixed set of
     ``IndexRow`` directly, bypassing the local index file and its cache."""
     from .market_index import is_home_listing
+    from .peer_table import spelling_fixed
 
     needle = _fold(query.strip())
     if not needle:
@@ -228,14 +249,16 @@ def search_companies(query: str, *, limit: int = MAX_MATCHES, root=None,
     pool = _clean_pool(root, rows=rows)
     membership, any_built = _cohort_membership(cohorts_root)
     alias_needle = _ALIASES.get(needle)
+    loose_needle = _loose(needle)
     hits = [row for row in pool.rows
            if needle in _fold(row.name) or needle in _fold(row.ticker)
            or needle in _fold(row.yahoo_ticker)
+           or (len(loose_needle) >= 4 and loose_needle in _loose(_fold(row.name)))
            or (alias_needle and alias_needle in _fold(row.name))]
     hits.sort(key=lambda r: (_ticker_rank(r, needle, alias_needle),
                              -(r.market_cap_usd or 0.0), _fold(r.name)))
     matches = tuple(
-        CompanyMatch(ticker=row.ticker, name=row.name, exchange=row.exchange,
+        CompanyMatch(ticker=row.ticker, name=spelling_fixed(row.name), exchange=row.exchange,
                     market=row.market, country=row.country,
                     market_cap_usd=row.market_cap_usd, is_home=is_home_listing(row),
                     cohorts=tuple(membership.get(row.ticker, ())))

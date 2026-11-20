@@ -405,7 +405,7 @@ def test_story_the_text_keeps_every_section_below_the_fold(tmp_path):
     text = format_company_report(_real(tmp_path))
     below = text.split("SHOW THE WORKINGS")[1]
     for heading in ("VALUATION BAND", "PRICE AND CASH", "ABSOLUTE READINGS", "WHAT ANALYSTS SAY",
-                    "PEERS", "LENS NOTES", "SOURCES"):
+                    "PEERS", "LENS DESCRIPTIONS", "SOURCES"):
         assert heading in below, heading
 
 

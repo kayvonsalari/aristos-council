@@ -40,6 +40,7 @@ from aristos_council.demo_surface import (
     lens_caption, strategy_label, strategy_role, suggested_first,
     universe_label, universe_role, visible_universes)
 from aristos_council.costs import actual_vs_estimate, cost_phrase
+from aristos_council.pilot import pilot_mode
 
 # READER-1 — what one summary costs, for the checkbox label and the Run-button line. One
 # call on the cheapest tier over a facts pack of a few thousand tokens; stated as "about"
@@ -465,6 +466,13 @@ _COUNCIL_HELP = ("The four specialists, a critic and a narrator — the same cou
                 "off unless you tick it. Adds a few minutes to the run.")
 
 
+_COUNCIL_HELP_COMPANY = ("The four specialists, a critic and a narrator — the same council the rest of Aristos uses — "
+                         "read this company's gate, price test and readings, and where it sits among rivals, and "
+                         "write about them. They decide nothing: the answer at the top stays the verdict of record. "
+                         "About six model calls, mostly on the cheap tier; off unless you tick it. Adds a few "
+                         "minutes to the run.")
+
+
 def equal_vote_caption(choices) -> str:
     """The sentence under "Lenses". ETF-MODE-1: the Forensic half is only true where Forensic is
     offered (it is a stock lens; the ETF lenses have no check), so it is said only then."""
@@ -481,11 +489,14 @@ def company_page_offered(mode: str) -> bool:
 
 
 OPTIONAL_EXTRAS_HEADING = "Optional extras (paid AI calls)"
+# PILOT-STRIP-1: said once where the tick boxes used to be, so the one model call is never a surprise
+PILOT_SUMMARY_NOTE = ("A plain-English summary is written with every run: one small AI call, well under one cent. "
+                      "The answer itself comes from fixed rules and uses no AI.")
 OPTIONAL_EXTRAS_TIME = "Adds a few minutes to the run."          # B24-E6: a council + summary run took 6.6 min
 
 
 def render_run_options(choices, *, input_kind: str, show_council: bool,
-                       show_judges: bool = False) -> RunOptions:
+                       show_judges: bool = False, show_lenses: bool = True) -> RunOptions:
     """ONE options block, called once per input kind. ``input_kind`` is "list" (the Run
     tab) or "company" (Company Check) — it only qualifies widget keys (see
     ``opt_lens_checkbox_key``) and picks the right summary help text; the WIDGETS
@@ -499,16 +510,27 @@ def render_run_options(choices, *, input_kind: str, show_council: bool,
     # SHARED-OPTIONS-1: the ticks follow the user across Company <-> list and are kept per
     # asset mode; the default lens is seeded once per asset mode, not once per input kind.
     switched = st.session_state.get("_opts_last_kind") != input_kind
-    st.markdown("**Lenses**")
-    st.caption(equal_vote_caption(choices))
-    _preselect_default_lens(choices, seeded_key=f"opt_lenses_seeded_{asset}", key_for=key_for)
-    for c in choices:
-        _sync_from_store(key_for(c.id), shared_lens_store_key(asset, c.id), switched=switched)
-    extras = render_lens_checkboxes(choices, key_for)
     store = st.session_state.setdefault(_SHARED_OPTS, {})
-    for c in choices:
-        store[shared_lens_store_key(asset, c.id)] = bool(st.session_state.get(key_for(c.id)))
-    strategies = resolve_all(choices, selected_labels(extras=extras))
+    if show_lenses:
+        st.markdown("**Lenses**")
+        st.caption(equal_vote_caption(choices))
+        _preselect_default_lens(choices, seeded_key=f"opt_lenses_seeded_{asset}", key_for=key_for)
+        for c in choices:
+            _sync_from_store(key_for(c.id), shared_lens_store_key(asset, c.id), switched=switched)
+        extras = render_lens_checkboxes(choices, key_for)
+        for c in choices:
+            store[shared_lens_store_key(asset, c.id)] = bool(st.session_state.get(key_for(c.id)))
+        strategies = resolve_all(choices, selected_labels(extras=extras))
+    else:
+        # ABSOLUTE-UI-1: the company page has no lens tick boxes. Every relative lens runs, and appears only as
+        # context. The shared tick store is left alone, so a list run keeps the ticks the reader chose.
+        strategies = [c.strategy for c in choices]
+    if pilot_mode() and input_kind == "company":
+        # PILOT-STRIP-1 (items 5 to 7): no tick boxes. The plain-English summary is always written; the council
+        # opinion and the judge panel are hidden (their code and their tick boxes return with pilot mode off).
+        st.caption(PILOT_SUMMARY_NOTE)
+        st.session_state["_opts_last_kind"] = input_kind
+        return RunOptions(strategies=strategies, with_summary=True, with_council=False, with_judges=False)
     # B22-U3: the two paid AI extras are not lenses - their own small heading sets them apart from the grid
     st.markdown(f'<div class="ar-sub" style="margin-top:14px">{OPTIONAL_EXTRAS_HEADING}<br>'
                 f"{OPTIONAL_EXTRAS_TIME}</div>", unsafe_allow_html=True)
@@ -523,7 +545,7 @@ def render_run_options(choices, *, input_kind: str, show_council: bool,
         _sync_from_store(f"opt_council_{input_kind}", "council", switched=switched)
         with_council = st.checkbox(
             "Council opinion", value=False, key=f"opt_council_{input_kind}",
-            help=_COUNCIL_HELP)
+            help=_COUNCIL_HELP_COMPANY if input_kind == "company" else _COUNCIL_HELP)
         store["council"] = with_council
     if show_council and show_judges:
         # JUDGE-PANEL-1 - directly under the council tick box, off by default, with the expected
@@ -2510,7 +2532,10 @@ def render_input() -> InputChoice:
             _carry_lenses_to_store(lens_ids)
 
     etf_mode = asset_mode() == ETFS
-    if etf_mode:
+    if pilot_mode():
+        # PILOT-STRIP-1 (item 4): company only. The Company / Cohort-list switch is not drawn.
+        kind = INPUT_COMPANY
+    elif etf_mode:
         kind = INPUT_LIST
         st.caption("ETF mode: a list of fund tickers only — there is no per-fund peer "
                   "group to check one against.")
@@ -2527,7 +2552,7 @@ def render_input() -> InputChoice:
             st.session_state["run_input_kind"] = _store["input_kind"]
         choice = st.radio("Input", ["Company", "Cohort / list"], index=0,
                           key="run_input_kind", horizontal=True,
-                          help="Company: one name against its own peer group. "
+                          help="Company: one name, checked on its accounts and its price. "
                                "Cohort / list: several names, ranked and compared "
                                "against each other.")
         kind = INPUT_COMPANY if choice == "Company" else INPUT_LIST
@@ -2773,6 +2798,9 @@ def render_input() -> InputChoice:
 # UI-POLISH-1: the ONE line under the page title (replaces the two "Verdict: deterministic ranker..." /
 # "Screen -> rank -> gates..." lines, which described the machinery to a reader who wants the answer).
 TOP_LINE = "Check one company against its rivals, or rank a list. Every lens is one equal vote."
+# ABSOLUTE-UI-1: the company page is not a vote, so its top line says what decides it.
+COMPANY_TOP_LINE = ("Check one company: the gate and the price test decide, and where it sits among rivals is "
+                    "shown as context.")
 
 
 def _index_age_caption() -> None:
@@ -2793,8 +2821,8 @@ def render_run_tab() -> None:
     ``run_multi_strategy_pipeline``/``run_rank_pipeline`` for a list) and their own
     result renderers are UNCHANGED — this only decides which one runs and shows its
     EXISTING page, in its EXISTING order (Part 2 reorders the company page)."""
-    st.subheader("Analyse — one company, or a cohort")
-    st.caption(TOP_LINE)
+    st.subheader(PILOT_HEADING if pilot_mode() else "Analyse — one company, or a cohort")
+    st.caption(COMPANY_TOP_LINE if company_path_active() else TOP_LINE)
     _index_age_caption()
 
     choice = render_input()
@@ -2841,12 +2869,19 @@ def _drop_results_from_another_asset(results_key: str, input_key: str) -> None:
 
 
 START_PANEL = (
-    "Check one company against its rivals",
-    "Pick a company and the lenses you trust. Each lens ranks it against similar companies and casts "
-    "one equal vote; the page shows the votes, the reasons and what the numbers say.",
-    ("1. Find a company", "2. Tick lenses", "3. Run, free"),
+    "What the price requires, and what the record shows",
+    "Pick a company. The page checks its accounts and its debt, works out what growth the price needs and "
+    "what the shares return if that growth holds, and shows where it sits among rivals as context.",
+    ("1. Find a company", "2. Choose any extras", "3. Run, free"),
     "Want to rank a whole list? Switch to Cohort / list.",
 )
+
+
+# PILOT-STRIP-1: the same panel with no "extras" step and no pointer to the hidden list input
+PILOT_HEADING = "Analyse a company"
+PILOT_NO_KEY_NOTE = ("No ANTHROPIC_API_KEY was found in the environment or `.env`, so the summary will be written "
+                     "by fixed templates instead of the AI. Every figure and the answer are the same either way.")
+PILOT_START_PANEL = (START_PANEL[0], START_PANEL[1], ("1. Find a company", "2. Run"), "")
 
 
 def _render_company_run(choice: InputChoice, choices) -> None:
@@ -2859,7 +2894,7 @@ def _render_company_run(choice: InputChoice, choices) -> None:
     from aristos_council.company_report import run_company_report
 
     run_options = render_run_options(choices, input_kind="company", show_council=True,
-                                     show_judges=True)
+                                     show_judges=True, show_lenses=False)
     strategies = run_options.strategies
     with_summary = run_options.with_summary
     with_council = run_options.with_council
@@ -2867,13 +2902,12 @@ def _render_company_run(choice: InputChoice, choices) -> None:
 
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
     if (with_summary or with_council) and not has_key:
-        st.info("This needs ANTHROPIC_API_KEY in the environment or `.env`; without it the page "
+        st.info(PILOT_NO_KEY_NOTE if pilot_mode() else
+                "This needs ANTHROPIC_API_KEY in the environment or `.env`; without it the page "
                 "runs without it and says so.")
 
-    # CLICKTHROUGH-LENSES-1: like a list run, a company run with no lens ticked is blocked with
-    # the same sentence rather than producing an empty report ("No vote: No lens is ticked").
-    if not strategies:
-        st.info("Pick at least one strategy.")
+    if not strategies:                       # only when the mode offers no lens at all
+        st.info("No relative lens is available for this asset type.")
     run = st.button(_md(run_button_label(n_strategies=len(strategies),
                                          with_reader=with_summary,
                                          with_council=with_council,
@@ -2905,7 +2939,8 @@ def _render_company_run(choice: InputChoice, choices) -> None:
     report = st.session_state.get("cc_report")
     if report is None and not run:
         # UI-POLISH-1 item 6: the start state - a quiet panel where the result will appear
-        st.markdown(ui_style.empty_panel(*START_PANEL), unsafe_allow_html=True)
+        st.markdown(ui_style.empty_panel(*(PILOT_START_PANEL if pilot_mode() else START_PANEL)),
+                    unsafe_allow_html=True)
     if report is not None:
         st.divider()
         _note = _stale_results_note(
@@ -3331,6 +3366,8 @@ def _render_peers(result, columns=None, company_ticker: str = "", *,
     import pandas as pd
 
     from aristos_council.peer_table import PEER_METHOD_TITLE, rank_display
+    from aristos_council.peer_table import cap_headers as _cap_headers
+    from aristos_council.peer_table import cap_snapshot_note as _cap_snapshot_note
     # Numbers stay numbers (sortable by size), largest USD cap first. The local column is in the
     # MAJOR unit: a London cap is pounds although its quote code says GBX (INDEX-GBX-SCALE-1).
     columns = list(columns or ())
@@ -3355,9 +3392,11 @@ def _render_peers(result, columns=None, company_ticker: str = "", *,
     st.dataframe(
         data, hide_index=True, width="stretch",
         column_config={
-            USD_COLUMN: st.column_config.NumberColumn(USD_COLUMN, format=USD_FORMAT),
-            LOCAL_COLUMN: st.column_config.NumberColumn(LOCAL_COLUMN, format=LOCAL_FORMAT),
+            USD_COLUMN: st.column_config.NumberColumn(_cap_headers(group)[0], format=USD_FORMAT),
+            LOCAL_COLUMN: st.column_config.NumberColumn(_cap_headers(group)[1], format=LOCAL_FORMAT),
         })
+    if _cap_snapshot_note(group):           # PILOT-STRIP-1 item 20: the sizes are the snapshot's, not today's
+        st.caption(_cap_snapshot_note(group))
     if has_one_system_peers(peer_rows(group)):
         st.caption(ONE_SYSTEM_NOTE)
     # PEERS-METHOD-1: how the group was built is a diagnostic, collapsed by default.
@@ -3379,8 +3418,8 @@ def _render_company_report(report) -> None:
     the same order."""
     import pandas as pd
 
-    from aristos_council.company_report import (HOUSE_LINE, NO_LENS_REASON,
-                                                OUTSIDE_TESTED_RANGE_LINE,
+    from aristos_council.company_report import (HOUSE_LINE, HOW_TO_READ, KICKER, NO_LENS_REASON,
+                                                OUTSIDE_TESTED_RANGE_LINE, context_row,
                                                 format_company_report)
     from aristos_council.export.report_html import company_report_html
 
@@ -3390,8 +3429,12 @@ def _render_company_report(report) -> None:
         st.markdown(f"### Company Report — {report.display}")
     else:
         # UI-POLISH-1 item 4: a header card (name, where it trades, last price) and a row of chips
+        st.caption(KICKER.upper())
         st.markdown(company_cards.header_card(report), unsafe_allow_html=True)
+        st.caption(context_row(report))
         st.markdown(company_cards.summary_chips(report), unsafe_allow_html=True)
+    for _how in HOW_TO_READ:                # PILOT-STRIP-1 item 10: what this is, how to read it
+        st.markdown(_how)
     st.caption(HOUSE_LINE)
 
     # TAB-MERGE-1 part 2 commit 4 — click-through from a list result. Shown ONLY when
@@ -3409,7 +3452,7 @@ def _render_company_report(report) -> None:
             st.caption(line)
 
     if report.unrateable:
-        st.warning(f"⚪ **UNRATEABLE** — {check.data_integrity.note}. No data, so no votes and no "
+        st.warning(f"⚪ **UNRATEABLE** — {check.data_integrity.note}. No data, so no ranking and no "
                    "readings.")
         return
 
@@ -3562,7 +3605,7 @@ def _render_company_report(report) -> None:
                 st.markdown(f"- \"{_claim_text}\" - {_why}")
         _notes = [r for r in table_rows(report) if r.full_reason or r.badge_detail]
         if _notes or page.track_intro:
-            st.markdown("**Lens notes**")
+            st.markdown("**Lens descriptions**")
             from aristos_council.company_story import badge_legend
             for _legend in (badge_legend() if page.track_intro else []):   # BADGE-EXPLAIN-1: legend first
                 st.caption(_legend)
@@ -3663,9 +3706,24 @@ def _render_sources(result) -> None:
 # --------------------------------------------------------------------------- #
 # ASSET-MODE-1 — the switch, read wherever a picker is built
 # --------------------------------------------------------------------------- #
+def company_path_active() -> bool:
+    """ABSOLUTE-UI-1: True when the Analyse tab is on the company page (the "Company" input, stocks mode). The
+    sidebar reads it to switch the lens-description toggle off, because the company page has no lens tick boxes."""
+    if pilot_mode():                        # PILOT-STRIP-1: company only, stocks only
+        return True
+    return (st.session_state.get("run_input_kind", "Company") == "Company"
+            and asset_mode() != ETFS)
+
+
+LENS_DESC_COMPANY_NOTE = ("Applies to cohort and list runs only. The company page has no lens tick boxes: every "
+                          "relative lens runs and is shown as context.")
+
+
 def asset_mode() -> str:
     """The current Stocks / ETFs mode. Stocks whenever nothing has been chosen — on a
     fresh start, after a refresh, and in every test that never touches the switch."""
+    if pilot_mode():                        # PILOT-STRIP-1 (item 1): the switch is hidden; stocks is always used
+        return DEFAULT_ASSET_MODE
     return st.session_state.get("asset_mode") or DEFAULT_ASSET_MODE
 
 
@@ -3736,6 +3794,11 @@ def main() -> None:
     except Exception:               # noqa: BLE001 - a missing image must never stop the app
         pass
 
+    if pilot_mode():
+        # PILOT-STRIP-1 (items 1 to 3): no asset-type switch, no Display section, no Scoreboard tab. One page.
+        render_run_tab()
+        return
+
     with st.sidebar:
         # ASSET-MODE-1 — the one control that decides what every picker offers. In the
         # SIDEBAR, not in a tab, because it governs the Run tab, Company Check and every
@@ -3756,10 +3819,13 @@ def main() -> None:
         # DISPLAY (UI-POLISH-1): the view switch. No `value=`: the default is off, and tests/session can
         # set a key without a default-conflict warning. Session-only.
         st.markdown("**Display**")
+        _company_path = company_path_active()
         st.toggle(
-            "Show lens descriptions", key=SHOW_LENS_DESC_KEY,
+            "Show lens descriptions", key=SHOW_LENS_DESC_KEY, disabled=_company_path,
             help="Show each lens's full description under its tick box. Off: names and tick boxes "
                  "only, with the one-line summary on the small ? beside each lens.")
+        if _company_path:
+            st.caption(LENS_DESC_COMPANY_NOTE)
 
     tab_analyse, tab_scoreboard = st.tabs(["Analyse", "Scoreboard"])
     with tab_analyse:

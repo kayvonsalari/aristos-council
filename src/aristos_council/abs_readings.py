@@ -378,7 +378,7 @@ def debt_and_cash(f) -> DebtAndCash:
         years = net / ocf
         ratio = Reading(value=years, unit="years",
                         label=f"would take {years:.1f} years of operating cash flow to "
-                              f"repay its debt")
+                              f"repay its debt after cash")
 
     # -- interest cover ----------------------------------------------------- #
     operating = _num(getattr(f, "operating_income", None))
@@ -438,8 +438,8 @@ def debt_and_cash(f) -> DebtAndCash:
     else:
         years = net / fcf
         repay = Reading(value=years, unit="years",
-                        label=f"would take {years:.1f} years of free cash flow to repay "
-                              f"its debt")
+                        label=f"would take {years:.1f} years of the latest year's free cash flow "
+                              f"to repay its debt after cash")
 
     # the burn test reads the latest FISCAL YEAR's operating cash flow (the annual series), falling back to
     # the scalar the provider gives when no series is on file
@@ -1308,8 +1308,19 @@ def price_and_cash(technical, f, trend=None, news=None, *, max_news: int = 5,
     else:
         trailing_eps = _abstain("trailing EPS not reported")
     ttm = _ttm_basis(f)
-    if relation == "same":
-        trailing_pe = (Reading(value=f.pe_ratio, unit="x", label=f"trailing P/E {f.pe_ratio:.1f}{ttm}")
+    if relation == "same" and f is not None and f.eps is not None and f.eps > 0 and last_close_v is not None:
+        # PILOT-STRIP-1 item 19 (live, KO 2026-11-20): the page printed "trailing P/E 28.7" beside a last close of
+        # $96.09 and a trailing EPS of $3.39, which give 28.3. The 28.7 was the provider's own ratio, taken on
+        # the provider's price at the moment of the fetch ($97.24 intraday), not on the close the page shows;
+        # that it equalled the forward P/E was a coincidence. The page's P/E is now the page's own two figures,
+        # with the working shown, exactly as the forward lines below do. The provider's ratio is still what the
+        # lenses read (changing that would change ranks) and is the fallback when there is no close.
+        pe = last_close_v / f.eps
+        trailing_pe = Reading(value=pe, unit="x",
+                              label=f"trailing P/E {pe:.1f}{ttm} ({money(last_close_v)} / {acct_money(f.eps)} EPS)")
+    elif relation == "same":
+        trailing_pe = (Reading(value=f.pe_ratio, unit="x",
+                               label=f"trailing P/E {f.pe_ratio:.1f}{ttm} (the data provider's own figure)")
                        if f is not None and f.pe_ratio is not None
                        else _abstain("trailing P/E not reported"))
     elif f is None or f.eps is None:

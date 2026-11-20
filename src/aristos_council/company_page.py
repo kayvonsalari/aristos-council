@@ -150,6 +150,46 @@ def _cap(text: str) -> str:
     return text[:1].upper() + text[1:] if text else text
 
 
+OFFICIAL_LABEL = "Official label"
+
+
+def plain_answer(report) -> str:
+    """PILOT-STRIP-1 item 9: the answer in plain words, said FIRST. One sentence, written by code from the same
+    verdict the official label states, for a reader who has never seen the page. "Sound company" is said only
+    when no exclusion failed AND no warning fired; with warnings it says how many. The hurdle is called "the
+    X% a year this report asks for" (never a "target": that word is kept off the page so a required return is
+    not read as a price target or a forecast)."""
+    from .gate.engine import WARN
+    gate, av = _gate(report), _absolute(report)
+    state = verdict_state(report)
+    if state == "excluded":
+        return "Ruled out: it fails a safety check on its accounts or its debt, so the price is not judged."
+    if state == "not_covered":
+        return "No answer: banks and insurers are outside what this report can judge."
+    if state == "not_enough_data" or av is None or gate is None:
+        return "No answer: the data needed to judge this company is missing."
+    fired = [w for w in (getattr(gate, "warnings", ()) or ()) if w.result == WARN]
+    if fired:
+        sound = f"Passes the safety checks, with {len(fired)} warning{'s' if len(fired) != 1 else ''}"
+    else:
+        sound = "Sound company"
+    asked = f"the {_pct(av.hurdle.hurdle, 2)} a year this report asks for"
+    v = av.verdict
+    if state == "qualifies_clears_hurdle":
+        return f"{sound}, and cheap enough at today's price to earn {asked}, if its growth holds."
+    if v.of and v.clearing:
+        return f"{sound}, but at today's price it earns {asked} in only {v.clearing} of {v.of} growth cases."
+    return f"{sound}, but too expensive at today's price to earn {asked}."
+
+
+def answer_shown(report) -> tuple[str, str]:
+    """What every rendering prints under "The answer": the plain sentence, then the official label with its two
+    facts. ``answer_lines`` (the official pair) is unchanged and is what the saved record and the summary's facts
+    pack keep."""
+    first, second = answer_lines(report)
+    return plain_answer(report), f"{OFFICIAL_LABEL}: {first} {second}"
+
+
 # --------------------------------------------------------------------------- #
 # Section 2 - the story (five paragraphs)
 # --------------------------------------------------------------------------- #
@@ -166,9 +206,25 @@ def _asked(report) -> str:
             "if that growth holds.")
 
 
+# PILOT-STRIP-1 item 12: what each exclusion rule checks, in plain words, said with the rule's name the first time
+# the summary mentions it. Keyed by the gate's own rule keys; the versioned gate file is not touched.
+RULE_PLAIN = {
+    "earnings_quality": "are the reported profits backed by cash",
+    "solvency": "does the cash coming in cover the debt",
+    "accounting_health": "nine basic health checks on the accounts",
+    "cash_runway": "if it is burning cash, how long the cash lasts",
+}
+
+
+def rule_plain(key: str) -> str:
+    return RULE_PLAIN.get(key, "")
+
+
 def _rule_sentence(r, first: bool = False) -> str:
     from .gate.engine import FAIL, NOT_APPLICABLE, NOT_EVALUATED, PASS
     label = r.label if first else r.label.lower()
+    if rule_plain(r.key):
+        label = f"{label} ({rule_plain(r.key)})"
     if r.result == PASS:
         return f"{label} passes ({r.reading})"
     if r.result == FAIL:
@@ -181,6 +237,9 @@ def _rule_sentence(r, first: bool = False) -> str:
     return f"{label}: {r.result}"
 
 
+_NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
+
+
 def _gate_found(report) -> str:
     gate = _gate(report)
     if gate is None:
@@ -191,6 +250,8 @@ def _gate_found(report) -> str:
         return gate.reason
     from .gate.engine import NOT_EVALUATED, WARN
     parts = "; ".join(_rule_sentence(r, i == 0) for i, r in enumerate(gate.rules))
+    n = len(gate.rules)
+    parts = f"The gate has {_NUMBER_WORDS.get(n, n)} rules that can rule a company out. {parts}"
     fired = [w for w in gate.warnings if w.result == WARN]
     unread = [w for w in gate.warnings if w.result == NOT_EVALUATED]
     if fired:
@@ -211,21 +272,25 @@ def _requires(report) -> str:
     bits = []
     b, p = av.base, av.price
     if b.usable and p.available:
-        bits.append(f"The base is {_money(b.base, b.currency)} of free cash flow per share ({b.chosen}) against a "
-                    f"price of {_money(p.price, p.currency)}, a yield of {_pct(av.yield_on_base)}.")
+        # PILOT-STRIP-1 item 13, in this order: the spare cash a share produces a year, the price paid, the
+        # yield that gives, the growth needed to reach the hurdle, the growth actually achieved.
+        bits.append(f"Each share produces {_money(b.base, b.currency)} of spare cash a year (free cash flow: the "
+                    f"cash left after running costs and investment; {b.chosen}). The price paid for a share is "
+                    f"{_money(p.price, p.currency)}. That is a yield of {_pct(av.yield_on_base)} a year.")
     elif b.not_valued:
         bits.append("The company has no positive free cash flow per share, so the price test has no base.")
     else:
         bits.append(f"The price test has no base: {b.note or p.note or 'free cash flow per share is not available'}.")
     own = {c.key: c for c in av.cases}
     if av.implied_growth is not None:
-        recs = [f"{_pct(own[k].growth)} ({w})" for k, w in (("own_5_year", "5-year"), ("own_10_year", "10-year"))
+        recs = [f"{_pct(own[k].growth)} ({w})" for k, w in (("own_5_year", "over five years"),
+                                                            ("own_10_year", "over ten years"))
                 if k in own and own[k].growth is not None]
-        against = f" Its own records read {' and '.join(recs)} a year." if recs else ""
+        against = f" The growth it actually achieved was {' and '.join(recs)} a year." if recs else ""
         mark = (" That is above the 18% a year few companies have kept up for ten years."
                 if av.implied_growth > 0.18 else "")
-        bits.append(f"At the hurdle the price needs {_pct(av.implied_growth)} a year of growth for ten years, flat "
-                    f"after that.{against}{mark}")
+        bits.append(f"To reach the hurdle, that spare cash must grow {_pct(av.implied_growth)} a year for ten "
+                    f"years, flat after that.{mark}{against}")
     elif av.implied_note:
         bits.append(f"The growth the price needs could not be worked out: {av.implied_note}.")
     got = [f"{_CASE_SHORT[c.key]} {c.ret_bound or _pct(c.ret)}" for c in av.cases if c.available]
@@ -251,8 +316,8 @@ def _doubt(report) -> str:
         gone = [f"{_CASE_SHORT[c.key]} ({c.reason})" for c in av.cases if not c.available and c.reason]
         if gone:
             bits.append("Not available: " + "; ".join(gone) + ".")
-        if any(c.key == "consensus" and c.available for c in av.cases):
-            bits.append("The consensus case rests on analyst figures that no past data can test.")
+        # PILOT-STRIP-1 item 14: the sentence "the consensus case rests on analyst figures that no past data can
+        # test" is no longer said here; the tables still label that case "(not testable)".
         hi = [_CASE_SHORT[c.key] for c in av.cases if c.high_growth]
         if hi:
             bits.append(f"Marked above 18% a year: {', '.join(hi)}.")
@@ -297,17 +362,28 @@ def story_paragraphs(report) -> list[tuple[str, str]]:
 # --------------------------------------------------------------------------- #
 # Section 6 - context, no vote
 # --------------------------------------------------------------------------- #
+def context_row(report) -> str:
+    """ABSOLUTE-UI-1: the header's context line. The relative lenses all run and appear only as context, so the
+    header counts them: "context: ranked among rivals on 5 measures"."""
+    n = sum(1 for v in report.votes if v.ranked)
+    if n:
+        return f"context: ranked among rivals on {n} {'measure' if n == 1 else 'measures'}"
+    return "context: not ranked among rivals"
+
+
 def rivals_lines(report) -> list[str]:
-    """"Where it sits among rivals": one line per relative lens with its rank and no vote word."""
+    """"Where it sits among rivals": one line per relative lens, in the form "where it sits among rivals on <what it
+    measures>", with its rank and no vote word."""
     out = []
     for v in report.votes:
+        on = f" on {v.measures}" if getattr(v, "measures", "") else ""
         if v.ranked:
             where = (f"{ordinal(v.position)} of {v.cohort_size}" if v.position and v.cohort_size
                      else f"ranked among {v.cohort_size}" if v.cohort_size else "ranked")
-            out.append(f"{v.label}: {where}.")
+            out.append(f"{v.label}: where it sits among rivals{on}: {where}.")
         else:
             why = _first_reason(v.reason or v.result())
-            out.append(f"{v.label}: not ranked ({why}).")
+            out.append(f"{v.label}: where it sits among rivals{on}: not ranked ({why}).")
     return out
 
 
@@ -354,7 +430,38 @@ def context_blocks(report) -> list[tuple]:
     rivals = rivals_lines(report)
     if rivals:
         out += [("head", "Where it sits among rivals")] + [("p", ln) for ln in rivals]
+        measures = dividend_measures_note(report)
+        if measures:
+            out.append(("note", measures))
     return out
+
+
+_FCF_SHARE = re.compile(r"dividends took (\d+(?:\.\d+)?%) of free cash flow")
+_MEASURED_ON = re.compile(r"Measured on ([^.]+)\.")
+
+
+def dividend_measures_note(report) -> str:
+    """PILOT-STRIP-1 item 18: one page showed the dividend two ways (the gate: "cover 1.3 times, passes"; the
+    lenses: "dividends took 120% of free cash flow") and never said they are different measures. When both are on
+    the page this says which cash measure each one uses. "" when either is absent."""
+    gate = _gate(report)
+    cover = next((w for w in (getattr(gate, "warnings", ()) or ())
+                  if w.key == "dividend_cover" and w.value is not None), None)
+    if cover is None:
+        return ""
+    for v in report.votes:
+        reason = getattr(v, "reason", "") or ""
+        m = _FCF_SHARE.search(reason)
+        if not m:
+            continue
+        basis = _MEASURED_ON.search(reason)
+        on = f" ({basis.group(1)})" if basis else ""
+        how = (cover.note or "average net income / dividends paid").replace(" / ", " divided by the ")
+        return (f"The dividend is measured two ways on this page, and they use different money. The gate's dividend "
+                f"cover ({cover.value:.1f} times) is on profit: {how}. The lenses' figure (dividends took "
+                f"{m.group(1)} of free cash flow) is on cash: the dividends paid against free cash flow{on}. A "
+                "dividend can be covered by profit and still be larger than the cash left after investment.")
+    return ""
 
 
 def context_text_lines(report) -> list[str]:

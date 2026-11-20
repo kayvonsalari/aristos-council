@@ -398,6 +398,11 @@ equivalence test must be updated deliberately.
   (ANTHROPIC_API_KEY, optionally FINNHUB_API_KEY) in the environment or a local
   `.env` (gitignored). Do NOT launch runs from the Claude Code dev environment.
 
+## Sub-agent model
+
+Sub-agents that only read or search (no edits, no commands that change anything) must run on Sonnet, not the
+main session's model. The main session's model is unchanged.
+
 ## Sprint log (history)
 
 Everything from here to "Sprint 4F" is a dated record of how the code got here, kept for the reasons

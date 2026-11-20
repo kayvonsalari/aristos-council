@@ -21,8 +21,10 @@ def test_default_temps_are_zero_on_every_tier():
     # READER-1 adds a fourth tier and it is held to the same bar — the same run must not
     # produce a differently-worded summary. The exact-equality assertion is KEPT (a new
     # tier must be added here deliberately, not slip in unpinned); only the roster grows.
+    # PILOT-STRIP-1 adds "company_reader" (the company summary, on claude-haiku-5-5). It asks for 0 like the
+    # others; that model rejects a temperature, so none is SENT to it (tests/test_pilot_strip.py pins that).
     assert _DEFAULT_TEMPS == {"specialist": 0.0, "critic": 0.0, "decision": 0.0,
-                              "reader": 0.0}
+                              "reader": 0.0, "company_reader": 0.0}
     for tier in ("specialist", "critic", "decision", "reader"):
         assert _DEFAULT_TEMPS[tier] == 0.0
 

@@ -69,7 +69,8 @@ def test_every_reading_matches_the_el_pa_reference_case():
     assert "annualised volatility 30.3%" in lines
     assert any("FY2022" in ln and "FY2025" in ln and "oldest first" in ln for ln in lines)
     assert "trailing EPS €5.36" in lines
-    assert "trailing P/E 26.6, twelve months to the latest reported quarter" in lines   # PE-BASIS-2
+    # PE-BASIS-2, and PILOT-STRIP-1 item 19: the page's own close over its own EPS, with the working shown
+    assert "trailing P/E 26.6, twelve months to the latest reported quarter (€142.80 / €5.36 EPS)" in lines
 
 
 def test_trailing_pe_names_the_twelve_months_it_rests_on():
@@ -77,7 +78,7 @@ def test_trailing_pe_names_the_twelve_months_it_rests_on():
     months, and the line says which (period from the provider's most recent quarter)."""
     pac = price_and_cash(_technical(), _fundamentals(trailing_period_end="2026-06-30"),
                          trend=_trend(), news=_news())
-    assert "trailing P/E 26.6, twelve months to Jun 2026" in pac.lines()
+    assert "trailing P/E 26.6, twelve months to Jun 2026 (€142.80 / €5.36 EPS)" in pac.lines()
 
 
 def test_forward_pe_is_close_over_consensus_eps():

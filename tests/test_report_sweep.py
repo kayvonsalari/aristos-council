@@ -479,3 +479,44 @@ def test_the_structured_rules_fire_on_a_contradiction():
                               votes=[forensic], peer_group=None)
     assert any(f.rule == sweep.LENS_TWO_WAYS
                for f in sweep.company_agreement_findings(report2, "x"))
+
+
+# --------------------------------------------------------------------------- #
+# ABSOLUTE-UI-1 - the company page's header and context are written as context
+# --------------------------------------------------------------------------- #
+def test_the_company_page_header_and_context_use_the_new_wording(sweep_reports):
+    """In the text, the HTML and the Markdown: the new kicker and the context row are in the header, the old kicker
+    is nowhere, and the header, the answer, the story, the gate, the price test, the return range and the context never
+    say votes, cohort, strategy, "a BUY needs" or print a lens id."""
+    from aristos_council.company_report import HOUSE_LINE, KICKER
+    found, kinds = [], set()
+    for where, kind, text, report in _company_exports(sweep_reports):
+        kinds.add(kind)
+        low = " ".join(text.lower().split())
+        assert KICKER.lower() in low, where
+        assert " ".join(HOUSE_LINE.lower().split()) in low, where
+        assert "ranked among rivals on" in low or "not ranked among rivals" in low, where
+        found += sweep.page_context_wording_findings(text, where)
+    assert kinds == {"text", "html", "company md"}
+    _assert_clean(found, sweep.PAGE_CONTEXT_WORDING)
+
+
+def test_the_company_page_context_names_what_each_lens_measures(sweep_reports):
+    """Every relative lens that ran shows up under "Where it sits among rivals" in the form "where it sits among
+    rivals on <what it measures>" (a lens that lists factors always names them)."""
+    for where, kind, text, report in _company_exports(sweep_reports):
+        assert report.votes, where
+        for v in report.votes:
+            assert v.measures, (where, v.label)
+            assert f"{v.label}: where it sits among rivals on {v.measures}" in " ".join(text.split()), (where, v.label)
+
+
+def test_the_context_wording_rule_fires_on_the_shapes_it_names():
+    ctx = "\nCONTEXT, NO VOTE\nWhere it sits among rivals:\nValue: where it sits among rivals on earnings yield: 4th of 13.\n"
+    fold = "SHOW THE WORKINGS\nRelative view: the lenses cast votes here.\n"
+    assert not sweep.page_context_wording_findings("Company Report - X\nThe answer\nfine." + ctx + fold, "x")
+    for bad in ("the lenses cast votes", "a BUY needs a top-half rank", "the cohort of 13", "the strategy", "ranked by magic_formula_raw_v1"):
+        assert sweep.page_context_wording_findings(f"Company Report - X\nThe answer\n{bad}\n" + ctx + fold, "x"), bad
+        assert sweep.page_context_wording_findings("The answer\nfine." + ctx.replace("Value:", bad + " Value:") + fold, "x"), bad
+    assert sweep.page_context_wording_findings("ONE COMPANY AGAINST ITS PEER GROUP\nThe answer\nfine." + ctx + fold, "x")
+    assert sweep.page_context_wording_findings("The answer\nfine." + ctx + fold + "one company against its peer group", "x")

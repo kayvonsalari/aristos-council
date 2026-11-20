@@ -236,14 +236,17 @@ def test_the_gate_paragraph_gives_every_exclusion_result_and_names_the_warnings(
 
 def test_the_excluded_story_says_which_rule_failed():
     found = dict(cp.story_paragraphs(case("excluded")))["What the gate found."]
-    assert "Earnings quality fails (0.14 of assets, limit 0.1)" in found
+    # PILOT-STRIP-1 item 12: each exclusion rule carries what it checks, in plain words
+    assert ("Earnings quality (are the reported profits backed by cash) fails (0.14 of assets, limit 0.1)"
+            in found)
 
 
 def test_the_price_paragraph_for_microsoft_carries_the_base_the_implied_growth_and_the_count():
     price = dict(cp.story_paragraphs(case("below")))["What the price requires."]
-    assert "$9.64 of free cash flow per share (the latest year)" in price
-    assert "needs 24.0% a year of growth for ten years" in price
-    assert "17.2% (5-year)" in price and "21.2% (10-year)" in price
+    # PILOT-STRIP-1 item 13: the same five facts, in plain words and in the asked order
+    assert "Each share produces $9.64 of spare cash a year (free cash flow:" in price and "the latest year)" in price
+    assert "that spare cash must grow 24.0% a year for ten years" in price
+    assert "17.2% (over five years)" in price and "21.2% (over ten years)" in price
     assert "above the 18% a year few companies have kept up" in price
     assert "own 5-year growth 6.8%" in price and "the downside case 4.6%" in price
     assert price.rstrip().endswith("0 of 4 cases clear.")
@@ -251,7 +254,7 @@ def test_the_price_paragraph_for_microsoft_carries_the_base_the_implied_growth_a
 
 def test_the_doubt_paragraph_names_the_untested_consensus_the_marks_and_the_evidence_line():
     doubt = dict(cp.story_paragraphs(case("below")))["What to doubt."]
-    assert "no past data can test" in doubt
+    assert "no past data can test" not in doubt          # PILOT-STRIP-1 item 14: the sentence was dropped
     assert "Marked above 18% a year: own 10-year growth" in doubt
     assert "a question put to the reader and not an answer" in doubt          # the section f evidence line
     outside = dict(cp.story_paragraphs(fake_report(gate_ok(), absolute(gate_ok()), outside=True)))
@@ -299,19 +302,23 @@ def test_the_return_range_section_holds_the_cases_the_hurdle_the_verdict_and_the
 # --------------------------------------------------------------------------- #
 # section 6: context, no vote
 # --------------------------------------------------------------------------- #
-def _vote(label, status="ranked", verdict="buy", position=3, size=14, reason=""):
+def _vote(label, status="ranked", verdict="buy", position=3, size=14, reason="", measures=""):
     return LensVote(strategy_id="x_v1", label=label, status=status, verdict=verdict, position=position,
-                    cohort_size=size, reason=reason)
+                    cohort_size=size, reason=reason, measures=measures)
 
 
 def test_where_it_sits_among_rivals_is_one_line_per_lens_with_a_rank_and_no_vote_word():
     rep = fake_report(gate_ok(), absolute(gate_ok()), votes=[
-        _vote("Value + Momentum", verdict="buy", position=3, size=14),
+        _vote("Value + Momentum", verdict="buy", position=3, size=14,
+              measures="earnings yield and 12-month price momentum"),
         _vote("Magic Formula RAW", verdict="sell", position=13, size=14),
-        _vote("Defensive Income", status="excluded", reason="no dividend paid")])
+        _vote("Defensive Income", status="excluded", reason="no dividend paid", measures="net payout yield")])
     lines = cp.rivals_lines(rep)
-    assert lines == ["Value + Momentum: 3rd of 14.", "Magic Formula RAW: 13th of 14.",
-                     "Defensive Income: not ranked (no dividend paid)."]
+    # ABSOLUTE-UI-1: each line reads "where it sits among rivals on <what it measures>"
+    assert lines == ["Value + Momentum: where it sits among rivals on earnings yield and 12-month price momentum: "
+                     "3rd of 14.",
+                     "Magic Formula RAW: where it sits among rivals: 13th of 14.",
+                     "Defensive Income: where it sits among rivals on net payout yield: not ranked (no dividend paid)."]
     assert not BANNED_CASE.search(" ".join(lines))
 
 
@@ -333,6 +340,11 @@ def test_the_context_carries_the_quality_trough_year_and_the_momentum_and_no_vot
 # the page order, in the text, the Markdown and the HTML
 # --------------------------------------------------------------------------- #
 def _order(text, headings):
+    from aristos_council.company_report import HOUSE_LINE, HOW_TO_READ
+    # ABSOLUTE-UI-1: the house line in the header says "the gate and the price test decide"; it is not a heading.
+    # PILOT-STRIP-1: nor are the two "what this is / how to read it" lines above it, which name the same steps.
+    for line in (HOUSE_LINE, *HOW_TO_READ):
+        text = text.replace(line, "")
     low = text.lower()
     at = [low.find(h.lower()) for h in headings]
     assert all(i >= 0 for i in at), dict(zip(headings, at))
@@ -369,8 +381,12 @@ def test_the_html_download_follows_the_new_page_order(full_report):
 
 def test_the_answer_comes_before_the_story_and_the_lens_table_is_only_in_the_workings(full_report):
     text = format_company_report(full_report)
-    first_lines = [ln for ln in text.splitlines() if ln.strip()][2:4]
-    assert first_lines == list(cp.answer_lines(full_report))
+    from aristos_council.company_report import HOUSE_LINE
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    start = lines.index(HOUSE_LINE) + 1                      # the title, kicker, context row and house line come first
+    first_lines = lines[start:start + 2]
+    assert first_lines == list(cp.answer_shown(full_report))       # PILOT-STRIP-1 item 9: plain words first
+    assert first_lines[1] == "Official label: " + " ".join(cp.answer_lines(full_report))
     head = text[:text.lower().index("show the workings")]
     assert "Track record" not in head and "Vote or mark" not in head
     assert "Vote or mark" in text[text.lower().index("show the workings"):]

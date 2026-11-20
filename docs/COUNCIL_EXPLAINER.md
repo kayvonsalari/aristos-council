@@ -6,6 +6,14 @@
 > The lens votes and the equal-vote majority described below are now the **relative view** on that page, folded under "Show
 > the workings"; they decide nothing there. The Analyse tab's list and cohort runs still rank and vote exactly as described.
 > See `docs/DESIGN_absolute.md` and `docs/CALCULATIONS.md` 4.12.
+>
+> **The company page's controls (ABSOLUTE-UI-1).** When one company is entered there are **no lens tick boxes**: every
+> relative lens runs automatically and shows only as context ("where it sits among rivals on `<what it measures>`") and in
+> the workings under "Relative view (peer ranks): no longer votes". The tick boxes left on that page are the
+> plain-English summary, the council opinion and the judge panel. The header reads "What the price requires, and what the
+> record shows", then "context: ranked among rivals on N measures", then the house line (the gate and the price test decide;
+> nothing here is a recommendation). The sidebar's "Show lens descriptions" switch is disabled on the company page, with a
+> note, because it only describes the tick boxes of cohort and list runs. Cohort and list runs are unchanged.
 
 # Aristos Council — How It Works
 

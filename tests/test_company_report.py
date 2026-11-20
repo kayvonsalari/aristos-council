@@ -391,7 +391,8 @@ def test_the_facts_pack_holds_only_what_the_page_prints(tmp_path):
     report = _run([RAW, SCREENED], tmp_path=tmp_path, save=False)
     pack = company_facts_pack(report)
     assert set(pack) == {"company", "currency_and_bond", "answer", "gate", "price_test", "return_range", "context",
-                         "valuation_band", "absolute_readings", "what_analysts_say"}
+                         "valuation_band", "absolute_readings", "what_analysts_say",
+                         "backtest"}        # PILOT-STRIP-1 item 16: whether the page carries a backtest section
     assert pack["answer"] == list(answer_lines(report))
     assert pack["company"] == {"name": report.display}
     assert [r["role"] for r in pack["gate"]["rules"]] == ["exclusion"] * 4

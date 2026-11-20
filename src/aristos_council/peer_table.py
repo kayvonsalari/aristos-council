@@ -82,10 +82,23 @@ def _title_case_caps(name: str) -> str:
     return " ".join(out)
 
 
+# PILOT-STRIP-1 item 21: the data provider's own record of a name can be misspelt. The index stores "LOréal S.A."
+# with no apostrophe (every other name with one keeps it), so this is the provider's row, not a fault in how the
+# index is read. Display only: a name is corrected where it is printed, never in the index.
+_NAME_SPELLINGS = {"LOréal": "L'Oréal", "LOreal": "L'Oreal"}
+
+
+def spelling_fixed(name: str) -> str:
+    for wrong, right in _NAME_SPELLINGS.items():
+        if name.startswith(wrong):
+            return right + name[len(wrong):]
+    return name
+
+
 def clean_company_name(name: str) -> str:
     """The company's name without its share-class description, title-cased when it was all capitals.
     Empty in, empty out; never returns an empty string for a non-empty name."""
-    text = (name or "").strip()
+    text = spelling_fixed((name or "").strip())
     previous = None
     while previous != text:
         previous = text
@@ -276,6 +289,8 @@ def peer_text_lines(group, columns=None, company_ticker: str = "") -> list[str]:
                    f"{r.usd_text:>17} {r.local_text:>15}  "
                    + "".join(f"{_cell_text(cell):>{w}}  " for (_h, cell), w in zip(r.ranks, widths))
                    + r.sub_industry)
+    if cap_snapshot_note(group):
+        out.append(cap_snapshot_note(group))
     if has_one_system_peers(rows):
         out.append(ONE_SYSTEM_NOTE)
     return out
@@ -286,6 +301,29 @@ def peer_text_lines(group, columns=None, company_ticker: str = "") -> list[str]:
 # cannot abbreviate; the static exports use ``PeerRow.usd_text`` / ``local_text`` instead.
 USD_COLUMN = "Market cap (USD)"
 LOCAL_COLUMN = "Market cap (local)"
+
+
+def _snapshot_of(group) -> str:
+    return str(getattr(group, "snapshot", "") or "")[:10]
+
+
+def cap_headers(group) -> tuple[str, str]:
+    """PILOT-STRIP-1 item 20: the two size columns' headings with the index snapshot's date on them, so a size
+    from the snapshot is never read as today's (live: KO's own row read $379.7bn from 2026-10-15 beside figures
+    that implied about $418bn on the day of the run). No snapshot date on the group: the plain headings."""
+    snap = _snapshot_of(group)
+    if not snap:
+        return USD_COLUMN, LOCAL_COLUMN
+    return f"Market cap (USD, on {snap})", f"Market cap (local, on {snap})"
+
+
+def cap_snapshot_note(group) -> str:
+    """One line under the peers table saying whose date the sizes carry, and why every row shares it."""
+    snap = _snapshot_of(group)
+    if not snap:
+        return ""
+    return (f"Market caps in this table are from the index snapshot of {snap}, for every company including this "
+            "one, so that all rows are sized on the same day. Today's share price gives a different figure.")
 USD_FORMAT = "$%.1fbn"
 LOCAL_FORMAT = "%.1fbn"
 

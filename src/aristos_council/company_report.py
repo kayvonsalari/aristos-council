@@ -61,8 +61,22 @@ from .tools.valuation_band import ordinal
 
 _ROOT = Path(__file__).resolve().parents[2]
 
-HOUSE_LINE = ("The math judges: the answer below comes from fixed rules applied to the company's accounts and its "
-              "price. The writing explains it and cannot change a number. Nothing here is a recommendation.")
+HOUSE_LINE = ("The gate and the price test decide: the answer below comes from fixed rules applied to the company's "
+              "accounts and its price. The writing explains it and cannot change a number. Nothing here is a "
+              "recommendation.")
+# PILOT-STRIP-1 item 10: two plain lines at the top, for someone who has never seen the page: what it is and how
+# to read it. The house line above is the third. Same words in the page, the text, the Markdown and the HTML.
+HOW_TO_READ = (
+    "What this is: a check of one company, in two steps. First a safety check of its accounts and its debt (the "
+    "gate). Then a price test: could someone who buys the shares today and holds them for ten years earn the "
+    "return this report asks for (the hurdle: the ten-year government bond yield plus 5 points a year)?",
+    "How to read it: the answer comes first, in one plain sentence, then a short summary. The sections after "
+    "that show the working behind it, and the last part, the workings, is detail you can skip.",
+)
+# (The line names no section by its heading: the report sweep and the page-order tests find sections by their
+# heading text, and a heading quoted in the header would be found there first.)
+# ABSOLUTE-UI-1: the one kicker above the company page's title, in every rendering and in the saved record.
+KICKER = "What the price requires, and what the record shows"
 NO_LENS_REASON = "No lens is ticked, so there is nothing to vote."
 SUMMARY_NOT_ASKED = ""          # an unticked summary leaves NO section, not a placeholder
 NO_KEY_NOTE_OPINION = "Council opinion unavailable: no ANTHROPIC_API_KEY set"
@@ -109,6 +123,7 @@ class LensVote:
     label: str
     kind: str = "selector"            # "selector" votes; "check" marks
     asks: str = ""
+    measures: str = ""                # ABSOLUTE-UI-1: what the lens measures, plain words ("earnings yield and momentum")
     status: str = "absent"            # ranked | excluded | unrateable | fetch_error | absent | no_group
     verdict: str = ""                 # buy / hold / sell when ranked
     position: Optional[int] = None
@@ -1006,6 +1021,32 @@ def _n_no_data(result) -> Optional[int]:
             + len(getattr(result, "fetch_errors", None) or []) + unread)
 
 
+def context_row(report) -> str:
+    """ABSOLUTE-UI-1: the header's one context line ("context: ranked among rivals on 5 measures")."""
+    from .company_page import context_row as _row
+    return _row(report)
+
+
+_PROPER_FIRST_WORDS = frozenset({"Altman", "Piotroski"})
+
+
+def lens_measures(strategy) -> str:
+    """ABSOLUTE-UI-1: what a lens measures, in plain words, from its own factor list ("return on invested capital,
+    earnings yield and 12-month price momentum"). "" when the strategy lists no known factor."""
+    from .factors import FACTOR_REGISTRY
+    names = [f.name for f in (getattr(strategy, "factors", None) or ()) if f.name in FACTOR_REGISTRY]
+    labels = []
+    for n in names:
+        label = re.sub(r"\s*\([^)]*\)", "", FACTOR_REGISTRY[n].label).split(",")[0].strip()
+        if label:
+            first = label.split(" ")[0]
+            keep = first.isupper() or first in _PROPER_FIRST_WORDS        # "ROIC ...", "Altman Z-Score"
+            labels.append(label if keep else label[:1].lower() + label[1:])
+    if not labels:
+        return ""
+    return labels[0] if len(labels) == 1 else ", ".join(labels[:-1]) + " and " + labels[-1]
+
+
 def votes_from_multi(multi, ticker: str) -> list[LensVote]:
     """The company's outcome under every lens of a ``MultiStrategyResult``."""
     target = ticker.upper()
@@ -1017,6 +1058,7 @@ def votes_from_multi(multi, ticker: str) -> list[LensVote]:
         base = dict(strategy_id=sid, label=multi.strategy_names.get(sid, "") or sid,
                     kind=getattr(strategy, "kind", "selector") or "selector",
                     asks=(getattr(strategy, "asks", "") or "").strip(),
+                    measures=lens_measures(strategy),
                     buy_rule="; ".join(buy_requirement_lines(
                         getattr(strategy, "buy_requires", None))))
         cell = row.cells.get(sid) if row is not None else None
@@ -1370,6 +1412,10 @@ def report_record(report: CompanyReport) -> dict:
         "schema_version": 2,
         "kind": "company_report", "ticker": report.ticker, "company": report.display,
         "run_at": report.run_at, "lenses": list(report.lens_ids),
+        "summary_meta": ({k: v for k, v in (getattr(report.summary, "meta", None) or {}).items()
+                          if k != "withheld_text"} if report.summary is not None else None),
+        "kicker": KICKER, "house_line": HOUSE_LINE,       # ABSOLUTE-UI-1: the same wording as every rendering
+        "context_row": context_row(report),
         "peer_snapshot": peer_snapshot(group) if group is not None and group.subject else None,
         "peer_sentence": group.sentence() if group is not None else "",
         "universe": list(report.universe),
@@ -1726,7 +1772,7 @@ def workings_text_lines(report: CompanyReport) -> list[str]:
 
     notes = [r for r in table_rows(report) if r.asks or r.badge_detail or r.full_reason]
     if notes:
-        lines.append("LENS NOTES (what each lens asks, its full reason, its track record)")
+        lines.append("LENS DESCRIPTIONS (what each lens asks, its full reason, its track record)")
         if shows_track_record(report):                                # BADGE-EXPLAIN-1: the legend opens the notes
             lines += [f"  {line}" for line in badge_legend()]
         chance = lens_notes_chance(notes)
@@ -1750,9 +1796,9 @@ def format_company_report(report: CompanyReport) -> str:
     """The report as text, in the page order: the answer, the story, the gate, the price test, the return
     range, the context, the judge panel and the council opinion (only when ticked), then the workings."""
     c = report.check
-    lines = [f"Company Report - {report.display}", HOUSE_LINE, ""]
+    lines = [f"Company Report - {report.display}", KICKER, context_row(report), *HOW_TO_READ, HOUSE_LINE, ""]
     if report.unrateable:
-        lines += [f"UNRATEABLE - {c.data_integrity.note}. No data, so no votes and no readings.",
+        lines += [f"UNRATEABLE - {c.data_integrity.note}. No data, so no ranking and no readings.",
                   c.pointer]
         return "\n".join(lines)
 
@@ -1776,7 +1822,13 @@ def format_company_report(report: CompanyReport) -> str:
 # --------------------------------------------------------------------------- #
 # The plain-English summary (opt-in; the only place a model is reached)
 # --------------------------------------------------------------------------- #
-COMPANY_PROMPT_VERSION = "reader_company_v2"
+# PILOT-STRIP-1: v3 (v2 stays on disk, so a summary recorded under it stays reproducible). v2 told the writer to
+# say "no backtest of this method exists yet" in every summary, which became false the day the backtest shipped;
+# v3 reads the backtest from the pack, names the four exclusion rules in plain words, gives the price test in a
+# fixed plain order, drops the consensus sentence, and adds the fifth check (nothing contradicts the report).
+COMPANY_PROMPT_VERSION = "reader_company_v3"
+# The model tier the company summary runs on: the cheapest Claude Haiku (agents/runners.py, "company_reader").
+COMPANY_READER_TIER = "company_reader"
 _COMPANY_PROMPT = Path(__file__).resolve().parent / "agents" / "prompts" / f"{COMPANY_PROMPT_VERSION}.md"
 
 # ABSOLUTE-PAGE-1: the role each growth case plays on the page, for the summary's role check
@@ -1802,9 +1854,18 @@ def company_facts_pack(report: CompanyReport) -> dict:
     gate, av = getattr(c, "gate", None), getattr(c, "absolute", None)
     first, second = answer_lines(report)
 
+    from .company_page import rule_plain
+    from .summary_contradictions import position_sentence
+
     def rule(r, role):
-        return {"name": r.label, "role": role, "reading": r.reading, "limit": r.limit, "result": r.result,
-                "note": r.note}
+        out = {"name": r.label, "role": role, "reading": r.reading, "limit": r.limit, "result": r.result,
+               "note": r.note}
+        if role == "exclusion" and rule_plain(r.key):
+            out["plain"] = rule_plain(r.key)            # item 12: what the rule checks, in plain words
+        position = position_sentence(r.label, r.reading, r.limit)
+        if position:
+            out["position"] = position                  # item 17: the reading against its range, worked out by code
+        return out
 
     gate_block = None
     if gate is not None:
@@ -1833,14 +1894,27 @@ def company_facts_pack(report: CompanyReport) -> dict:
         if av.hurdle.available:
             # "US (USD)": the two-letter country code and the currency are names the summary may use
             hurdle_name = f"{av.hurdle.currency} ({av.hurdle.bond_symbol[:2]})"
+    # item 16: whether THIS report carries a backtest of the method for the company's industry, and the one
+    # sentence the page itself prints about it. The summary must agree with it (summary_contradictions).
+    from .absolute_backtest.lookup import NO_RESULT, cannot_sentence, workings_lines
+    from .company_page import rivals_lines
+    rivals = set(rivals_lines(report))
+    slug = getattr(report, "cohort_slug", None)
+    has_backtest = bool(workings_lines(slug))
+    backtest = {"exists": has_backtest,
+                "statement": (cannot_sentence(slug) or NO_RESULT) if has_backtest else NO_RESULT}
     return {
         "company": {"name": report.display},
+        "backtest": backtest,
         "currency_and_bond": ({"name": hurdle_name} if hurdle_name else None),
         "answer": [first, second],
         "gate": gate_block,
         "price_test": price_test,
         "return_range": return_range,
-        "context": [b[1] for b in context_blocks(report) if b[0] in ("p",)],
+        # PILOT-STRIP-1 (found in the paid test, 2026-11-20): the "where it sits among rivals" lines were in
+        # here, so two of six live summaries spoke of "the income lenses" and "the sector rankings", which this
+        # pack's own contract (above) says it does not hold. They are left out; the other context readings stay.
+        "context": [b[1] for b in context_blocks(report) if b[0] in ("p",) and b[1] not in rivals],
         "valuation_band": c.valuation_band,
         "absolute_readings": {
             "debt_and_cash": ((c.debt_and_cash.lines() + c.debt_and_cash.notes())
@@ -1876,12 +1950,20 @@ def write_company_summary(report: CompanyReport, *, runner=None):
         from .agents.runners import LangChainRunner
         from .agents.schemas import ReaderSummary
         from .costs import CostMeter
-        runner = LangChainRunner("reader", ReaderSummary, meter=CostMeter())
+        runner = LangChainRunner(COMPANY_READER_TIER, ReaderSummary, meter=CostMeter())
     if runner is None:
         return ReaderResult(note=NO_KEY_NOTE, meta={"written": False, "reason": "no key"})
-    return write_summary_from_pack(company_facts_pack(report), runner=runner,
-                                   prompt=company_prompt_text(),
-                                   prompt_version=COMPANY_PROMPT_VERSION)
+    result = write_summary_from_pack(company_facts_pack(report), runner=runner,
+                                     prompt=company_prompt_text(),
+                                     prompt_version=COMPANY_PROMPT_VERSION)
+    # what the call(s) cost, measured from the provider's own token counts (None for a fake runner: never a
+    # silent zero). One summary is one call, or two when the check sent it back once.
+    meter = getattr(runner, "meter", None)
+    if meter is not None and result.meta is not None:
+        total = meter.total()
+        result.meta.update({"calls": total.calls, "input_tokens": total.input_tokens,
+                            "output_tokens": total.output_tokens, "usd": total.usd})
+    return result
 
 
 # --------------------------------------------------------------------------- #

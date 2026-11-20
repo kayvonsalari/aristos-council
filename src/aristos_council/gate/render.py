@@ -42,8 +42,22 @@ def rows(gate) -> list[list[str]]:
             # zone; a plain pass carries no method note
             if r.note and (r.result != PASS or r.key == "distress"):
                 result = f"{result} ({r.note})"
-            out.append([r.label, kind, r.reading, r.limit, result])
+            out.append([r.label, kind, _reading_shown(r), r.limit, result])
     return out
+
+
+# PILOT-STRIP-1 item 18: the gate's dividend cover is measured on PROFIT (average net income over the dividends
+# paid), while the relative lenses measure dividends against FREE CASH FLOW. One page showed "cover 1.3 times
+# (passes)" and "dividends took 120% of free cash flow" with nothing saying they are different measures, so the
+# reading names its own.
+DIVIDEND_COVER_BASIS = "on profit"
+
+
+def _reading_shown(r) -> str:
+    if r.key == "dividend_cover" and r.value is not None:
+        how = (r.note or "average net income / dividends paid").replace(" / ", " divided by the ")
+        return f"{r.reading}, {DIVIDEND_COVER_BASIS} ({how})"
+    return r.reading
 
 
 def state_line(gate) -> str:

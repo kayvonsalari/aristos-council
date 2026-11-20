@@ -37,6 +37,12 @@ STORY_FIRST_SCREEN = "the first screen runs past the fold"
 # relative view under the workings and in the judges' own answers).
 PAGE_LENS_NAMES = "a lens id, column name or label in sections 1 to 5 of the company page"
 PAGE_BANNED_WORDS = "'expected return', 'target', 'proven', BUY, HOLD or SELL in sections 1 to 6 of the company page"
+# ABSOLUTE-UI-1: the company page's header and its context are written as context. The header, the answer, the
+# story, the gate, the price test, the return range and the context never say "votes", "cohort", "strategy", "a BUY
+# needs" or print a lens id; and the old kicker never appears anywhere on the page.
+PAGE_CONTEXT_WORDING = ("'votes', 'cohort', 'strategy', 'a BUY needs' or a lens id in the header or sections 1 to 6 "
+                        "of the company page, or the old kicker anywhere")
+OLD_KICKER = "one company against its peer group"
 # 26: the design's 25 plus the ONE line BADGE-EXPLAIN-1 added under the lens table (what the Track record column
 # is). Nothing else on the first screen grew; the busiest report (BYD, nine lenses and a wider peer group) sits at 26.
 FIRST_SCREEN_MAX_LINES = 26
@@ -247,6 +253,22 @@ def page_banned_word_findings(text: str, where: str) -> list[Finding]:
     for ln in _lines(body):
         if _PAGE_BANNED.search(ln) or _PAGE_VERDICT_WORDS.search(ln):
             out.append(Finding(PAGE_BANNED_WORDS, where, ln.strip()[:140]))
+    return out
+
+
+_PAGE_CONTEXT_WORDS = re.compile(r"\b(?:votes|cohorts?|strateg(?:y|ies))\b|\ba BUY needs\b", re.I)
+
+
+def page_context_wording_findings(text: str, where: str) -> list[Finding]:
+    """ABSOLUTE-UI-1: no "votes", "cohort", "strategy", "a BUY needs" or lens id from the top of the page (the header)
+    to the end of the context, and the old kicker nowhere. The relative view under the workings keeps the old
+    definitions and is not read here."""
+    body = sections_1_to_6(text)
+    out = list(internal_id_findings(body, where))
+    out += [Finding(PAGE_CONTEXT_WORDING, where, ln.strip()[:140]) for ln in _lines(body)
+            if _PAGE_CONTEXT_WORDS.search(ln)]
+    out += [Finding(PAGE_CONTEXT_WORDING, where, ln.strip()[:140]) for ln in _lines(text)
+            if OLD_KICKER in ln.lower()]
     return out
 
 

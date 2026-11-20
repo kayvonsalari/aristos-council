@@ -490,6 +490,11 @@ def check_summary(summary, pack: dict) -> ReaderCheck:
     if miscounts:
         problems.append("; ".join(miscounts))
 
+    # 6. PILOT-STRIP-1 item 22 - a statement that contradicts the report: "no backtest exists" on a page with a
+    # backtest section, a reading said to sit in a range it is below. Only a company pack carries the keys.
+    from .summary_contradictions import contradiction_problems
+    problems += contradiction_problems(text, pack)
+
     # ------------------------------------------------------------------ ADVISE
     # Detected exactly as before; recorded, never enforced. Each of these withheld a live
     # summary that was otherwise true, which is what READER-5 exists to stop.
