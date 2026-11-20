@@ -14,8 +14,13 @@ import yaml
 
 _ROOT = Path(__file__).resolve().parents[3]
 GATES_DIR = _ROOT / "gates"
-DEFAULT_GATE_ID = "absolute_gate_v2"
-SUPPORTED_VERSION = 2
+# FIGURES-1: version 3 is the page's gate (the runway reads the burn of the latest twelve months). Version 2 stays on
+# disk unchanged and is what the BACKTEST evaluates: its history has no interim statements, and its saved
+# results were produced under version 2.
+DEFAULT_GATE_ID = "absolute_gate_v3"
+BACKTEST_GATE_ID = "absolute_gate_v2"
+SUPPORTED_VERSIONS = (2, 3)
+SUPPORTED_VERSION = 3
 
 
 class GateDefinitionError(ValueError):
@@ -42,6 +47,7 @@ class GateDefinition:
     cover_not_covered_below: float
     cover_years: int
     intensity_warn_above: Optional[float] = None
+    runway_burn_basis: str = "latest_year"   # "latest_year" (version 2); "trailing_twelve_months" (version 3)
     not_covered_industries: tuple = ()
     calibration: dict = field(default_factory=dict)
     raw: dict = field(default_factory=dict)
@@ -60,14 +66,22 @@ def _need(block: dict, key: str, where: str, kind=float):
     return kind(v)
 
 
+def _burn_basis(run: dict) -> str:
+    basis = str((run or {}).get("burn_basis") or "latest_year")
+    if basis not in ("latest_year", "latest_quarter", "trailing_twelve_months"):
+        raise GateDefinitionError(f"gate file: rules.cash_runway.burn_basis {basis!r} is not "
+                                  f"'latest_year', 'latest_quarter' or 'trailing_twelve_months'")
+    return basis
+
+
 def parse_gate(doc: dict) -> GateDefinition:
     if not isinstance(doc, dict):
         raise GateDefinitionError("gate file is not a mapping")
     version = int(doc.get("version") or 0)
-    if version != SUPPORTED_VERSION:
+    if version not in SUPPORTED_VERSIONS:
         raise GateDefinitionError(
-            f"gate file {doc.get('id')!r} is version {version}; this engine evaluates version "
-            f"{SUPPORTED_VERSION} (version 1 is kept as a record and is superseded)")
+            f"gate file {doc.get('id')!r} is version {version}; this engine evaluates versions "
+            f"{' and '.join(str(v) for v in SUPPORTED_VERSIONS)} (version 1 is kept as a record and is superseded)")
     rules, warns = doc.get("rules") or {}, doc.get("warnings") or {}
     eq, sol = rules.get("earnings_quality") or {}, rules.get("solvency") or {}
     acc, run = rules.get("accounting_health") or {}, rules.get("cash_runway") or {}
@@ -83,6 +97,7 @@ def parse_gate(doc: dict) -> GateDefinition:
         f_required_checks=_need(acc, "required_checks", "rules.accounting_health", int),
         runway_exclude_below_months=_need(run, "exclude_below_months", "rules.cash_runway"),
         runway_warn_below_months=_need(run, "warn_below_months", "rules.cash_runway"),
+        runway_burn_basis=_burn_basis(run),
         leverage_warn_above=_need(lev, "net_debt_to_ebitda_above", "warnings.highly_leveraged"),
         leverage_cash_flow_over_debt_below=_need(lev, "cash_flow_over_debt_below", "warnings.highly_leveraged"),
         z_warn_below=_need(dist, "warn_below", "warnings.distress_score"),

@@ -23,7 +23,7 @@ from ..backtest import _size_floor, add_months, load_cohort_members, round_dates
 from ..data.adapter import MarketDataAdapter
 from ..data.asof_adapter import AsOfAdapter
 from ..data.backtest_feed import MemoAdapter, lookback_start
-from ..gate.definition import load_gate
+from ..gate.definition import BACKTEST_GATE_ID, load_gate
 from ..absolute_value.definition import load_definition
 from ..tools.quality_epv import gross_profitability
 from . import LAG_DAYS, YEARS
@@ -98,7 +98,7 @@ def gp_assets_of(f) -> Optional[float]:
 def extract_industry(slug: str, out_root, *, cohorts_root=None, adapter=None, bonds=None,
                      members=None, member_caps=None, end: date = END, name: Optional[str] = None) -> dict:
     """Write ``<out_root>/<slug>/names.csv.gz`` and ``meta.json``; return the meta dict."""
-    gate_def, value_def = load_gate(), load_definition()
+    gate_def, value_def = load_gate(BACKTEST_GATE_ID), load_definition()
     version = None
     if members is None:
         members, version, member_caps = load_cohort_members(slug, cohorts_root)

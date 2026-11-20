@@ -23,6 +23,12 @@ SECOND DELIBERATE EXCEPTION (Batch 19B, B3). WORDING ONLY: the two scope-gate re
 this strategy's scope" -> "... outside this lens's scope") because reader text says "lens", never
 "strategy". The golden's reason strings were rewritten by that same textual substitution; no rank,
 verdict, factor value or exclusion moved.
+
+THIRD DELIBERATE EXCEPTION (FIGURES-1, 2026-11-20, owner's ruling: a lens of several factors does not rank
+a name measured on fewer than two of them). ONLY the ``forensic_v1`` entry was re-baselined. This
+fixture's names carry none of Forensic's three inputs, so the old golden "ranked" all 14 of them on three
+IMPUTED ranks (every one tied at 14). They are now excluded as "none of the 3 factors could be measured".
+Every other lens is byte-identical to the golden as it stood.
 """
 
 from __future__ import annotations
@@ -148,7 +154,8 @@ def test_existing_lenses_are_byte_identical_to_the_pre_lens_expand_golden():
     for lens in EXISTING_LENSES:
         assert got[lens] == golden[lens], f"{lens} no longer matches its pre-LENS-EXPAND-1 output"
     # The universe really exercised the lenses (a golden of empty lists would prove nothing).
-    assert sum(len(v["ranked"]) for v in golden.values()) >= 30
+    # (19 since FIGURES-1: Forensic's 14 all-imputed rows were never ranks and are gone from the golden)
+    assert sum(len(v["ranked"]) for v in golden.values()) >= 15
 
 
 if __name__ == "__main__":

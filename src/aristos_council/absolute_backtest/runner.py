@@ -168,10 +168,10 @@ def run_industry(slug: str, *, end: date, out_root, adapter=None, bonds: Optiona
 
     ``members`` / ``member_caps`` replace the cohort lookup (tests); ``adapter`` replaces the data feed."""
     from ..absolute_value.definition import load_definition
-    from ..gate.definition import load_gate
+    from ..gate.definition import BACKTEST_GATE_ID, load_gate
     say = progress or (lambda m: None)
     out_root = Path(out_root)
-    gate_def = gate_def or load_gate()
+    gate_def = gate_def or load_gate(BACKTEST_GATE_ID)
     value_def = value_def or load_definition()
     version = None
     if members is None:

@@ -370,6 +370,19 @@ def rank_universe(
                 combined_rank=float("inf"), universe_size=len(rows),
                 verdict="hold", excluded=True,
                 reason=f"missing {noun(len(excl_factors), 'factor')}: " + ", ".join(excl_factors)))
+        elif len(factors) >= 2 and sum(1 for f in factors if vals.get(f.name) is not None) < 2:
+            # FIGURES-1 (Rio Tinto, 2026-11-20; owner's ruling: every multi-factor lens, everywhere).
+            # A name with ONE measured factor of several used to be ranked: its missing ranks were filled
+            # from the one it had, so the "rank" was that single factor wearing the lens's name (Forensic
+            # put Rio Tinto 39th of 39, "doubted", on its F-Score alone). One measurement is not a rank
+            # on this lens. A single-factor lens is untouched: its one factor is all it ever asks for.
+            measured = sum(1 for f in factors if vals.get(f.name) is not None)
+            excluded.append(RankedTicker(
+                ticker=ticker, factor_ranks={}, factor_values=dict(vals),
+                combined_rank=float("inf"), universe_size=len(rows),
+                verdict="hold", excluded=True,
+                reason=(f"only {measured} of {len(factors)} factors could be measured" if measured
+                        else f"none of the {len(factors)} factors could be measured")))
         else:
             kept.append((idx, ticker, vals))
 

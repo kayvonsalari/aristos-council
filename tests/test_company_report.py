@@ -756,8 +756,25 @@ def _cols(report):
     return rank_columns(report)
 
 
+class _ForensicAdapter(_Adapter):
+    """``_Adapter`` plus the account lines two of Forensic's three factors read (accrual ratio and the
+    Altman Z-Score). FIGURES-1: ``_Adapter`` carries none of them, and a name measured on fewer than two
+    of a lens's factors is no longer ranked or marked, so the mark column needs real inputs to exist."""
+
+    def get_fundamentals(self, ticker):
+        from dataclasses import replace
+        f = super().get_fundamentals(ticker)
+        n = _number(ticker)
+        return replace(f, net_income=[200.0 + n, 190.0], operating_cash_flow_annual=[250.0, 240.0],
+                       total_assets_annual=[4000.0, 3900.0], current_assets_annual=[1500.0, 1400.0],
+                       current_liabilities_annual=[800.0, 780.0], retained_earnings_annual=[1200.0, 1100.0],
+                       total_liabilities_annual=[2000.0 + 10 * n, 1950.0])
+
+
 def test_one_rank_column_per_ticked_lens_that_ran_headed_with_its_size(tmp_path):
-    report = _run([RAW, SCREENED, "forensic_v1"], tmp_path=tmp_path, save=False)
+    report = run_company_report("CO", [RAW, SCREENED, "forensic_v1"], adapter=_ForensicAdapter(400.0),
+                                strategies_dir=STRAT_DIR, universes_dir=UNIV_DIR, runs_dir=tmp_path / "runs",
+                                today=TODAY, store=_table(), save=False, news_fetcher=_no_news)
     cols = _cols(report)
     assert [c.kind for c in cols] == ["rank", "rank", "mark"]
     assert cols[0].header == f"Magic Formula RAW rank (of {len(report.lens_ranks[RAW]['ranked'])})"
@@ -1654,3 +1671,40 @@ def test_b24_e6_a_council_run_streams_those_steps_in_order_and_still_returns_the
                              "Council: risk specialist 4 of 4\u2026",
                              "Council: critic\u2026", "Council: narrator writing the opinion\u2026"]
     assert report.council_opinion is not None and report.council_opinion.available
+
+
+# --------------------------------------------------------------------------- #
+# FIGURES-1 fault 8 (Fevertree, 2026-11-20): the group the page shows is the group that was ranked
+# --------------------------------------------------------------------------- #
+def _band_and_ladder_differ(tmp_path):
+    """$4bn subject; four peers inside the cohort's $3bn-$5bn band, two at $1.2bn that the ordinary peer
+    ladder (1/4x to 4x) admits and the band does not."""
+    rows = [_semi_row("CO.US", "CO", cap_usd=4e9)]
+    rows += [_semi_row(f"P{i:02d}.US", f"P{i:02d}", cap_usd=3.5e9) for i in range(4)]
+    rows += [_semi_row(f"S{i:02d}.US", f"S{i:02d}", cap_usd=1.2e9) for i in range(2)]
+    return run_company_report(
+        "CO", [RAW], adapter=_SmallcapAdapter(), strategies_dir=STRAT_DIR, universes_dir=UNIV_DIR,
+        runs_dir=tmp_path / "runs", today=TODAY, store=_Store(rows), include_small=True, save=False,
+        news_fetcher=_no_news)
+
+
+def test_figures_1_the_page_group_is_the_small_company_band_that_was_ranked(tmp_path):
+    """Before: the lenses ranked the band while the header ("compared with 15 similar companies"), the
+    peer table (12 of 15 rows "not in this run") and the count line described the ordinary peer group."""
+    report = _band_and_ladder_differ(tmp_path)
+    ranked_against = set(report.universe[1:])
+    assert ranked_against == {"P00", "P01", "P02", "P03"}                    # the band; S00/S01 are below its floor
+    shown = {m.yahoo_ticker for m in report.peer_group.members}
+    assert shown == ranked_against                                           # header, table and counts read this
+    assert report.peer_group.small_company_band == "the Tech - Semiconductors companies, $3bn-$5bn"
+    assert report.peer_group.reader_sentence() == "4 peers: the Tech - Semiconductors companies, $3bn-$5bn"
+
+
+def test_figures_1_the_header_the_peer_table_and_the_count_agree_with_the_ranked_group(tmp_path):
+    report = _band_and_ladder_differ(tmp_path)
+    text = format_company_report(report)
+    from aristos_council.company_cards import header_card
+    assert "compared with 4 similar companies" in header_card(report)        # the live page's header
+    assert "S00" not in text and "S01" not in text                           # never ranked, so never listed
+    assert "not in this run" not in text
+    assert report.votes[0].cohort_size == len(report.peer_group.members) + 1

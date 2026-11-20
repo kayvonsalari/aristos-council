@@ -1279,6 +1279,25 @@ def run_company_report(
         if band.tickers:
             universe = [ticker] + band.tickers
             report.universe = universe
+            # FIGURES-1 (Fevertree, 2026-11-20): the header, the peer table and the "N of M passed" line
+            # all read ``check.peer_group``. It held the ordinary peer group (15 names) while the lenses
+            # ranked the band (10 other names), so the page described one group and ranked another. The
+            # page's group IS now the band that was ranked.
+            if band.members and group is not None:
+                from dataclasses import replace as _replace
+
+                from .smallcap_band import band_label
+                band_reasons = []
+                if band.dropped_illiquid:
+                    band_reasons.append(f"{plural(len(band.dropped_illiquid), 'candidate')} left out: "
+                                        f"too thinly traded")
+                if band.skipped_no_symbol:
+                    band_reasons.append(f"{plural(len(band.skipped_no_symbol), 'candidate')} left out: "
+                                        f"no Yahoo symbol")
+                check.peer_group = group = _replace(
+                    group, members=list(band.members), small_company_band=band_label(band),
+                    distinct_companies=len(band.members), reasons=band_reasons, matched_on={},
+                    skipped_contradicted=[])
             say(f"Ranking {ticker} against {len(band.tickers)} small-company peer"
                 f"{'s' if len(band.tickers) != 1 else ''} ({band.cohort_name}) under "
                 f"{len(ids)} lens{'es' if len(ids) != 1 else ''}…")

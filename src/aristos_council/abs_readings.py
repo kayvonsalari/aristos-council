@@ -285,6 +285,36 @@ def _runway_pieces(f, years: float) -> tuple[str, str]:
     return span, (f"{fy}'s spending" if fy else "last year's spending")
 
 
+def _quarter_basis(reading) -> str:
+    """FIGURES-1: "the spending of the three months to Sep 2026, on a yearly footing"."""
+    words = {3: "three", 6: "six"}.get(reading.basis_months, str(reading.basis_months))
+    try:
+        from datetime import datetime
+        when = " to " + datetime.strptime(reading.basis_end[:10], "%Y-%m-%d").strftime("%b %Y")
+    except ValueError:
+        when = ""
+    return f"the spending of the {words} months{when}, on a yearly footing"
+
+
+def _trailing_basis(reading) -> str:
+    """"the spending of the twelve months to Sep 2026"."""
+    try:
+        from datetime import datetime
+        when = " to " + datetime.strptime(reading.basis_end[:10], "%Y-%m-%d").strftime("%b %Y")
+    except ValueError:
+        when = ""
+    return f"the spending of the twelve months{when}"
+
+
+def _page_burn_basis() -> str:
+    """The burn basis of the gate the page evaluates, so the context line and the gate cannot differ."""
+    try:
+        from .gate.definition import load_gate
+        return load_gate().runway_burn_basis
+    except Exception:                                    # noqa: BLE001 - a context line, never a crash
+        return "latest_year"
+
+
 def cash_runway(f, *, debt, cash, net, fcf, ocf, currency: str) -> Reading:
     """CASH-RUNWAY-1 (approved 2026-10-04; narrowed by B23-N1): a fact, never a vote.
 
@@ -294,17 +324,34 @@ def cash_runway(f, *, debt, cash, net, fcf, ocf, currency: str) -> Reading:
     * then, with net cash: how long that cash lasts at that year's spending (the operating outflow plus
       capital spending, i.e. the negative free cash flow); with net debt: "no cash cushion";
     * positive or missing operating cash flow, a missing figure, or a bank: no reading at all."""
-    if (ocf is None or ocf >= 0 or fcf is None or fcf >= 0
-            or net is None or debt is None or cash is None):
+    # FIGURES-1 (Revolution Medicines, 2026-11-20): this line had its own arithmetic (cash NET of debt over
+    # last fiscal year's burn: 3.3 years) beside the gate's (all cash over the same burn: 48 months). It now
+    # prints the gate's own reading, so one page has one runway. Debt is stated in the lines above it.
+    from .tools.gate_readings import BURN_LATEST_QUARTER, BURN_TRAILING_YEAR, cash_runway as _gate_runway
+    r = _gate_runway(f, _page_burn_basis())
+    if not r.applies or r.months is None or not r.burn:
         return Reading()
-    if net > 0:
-        return Reading(value=0.0, unit="years",
-                       label="no cash cushion: spending is funded by debt")
-    years = (-net) / (-fcf)
+    years = r.months / 12.0
     span, basis = _runway_pieces(f, years)
+    if r.basis == BURN_LATEST_QUARTER:
+        basis = _quarter_basis(r)
+    elif r.basis == BURN_TRAILING_YEAR:
+        basis = _trailing_basis(r)
     return Reading(value=years, unit="years",
-                   label=(f"at {basis} ({_money(-fcf, currency)}) that lasts {span} "
+                   label=(f"at {basis} ({_money(r.burn, currency)}) that lasts {span} "
                           f"({_balance_sheet_date(f)})"))
+
+
+def _runway_basis(f, fallback: str) -> str:
+    """The words for the burn the shared runway reading used ("FY2025's spending", or the latest
+    quarter's), for the card and the story, which print the basis on its own."""
+    from .tools.gate_readings import BURN_LATEST_QUARTER, BURN_TRAILING_YEAR, cash_runway as _gate_runway
+    try:
+        r = _gate_runway(f, _page_burn_basis())
+    except Exception:                                    # noqa: BLE001
+        return fallback
+    return (_quarter_basis(r) if r.basis == BURN_LATEST_QUARTER
+            else _trailing_basis(r) if r.basis == BURN_TRAILING_YEAR else fallback)
 
 
 def debt_and_cash(f) -> DebtAndCash:
@@ -450,6 +497,7 @@ def debt_and_cash(f) -> DebtAndCash:
     span = basis = ""
     if runway.available and runway.value:
         span, basis = _runway_pieces(f, runway.value)
+        basis = _runway_basis(f, basis)              # FIGURES-1: the basis the shared reading used
     from .finance_arms import finance_arm_note
     mixed = str(getattr(f, "statements_currency_note", "") or "")
     if mixed:                    # STATEMENTS-CCY-1: the balance-sheet scalars and the statements differ in money
@@ -1116,6 +1164,12 @@ def latest_accounts_fx(adapter, from_ccy: str, to_ccy: str, today) -> Optional[A
     from datetime import timedelta
     from datetime import date as _date
     from .tools.fx import monthly_fx_series
+    # FIGURES-1 (Rio Tinto, 2026-11-20): a pence code is a UNIT of the pound, not a currency with a rate of
+    # its own. The feed answers "USDGBp=X" with the POUND rate (0.7606), so a pence price divided by it read
+    # 100 times too high ($7,585.62 a share, P/E 1379). The rate is asked for in major units and then put
+    # into the units the caller named: 1 USD = 76.06 GBp. The pair asked for is unchanged (the valuation band
+    # asks for the same one, so the day-cache and the frozen runs still serve it); only the unit is corrected.
+    unit_scale = (100.0 if _minor(to_ccy) else 1.0) / (100.0 if _minor(from_ccy) else 1.0)
     try:
         fx = monthly_fx_series(adapter, from_ccy, to_ccy, start=today - timedelta(days=100),
                                end=today)
@@ -1126,7 +1180,7 @@ def latest_accounts_fx(adapter, from_ccy: str, to_ccy: str, today) -> Optional[A
     key = max(fx.rates)
     day = _date(key[0], key[1], 1)
     pair = fx.reverse_pair if fx.source_for(day) == "inverted" else fx.direct_pair
-    return AccountsFx(from_ccy=from_ccy, to_ccy=to_ccy, rate=fx.rates[key],
+    return AccountsFx(from_ccy=from_ccy, to_ccy=to_ccy, rate=fx.rates[key] * unit_scale,
                       as_of=f"{key[0]}-{key[1]:02d}",
                       source=f"yfinance {pair}" + (" inverted" if fx.source_for(day) == "inverted"
                                                    else ""))

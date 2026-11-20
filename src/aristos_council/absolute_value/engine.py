@@ -220,8 +220,10 @@ def _period_ends(f) -> list[str]:
     return list((getattr(f, "period_ends", None) or {}).get("operating_cash_flow_annual") or [])
 
 
-def _year_labels(f, n: int) -> list[str]:
-    ends = _period_ends(f)
+def _year_labels(f, n: int, ends: Optional[list] = None) -> list[str]:
+    # FIGURES-1: ``ends`` are the year-ends of the very rows being labelled (period_matched_ends). Without
+    # them the label came from the operating-cash-flow series alone and could sit a year off its figure.
+    ends = [e for e in ends] if ends else _period_ends(f)
     fallback = ["the latest year", "the year before", "two years before"]
     return [(f"the year to {_month_label(ends[i])}" if i < len(ends) and _month_label(ends[i]) else fallback[i])
             for i in range(n)]
@@ -248,7 +250,9 @@ def free_cash_flow_base(f, definition: ValueDefinition) -> BaseReading:
     use_diluted = diluted[0].get("diluted_shares") is not None
     rows, share_key, basis = ((diluted, "diluted_shares", "diluted shares") if use_diluted
                               else (basic, "shares_outstanding", "basic shares"))
-    labels = _year_labels(f, n)
+    from ..tools.screening import period_matched_ends
+    labels = _year_labels(f, n, period_matched_ends(
+        f, ("operating_cash_flow", "capital_expenditure", share_key) + wc, periods=n))
     years, values = [], []
     for i, row in enumerate(rows):
         ocf, capex, sh = row.get("operating_cash_flow"), row.get("capital_expenditure"), row.get(share_key)

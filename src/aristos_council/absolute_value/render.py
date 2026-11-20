@@ -105,6 +105,11 @@ def _hurdle_line(av: AbsoluteValue) -> str:
 def _price_line(av: AbsoluteValue) -> str:
     p = av.price
     if not p.available:
+        # FIGURES-1 (Revolution Medicines): the quoted price is a fact even when the test cannot use it.
+        # The line used to blank it ("Price: not enough data") while the header showed $159.43.
+        if p.quote_price is not None and p.quote_price > 0:
+            return (f"Price: {_money(p.quote_price, p.quote_currency)} a share, as quoted. "
+                    f"Not used in the test: {p.note or 'no price'}.")
         return f"Price: not enough data: {p.note or 'no price'}."
     if p.rate:
         return (f"Price: {_money(p.quote_price, p.quote_currency)} quoted = "
@@ -194,6 +199,10 @@ def context_lines(av: AbsoluteValue) -> list[str]:
     """Readings that carry no verdict and belong to section 6 (context, no vote): earnings over price and
     the earnings power value. Empty when neither could be worked out."""
     ctx, ccy = av.context, av.price.quote_currency
+    # FIGURES-1 (Rio Tinto): these two amounts are built on the provider's market value, which for a
+    # pence-quoted line is in POUNDS. Labelling them with the quote code read "GBp 110.4bn" for £110.4bn.
+    from ..abs_readings import _minor
+    ccy = _minor(ccy) or ccy
     out = []
     ey = ctx.get("ebit_over_ev")
     if ey is not None:

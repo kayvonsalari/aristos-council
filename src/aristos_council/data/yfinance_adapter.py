@@ -140,6 +140,25 @@ class YFinanceAdapter(MarketDataAdapter):
         except Exception:
             cashflow = None
 
+        try:
+            quarterly_cashflow = tk.quarterly_cashflow         # FIGURES-1: the latest quarter's burn
+        except Exception:
+            quarterly_cashflow = None
+        # FIGURES-1 (Fevertree, Rio Tinto, 2026-11-20). Two provider quirks are repaired HERE, once, so
+        # every series built below - positional and dated - starts at the same real fiscal year:
+        #   - a newest column that carries no revenue, profit, cash flow or assets is not a reported
+        #     year (Fevertree's 2025 column held a share count and nothing else, and was read as "the
+        #     latest year", which blanked the price test);
+        #   - an empty operating-cash-flow cell beside that year's free cash flow and capital spending
+        #     is derived from them (Rio Tinto 2025), the same "derive, do not trust the flaky field"
+        #     rule as the dividend rate. A true gap (either line missing) stays a gap.
+        income = _trim_unreported(income, _INCOME_KEY_ROWS)
+        balance = _trim_unreported(balance, _BALANCE_KEY_ROWS)
+        cashflow = _fill_operating_cash_flow(_trim_unreported(cashflow, _CASHFLOW_KEY_ROWS))
+        quarterly_cashflow = _fill_operating_cash_flow(
+            _trim_unreported(quarterly_cashflow, _CASHFLOW_KEY_ROWS))
+        latest_quarter = _latest_quarter_cash_flow(quarterly_cashflow)
+
         # Recovered DPS, reused for the payout derivation below (same source the
         # screen sees), so dividend yield AND payout survive the summaryDetail gap.
         dps = _dividend_per_share(info)
@@ -232,7 +251,13 @@ class YFinanceAdapter(MarketDataAdapter):
         return Fundamentals(
             statements_currency_note=_statements_currency_note(
                 _as_float(info.get("totalRevenue")), _annual_series(income, "Total Revenue"),
-                (info.get("financialCurrency") or None)),
+                (info.get("financialCurrency") or None),
+                quarterly_revenue=_aligned_series(quarterly_income, "Total Revenue")[1]),
+            latest_quarter_free_cash_flow=latest_quarter[0],
+            latest_quarter_end=latest_quarter[1],
+            latest_quarter_months=latest_quarter[2],
+            trailing_interim_free_cash_flow=_trailing_interim_free_cash_flow(
+                quarterly_cashflow, latest_quarter[2]),
             ticker=ticker,
             name=info.get("longName") or info.get("shortName"),
             company_name=(info.get("longName") or None),   # display label (None-guarded)
@@ -533,9 +558,26 @@ def _statement_total_debt(quarterly_balance, info_total_debt):
 STATEMENTS_CCY_RATIO = 3.0
 
 
-def _statements_currency_note(headline_revenue, statement_revenue, currency=None) -> str:
-    latest = next((v for v in (statement_revenue or []) if v), None)
-    if not headline_revenue or not latest or headline_revenue <= 0 or latest <= 0:
+def _statements_currency_note(headline_revenue, statement_revenue, currency=None, *,
+                              quarterly_revenue=None) -> str:
+    """FIGURES-1 (Revolution Medicines, 2026-11-20). The test used to compare the trailing figure with the
+    latest NON-ZERO annual statement, skipping zero years. A company whose first product had just launched
+    (annual sales 0, 0, $11.6m two years back; $197.6m trailing) read as "17.1x apart (not in one
+    currency)" and lost its whole price test. Now:
+
+      - when the last four quarterly statements are on file, the trailing figure is compared with THEIR
+        sum. Both describe the same twelve months, so a real jump in sales cannot open a gap between them;
+        a currency mix-up still does (Vale: every statement is in dollars, the headline in reais);
+      - otherwise the latest reported annual figure is used AS IT IS. Zero or negative: no test can be
+        made, and none is invented by reaching back to an older year."""
+    if not headline_revenue or headline_revenue <= 0:
+        return ""
+    quarters = list((quarterly_revenue or [])[:4])
+    if len(quarters) == 4 and all(v is not None for v in quarters):
+        latest = sum(quarters)
+    else:
+        latest = next((v for v in (statement_revenue or []) if v is not None), None)
+    if not latest or latest <= 0:
         return ""
     ratio = max(headline_revenue / latest, latest / headline_revenue)
     if ratio < STATEMENTS_CCY_RATIO:
@@ -750,6 +792,111 @@ def _first_present(series, fallback):
 _DA_LABELS = ("Depreciation And Amortization", "Depreciation Amortization Depletion", "Depreciation")
 
 
+_INCOME_KEY_ROWS = ("Total Revenue", "Net Income", "Net Income Common Stockholders", "Operating Income")
+_BALANCE_KEY_ROWS = ("Total Assets",)
+_CASHFLOW_KEY_ROWS = ("Operating Cash Flow", "Total Cash From Operating Activities", "Free Cash Flow",
+                      "Capital Expenditure", "Capital Expenditures")
+_OCF_LABELS = ("Operating Cash Flow", "Total Cash From Operating Activities")
+_CAPEX_LABELS = ("Capital Expenditure", "Capital Expenditures")
+
+
+def _trim_unreported(df: object, key_rows: tuple) -> object:
+    """The frame without its NEWEST columns that carry none of ``key_rows``: a fiscal year with no
+    revenue, profit, cash flow or assets is a stub the provider has opened, not a reported year. Older
+    empty columns are left alone (the series builders handle them). Any surprise: the frame as given."""
+    try:
+        if df is None or df.empty:
+            return df
+        rows = [r for r in key_rows if r in df.index]
+        if not rows:
+            return df
+        newest_first = sorted(df.columns, reverse=True)
+        dropped = []
+        for col in newest_first:
+            if any(_as_float(df.loc[r, col]) is not None for r in rows):
+                break
+            dropped.append(col)
+        if not dropped or len(dropped) == len(newest_first):
+            return df
+        return df[[c for c in df.columns if c not in dropped]]
+    except Exception:
+        return df
+
+
+def _fill_operating_cash_flow(cashflow: object) -> object:
+    """Operating cash flow = free cash flow + capital spending, for a year whose operating-cash-flow cell
+    is empty while BOTH other lines are present. Capital spending is an outflow whatever sign the provider
+    gives it. Nothing is filled when either line is missing."""
+    try:
+        if cashflow is None or cashflow.empty or "Free Cash Flow" not in cashflow.index:
+            return cashflow
+        ocf_row = next((r for r in _OCF_LABELS if r in cashflow.index), None)
+        capex_row = next((r for r in _CAPEX_LABELS if r in cashflow.index), None)
+        if ocf_row is None or capex_row is None:
+            return cashflow
+        out = None
+        for col in cashflow.columns:
+            if _as_float(cashflow.loc[ocf_row, col]) is not None:
+                continue
+            fcf, capex = _as_float(cashflow.loc["Free Cash Flow", col]), _as_float(cashflow.loc[capex_row, col])
+            if fcf is None or capex is None:
+                continue
+            if out is None:
+                out = cashflow.copy()
+            out.loc[ocf_row, col] = fcf + abs(capex)
+        return cashflow if out is None else out
+    except Exception:
+        return cashflow
+
+
+def _latest_quarter_cash_flow(quarterly_cashflow: object) -> tuple:
+    """``(free cash flow, period end ISO, months in the period)`` of the newest interim cash flow
+    statement, or ``(None, None, None)``. The months are measured from the gap to the statement before it
+    (three for a quarterly reporter, six for a half-yearly one such as most London companies), so the
+    figure can be put on a yearly footing honestly; a gap that is neither is not guessed at."""
+    try:
+        dates, fcf = _aligned_series(quarterly_cashflow, "Free Cash Flow")
+        if not dates or fcf[0] is None:
+            _, ocf = _aligned_series(quarterly_cashflow, *_OCF_LABELS)
+            dates, capex = _aligned_series(quarterly_cashflow, *_CAPEX_LABELS)
+            if not dates or not ocf or ocf[0] is None or capex[0] is None:
+                return None, None, None
+            fcf = [ocf[0] - abs(capex[0])]
+        if len(dates) < 2:
+            return None, None, None
+        from datetime import date as _d
+        gap = (_d.fromisoformat(dates[0]) - _d.fromisoformat(dates[1])).days
+        months = 3 if 80 <= gap <= 100 else 6 if 170 <= gap <= 195 else None
+        if months is None:
+            return None, None, None
+        return fcf[0], dates[0], months
+    except Exception:
+        return None, None, None
+
+
+def _trailing_interim_free_cash_flow(quarterly_cashflow: object, months) -> float | None:
+    """Free cash flow summed over the interim statements that make up the latest TWELVE months (four
+    quarters, or two half-years), or None unless every one of them carries a figure. Kept beside the
+    single latest statement because one quarter can be far from typical (Revolution Medicines, 2026:
+    -$745m, then -$64m)."""
+    try:
+        if months not in (3, 6):
+            return None
+        need = 12 // months
+        dates, fcf = _aligned_series(quarterly_cashflow, "Free Cash Flow")
+        if len(fcf) < need or any(v is None for v in fcf[:need]):
+            _, ocf = _aligned_series(quarterly_cashflow, *_OCF_LABELS)
+            _, capex = _aligned_series(quarterly_cashflow, *_CAPEX_LABELS)
+            if len(ocf) < need or len(capex) < need:
+                return None
+            if any(o is None or c is None for o, c in zip(ocf[:need], capex[:need])):
+                return None
+            fcf = [o - abs(c) for o, c in zip(ocf[:need], capex[:need])]
+        return float(sum(fcf[:need]))
+    except Exception:
+        return None
+
+
 def _cashflow_series(df: object, *labels: str) -> list[float]:
     """Newest-first annual series for the first matching cash-flow row label."""
     for label in labels:
@@ -815,11 +962,18 @@ def _annual_series(df: object, label: str) -> list[float]:
             row = row.sort_index(ascending=False)
         except Exception:
             pass
+        # FIGURES-1 (Rio Tinto, 2026-11-20): the list used to DROP every blank cell, so a blank in the
+        # latest year slid the year before into position 0 and a reader of "the latest year" got last
+        # year's figure without knowing (2024's operating cash flow printed as 2025's). Position i is
+        # now ALWAYS the i-th fiscal year back from the newest reported one: the list stops at the first
+        # blank and never bridges it. A blank newest year gives an empty list, which every reader already
+        # treats as "not evaluated". The dated series (``aligned_annual``) keep every year, blanks in place.
         out: list[float] = []
         for v in row.tolist():
             f = _as_float(v)
-            if f is not None:
-                out.append(f)
+            if f is None:
+                break
+            out.append(f)
         return out
     except Exception:
         # Never let a statement-shape surprise break the fundamentals fetch.

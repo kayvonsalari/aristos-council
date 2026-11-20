@@ -87,10 +87,12 @@ def test_reproduces_the_pre_fix_false_stamp_against_the_sequential_position():
 # --------------------------------------------------------------------------- #
 def test_imputed_factor_evidence_pack_matches_the_ranked_table():
     # B is missing momentum_12m; under 'neutral' mode it is imputed from B's other ranks.
-    rows = [("A", {"roic": 10.0, "momentum_12m": 10.0}),
-            ("B", {"roic": 5.0, "momentum_12m": None}),
-            ("C", {"roic": 1.0, "momentum_12m": 1.0})]
-    specs = [FactorSpec("roic", "high"), FactorSpec("momentum_12m", "high")]
+    # FIGURES-1: three factors, B measured on two - a name measured on ONE factor is no longer ranked
+    rows = [("A", {"roic": 10.0, "earnings_yield": 10.0, "momentum_12m": 10.0}),
+            ("B", {"roic": 5.0, "earnings_yield": 5.0, "momentum_12m": None}),
+            ("C", {"roic": 1.0, "earnings_yield": 1.0, "momentum_12m": 1.0})]
+    specs = [FactorSpec("roic", "high"), FactorSpec("earnings_yield", "high"),
+             FactorSpec("momentum_12m", "high")]
     ranked = rank_universe(rows, specs, missing="neutral", cut="top_k", k=2)
     b = next(r for r in ranked if r.ticker == "B")
 

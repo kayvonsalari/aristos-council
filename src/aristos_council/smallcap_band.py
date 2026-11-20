@@ -47,6 +47,10 @@ class SmallcapBand:
     reasons: list = field(default_factory=list)
     skipped_no_symbol: list = field(default_factory=list)
     dropped_illiquid: list = field(default_factory=list)
+    # FIGURES-1: the index rows of ``tickers`` (same order), so the page can show the group that was
+    # RANKED. Fevertree's page ranked it against ten band names while its header, peer table and counts
+    # described the fifteen names of the ordinary peer group.
+    members: list = field(default_factory=list)
 
 
 def _definitions_path():
@@ -73,6 +77,24 @@ def live_adv_usd(adapter, yahoo_ticker: str, *, today: date,
     values = [b.close * b.volume for b in history.bars
               if b.close is not None and b.volume is not None]
     return (sum(values) / len(values)) if values else None
+
+
+def _row_from_candidate(cand, symbol: str):
+    """An index row for a band member the pool lookup did not return (it always should): the candidate's
+    own fields, so the member is still listed."""
+    from .market_index import IndexRow
+    return IndexRow(ticker=cand.ticker, yahoo_ticker=symbol, name=getattr(cand, "name", "") or "",
+                    exchange=getattr(cand, "exchange", "") or "", currency=getattr(cand, "currency", "") or "",
+                    sector=getattr(cand, "sector", "") or "", industry=getattr(cand, "industry", "") or "",
+                    market_cap=getattr(cand, "market_cap", None),
+                    market_cap_usd=getattr(cand, "market_cap_usd", None))
+
+
+def band_label(band) -> str:
+    """"the Consumer - Beverages & Tobacco companies, $2bn-$5bn": the words the page already uses."""
+    floor = band.floor_usd
+    low = f"${floor / 1e9:g}bn" if floor else "its floor"
+    return f"the {band.cohort_name} companies, {low}-$5bn"
 
 
 def build_smallcap_peer_band(subject, *, adapter, today: date, store=None,
@@ -158,6 +180,7 @@ def build_smallcap_peer_band(subject, *, adapter, today: date, store=None,
 
     tickers: list[str] = []
     skipped_no_symbol: list[str] = []
+    cand_of: dict = {}
     for cand in candidates:
         try:
             symbol = yahoo_symbol(cand.ticker)
@@ -166,6 +189,7 @@ def build_smallcap_peer_band(subject, *, adapter, today: date, store=None,
             continue
         if symbol not in tickers:
             tickers.append(symbol)
+            cand_of[symbol] = cand
 
     kept, dropped_illiquid = [], []
     for symbol in tickers:
@@ -175,7 +199,9 @@ def build_smallcap_peer_band(subject, *, adapter, today: date, store=None,
         else:
             dropped_illiquid.append(symbol)
 
+    row_of = {str(getattr(r, "ticker", "")).upper(): r for r in (getattr(pool, "rows", None) or [])}
+    members = [row_of.get(cand_of[s].ticker.upper()) or _row_from_candidate(cand_of[s], s) for s in kept]
     return SmallcapBand(tickers=kept, cohort_slug=slug, cohort_name=defn.name,
                         floor_usd=defn.min_market_cap_usd, reasons=floor_reasons,
                         skipped_no_symbol=skipped_no_symbol,
-                        dropped_illiquid=dropped_illiquid)
+                        dropped_illiquid=dropped_illiquid, members=members)

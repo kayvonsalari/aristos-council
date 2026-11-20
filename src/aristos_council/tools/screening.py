@@ -1669,6 +1669,26 @@ def period_matched(f, keys, *, periods: int = 1) -> list[dict[str, float | None]
              for k in wanted} for i in range(periods)]
 
 
+def period_matched_ends(f, keys, *, periods: int = 1) -> list[str]:
+    """The period-end ISO date of each row ``period_matched(f, keys, periods=periods)`` returns, in the
+    same order ("" where there is no such period), or ``[]`` on the positional fallback, which carries no
+    dates. FIGURES-1 (Fevertree, 2026-11-20): the price test labelled its rows from ONE series' dates
+    while the rows themselves were matched on the dates of ALL the requested series, so when those began
+    in different years every figure sat under the wrong year (2024's cash flow was printed as 2023's).
+    A caller that prints a year beside a matched row must take the year from here."""
+    wanted = [k for k in keys if k in _SERIES_ATTR]
+    aligned = getattr(f, "aligned_annual", None) or {}
+    ends = getattr(f, "aligned_period_ends", None) or {}
+    usable = {k for k in wanted
+              if aligned.get(k) and ends.get(k) and len(aligned[k]) == len(ends[k])}
+    if not usable:
+        return []
+    dates = sorted({str(d) for k in usable for d, v in zip(ends[k], aligned[k])
+                    if v is not None and not isinstance(v, bool) and isinstance(v, (int, float))},
+                   reverse=True)
+    return [dates[i] if i < len(dates) else "" for i in range(periods)]
+
+
 @dataclass(frozen=True)
 class ForensicResult:
     """One forensic measure's outcome.

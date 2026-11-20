@@ -192,8 +192,9 @@ def test_neutral_is_strictly_better_than_worst_for_a_name_missing_payout():
 
 def test_per_factor_missing_overrides_strategy_default():
     # strategy default 'worst', but payout overridden to 'neutral'.
-    rows = [("X", {"roic": 0.3, "net_payout_yield": None})]
-    specs = [FactorSpec("roic"), FactorSpec("net_payout_yield", missing="neutral")]
+    # FIGURES-1: a third, measured factor - a name with ONE measured factor is no longer ranked at all
+    rows = [("X", {"roic": 0.3, "momentum_12m": 0.1, "net_payout_yield": None})]
+    specs = [FactorSpec("roic"), FactorSpec("momentum_12m"), FactorSpec("net_payout_yield", missing="neutral")]
     ranked = rank_universe(rows, specs, missing="worst")
     r = ranked[0]
     # roic present (rank 1 of 1); payout neutral-imputed to 1.0 (not worst=1 here, but
