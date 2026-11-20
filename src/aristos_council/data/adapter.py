@@ -248,6 +248,14 @@ class Fundamentals:
     operating_cash_flow: float | None = None
     capital_expenditure: float | None = None
     free_cash_flow_annual: list[float] = field(default_factory=list)
+    # FIGURES-1: the newest INTERIM cash flow statement's free cash flow, its period end and how many
+    # months it covers (3 or 6), for the cash runway on the latest burn. All None when the provider has no
+    # interim cash flow statement (the as-of adapter never has) -> the runway uses the fiscal year.
+    latest_quarter_free_cash_flow: float | None = None
+    latest_quarter_end: str | None = None
+    latest_quarter_months: int | None = None
+    # the same line summed over the interim statements of the latest twelve months (None unless complete)
+    trailing_interim_free_cash_flow: float | None = None
     operating_cash_flow_annual: list[float] = field(default_factory=list)
     capital_expenditure_annual: list[float] = field(default_factory=list)
     # ABSOLUTE-GATE-1: depreciation and amortisation from the cash flow statement, NEWEST-FIRST, for

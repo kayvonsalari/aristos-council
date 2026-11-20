@@ -2525,6 +2525,10 @@ class PeerGroup:
     # PEER-LABEL-2 (19A) - the candidates the winning rung refused because their other label
     # contradicted the one they matched on (tickers, so a report can name them).
     skipped_contradicted: list = field(default_factory=list)
+    # FIGURES-1 (Fevertree): set when the members are the SMALL-COMPANY BAND the lenses actually ranked,
+    # not a rung of the ladder ("the Consumer - Beverages & Tobacco companies, $2bn-$5bn"). The sentence
+    # above the table then describes that band, and no ladder step is claimed.
+    small_company_band: str = ""
 
     @property
     def available(self) -> bool:
@@ -2542,6 +2546,9 @@ class PeerGroup:
     def sentence(self) -> str:
         if not self.members:
             return "; ".join(self.reasons) or "no peer group could be formed"
+        if self.small_company_band:
+            return (f"{plural(len(self.members), 'peer')}: {self.small_company_band}, "
+                    f"index snapshot {self.snapshot or 'unknown'}")
         text = (f"{plural(len(self.members), 'peer')} at {self.rung} ({self.band}), "
                 f"index snapshot {self.snapshot or 'unknown'} - found at step {self.step} of "
                 f"{LADDER_STEPS}, {self.distinct_companies} distinct companies")
@@ -2554,6 +2561,8 @@ class PeerGroup:
         date, the distinct-company count and every matching diagnostic moved to ``method_lines``."""
         if not self.members:
             return "; ".join(self.reasons) or "no peer group could be formed"
+        if self.small_company_band:
+            return f"{plural(len(self.members), 'peer')}: {self.small_company_band}"
         level, _sep, ratio = self.rung.partition(", ")
         size = (f"within {ratio} of its market cap (USD)" if ratio else "").strip()
         text = (f"{plural(len(self.members), 'peer')}: {level}"

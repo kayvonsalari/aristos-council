@@ -18,7 +18,7 @@ from aristos_council.gate import (EXCLUDED, NOT_COVERED, NOT_ENOUGH_DATA, QUALIF
 from aristos_council.gate import engine, render
 from aristos_council.tools import gate_readings as gr
 
-D = load_gate()                                  # the shipped definition (version 2)
+D = load_gate()                                  # the shipped definition (version 3 since FIGURES-1)
 
 
 def _f(**kw) -> Fundamentals:
@@ -684,7 +684,11 @@ def test_abnormal_investment_needs_four_years_and_positive_sales():
 # the shipped gate files
 # --------------------------------------------------------------------------- #
 def test_the_gate_file_loads_with_every_threshold_the_owner_set():
-    assert D.id == "absolute_gate_v2" and D.version == 2 and D.frozen
+    # FIGURES-1: version 3 is the page's gate; it differs from version 2 in the runway's burn only
+    assert D.id == "absolute_gate_v3" and D.version == 3 and D.frozen
+    assert D.runway_burn_basis == "latest_quarter"
+    v2 = load_gate("absolute_gate_v2")
+    assert v2.version == 2 and v2.frozen and v2.runway_burn_basis == "latest_year"
     assert D.accrual_exclude_above == 0.10
     assert D.solvency_exclude_below == 0.05
     assert D.leverage_warn_above == 6.0 and D.leverage_cash_flow_over_debt_below == 0.12
@@ -741,7 +745,7 @@ def test_a_bank_section_has_no_table_and_says_not_covered():
 def test_the_gate_record_is_json_ready():
     import json
     d = evaluate_gate(msft(), D).as_dict()
-    assert json.loads(json.dumps(d))["state"] == QUALIFIES and d["definition"] == "absolute_gate_v2"
+    assert json.loads(json.dumps(d))["state"] == QUALIFIES and d["definition"] == "absolute_gate_v3"
     assert [r["key"] for r in d["rules"]] == ["earnings_quality", "solvency", "accounting_health", "cash_runway"]
     assert [w["key"] for w in d["warnings"]] == ["highly_leveraged", "distress_score", "dividend_cover",
                                                   "runway_warning"]

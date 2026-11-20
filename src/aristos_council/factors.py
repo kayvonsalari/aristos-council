@@ -1327,7 +1327,10 @@ def gather_factor_inputs(adapter, ticker: str, *, today: date,
         q_major = _MINOR_TO_MAJOR.get(q, q)
         a = fundamentals.financial_currency.strip()
         if q_major.upper() != a.upper():
-            quote_fx = latest_accounts_fx(adapter, a, q_major, today)
+            # FIGURES-1: the rate is asked for in the QUOTE's own unit (pence for a London line), because the
+            # price it converts is in that unit. Asking for pounds and dividing a pence price by it read
+            # Rio Tinto's 5,770p as $7,585.62.
+            quote_fx = latest_accounts_fx(adapter, a, q, today)
 
     # Absolute valuation band (VALBAND-1) — display column + registered factor. Computed
     # AFTER the static/FX layers so it reads the same fundamentals every other leg does.

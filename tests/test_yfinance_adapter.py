@@ -35,9 +35,10 @@ def test_annual_series_is_newest_first_and_clean():
     assert _annual_series(_income(), "Total Revenue") == [133.0, 121.0, 110.0, 100.0]
 
 
-def test_annual_series_drops_nan_years():
-    # the 2023 NaN is dropped; remaining order preserved newest-first
-    assert _annual_series(_income(), "Operating Income") == [13.0, 12.0, 10.0]
+def test_annual_series_stops_at_a_blank_year_and_never_bridges_it():
+    # FIGURES-1 (Rio Tinto, 2026-11-20): the 2023 blank used to be DROPPED, which slid 2022's figure into
+    # position 2 as if it were 2023's. Position i is the i-th year back or nothing: the list ends at the blank.
+    assert _annual_series(_income(), "Operating Income") == [13.0, 12.0]
 
 
 def test_annual_series_sorts_columns_newest_first():

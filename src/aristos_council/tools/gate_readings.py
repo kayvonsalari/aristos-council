@@ -247,18 +247,35 @@ class RunwayReading:
     months: Optional[float] = None
     note: str = ""
     funded_by_wc: bool = False    # a loss-maker before working capital whose free cash flow is not negative
+    burn: Optional[float] = None  # FIGURES-1: the yearly burn the months were worked out on (positive)
+    basis: str = ""               # BURN_LATEST_QUARTER or BURN_LATEST_YEAR: which statement the burn is from
+    basis_end: str = ""           # the interim statement's period end (ISO) when the basis is the latest quarter
+    basis_months: Optional[int] = None    # the months that interim statement covers (3 or 6)
 
 
 FUNDED_BY_WC_NOTE = "funded by working capital this year"
 
 
-def cash_runway(f) -> RunwayReading:
+BURN_LATEST_YEAR, BURN_LATEST_QUARTER = "latest_year", "latest_quarter"
+BURN_TRAILING_YEAR = "trailing_twelve_months"   # the interim statements of the latest twelve months, summed
+
+
+def cash_runway(f, burn_basis: str = BURN_LATEST_YEAR) -> RunwayReading:
     """Months the cash lasts at last year's burn. ABSOLUTE-GATE-3: it triggers on cash from operations BEFORE
     working-capital changes at or below zero, the same measure the solvency rule uses, so every company
     falls under exactly one of the two (positive: solvency; at or below zero: this rule). Burn is the
     negative free cash flow of the latest year (operating cash flow minus capital spending when the provider
     gives no free cash flow). If free cash flow is not negative in such a year, working capital funded it and
-    the runway passes with that note. Cash is cash plus short-term investments."""
+    the runway passes with that note. Cash is cash plus short-term investments.
+
+    FIGURES-1 (Revolution Medicines, 2026-11-20): THE one runway on the page. The gate and the "debt and
+    cash" reading each had their own (all cash over the burn: 48 months; cash net of debt over the burn:
+    40 months) and both used last fiscal year's spending for a company whose spending had since doubled.
+    ``burn_basis`` is the gate definition's (``rules.cash_runway.burn_basis``): ``latest_year`` is gate
+    version 2, unchanged, and what the backtest reads; ``latest_quarter`` (version 3) takes the newest
+    interim statement's negative free cash flow on a yearly footing, and falls back to the fiscal year when
+    there is no interim statement or its free cash flow is not negative. Debt is not netted off: it is shown
+    beside the runway, as its own lines."""
     if f is None:
         return RunwayReading(applies=False, note="no accounts")
     cfo = cash_flow_before_working_capital(f)
@@ -284,7 +301,22 @@ def cash_runway(f) -> RunwayReading:
                 break
     if cash is None:
         return RunwayReading(applies=True, note="cash missing")
-    return RunwayReading(applies=True, months=12.0 * cash / (-fcf), note="cash / yearly burn")
+    if burn_basis == BURN_LATEST_QUARTER:
+        q = _num(getattr(f, "latest_quarter_free_cash_flow", None))
+        q_months = getattr(f, "latest_quarter_months", None)
+        if q is not None and q < 0 and q_months in (3, 6):
+            burn = -q * 12.0 / q_months
+            return RunwayReading(applies=True, months=12.0 * cash / burn, note="cash / latest burn, yearly",
+                                 burn=burn, basis=BURN_LATEST_QUARTER, basis_months=int(q_months),
+                                 basis_end=str(getattr(f, "latest_quarter_end", "") or ""))
+    if burn_basis == BURN_TRAILING_YEAR:
+        t = _num(getattr(f, "trailing_interim_free_cash_flow", None))
+        if t is not None and t < 0:
+            return RunwayReading(applies=True, months=12.0 * cash / (-t), note="cash / burn of the last 12 months",
+                                 burn=-t, basis=BURN_TRAILING_YEAR,
+                                 basis_end=str(getattr(f, "latest_quarter_end", "") or ""))
+    return RunwayReading(applies=True, months=12.0 * cash / (-fcf), note="cash / yearly burn",
+                         burn=-fcf, basis=BURN_LATEST_YEAR)
 
 
 # --------------------------------------------------------------------------- #

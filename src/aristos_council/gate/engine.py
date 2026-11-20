@@ -132,7 +132,7 @@ def _accounting_health(f, d: GateDefinition) -> RuleResult:
 
 
 def _cash_runway(f, d: GateDefinition) -> RuleResult:
-    r = gr.cash_runway(f)
+    r = gr.cash_runway(f, d.runway_burn_basis)
     limit = f"excluded under {d.runway_exclude_below_months:.0f} months"
     if not r.applies:
         if r.note in _RUNWAY_MISSING:
@@ -210,7 +210,7 @@ def _dividend_cover(f, d: GateDefinition) -> RuleResult:
 
 
 def _runway_warning(f, d: GateDefinition) -> RuleResult:
-    r = gr.cash_runway(f)
+    r = gr.cash_runway(f, d.runway_burn_basis)
     limit = f"warning under {d.runway_warn_below_months:.0f} months"
     label = "Cash runway"
     if not r.applies:

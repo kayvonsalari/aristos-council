@@ -136,16 +136,19 @@ def test_pipeline_attaches_sources_and_report_shows_block():
         ["EVFULL1", "EVFULL2", "NOCASH1", "NOCASH2", "NETCASH"], "magic_formula_v1",
         ranker_only=True, strategies_dir=STRAT_DIR, adapter=_Adapter(),
         today=date(2026, 6, 30))
-    assert len(result.ranked) == 5
+    # FIGURES-1: NETCASH has no usable earnings yield, so it is measured on ONE of this lens's two
+    # factors and is no longer ranked (it used to be ranked on return on capital alone).
+    assert len(result.ranked) == 4
     by = {r.ticker: r.factor_sources["earnings_yield"] for r in result.ranked}
     assert by["EVFULL1"] == SRC_EV and by["NOCASH1"] == SRC_EBIT_MCAP
-    assert by["NETCASH"] == SRC_ABSTAINED
+    assert "NETCASH" not in by
+    assert ("NETCASH", "only 1 of 2 factors could be measured") in [tuple(e)[:2] for e in result.excluded]
 
     block = "\n".join(format_factor_integrity(result))
     # REPORT-1: the section is "Where the numbers came from" — "Factor integrity" was
     # internal jargon. The COUNTS below are unchanged; only the wording is.
     assert "WHERE THE NUMBERS CAME FROM" in block
     # REPORT-1: the same counts, as a sentence rather than a slash tally.
-    assert "from enterprise value for 2 of 5 names" in block
-    assert "from the EBIT / market-cap proxy for 2 of 5 names (NOCASH1, NOCASH2)" in block
-    assert "no usable data for 1 of 5 names (NETCASH)" in block
+    assert "from enterprise value for 2 of 4 names" in block
+    assert "from the EBIT / market-cap proxy for 2 of 4 names (NOCASH1, NOCASH2)" in block
+    assert "NETCASH" not in block                    # not ranked, so not in the ranked names' sources

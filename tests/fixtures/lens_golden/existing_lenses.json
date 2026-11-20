@@ -446,304 +446,65 @@
    [
     "TINY",
     "below min market cap ($5.0bn)"
+   ],
+   [
+    "T00",
+    "none of the 3 factors could be measured"
+   ],
+   [
+    "T01",
+    "none of the 3 factors could be measured"
+   ],
+   [
+    "T02",
+    "none of the 3 factors could be measured"
+   ],
+   [
+    "T03",
+    "none of the 3 factors could be measured"
+   ],
+   [
+    "T04",
+    "none of the 3 factors could be measured"
+   ],
+   [
+    "T05",
+    "none of the 3 factors could be measured"
+   ],
+   [
+    "T06",
+    "none of the 3 factors could be measured"
+   ],
+   [
+    "T07",
+    "none of the 3 factors could be measured"
+   ],
+   [
+    "T08",
+    "none of the 3 factors could be measured"
+   ],
+   [
+    "T09",
+    "none of the 3 factors could be measured"
+   ],
+   [
+    "T10",
+    "none of the 3 factors could be measured"
+   ],
+   [
+    "T11",
+    "none of the 3 factors could be measured"
+   ],
+   [
+    "T12",
+    "none of the 3 factors could be measured"
+   ],
+   [
+    "T13",
+    "none of the 3 factors could be measured"
    ]
   ],
-  "ranked": [
-   {
-    "combined_rank": 42.0,
-    "factor_ranks": {
-     "accrual_ratio": 14.0,
-     "altman_z": 14.0,
-     "piotroski_f_score": 14.0
-    },
-    "factor_sources": {
-     "accrual_ratio": "abstained: operating cash flow missing",
-     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
-     "piotroski_f_score": "abstained"
-    },
-    "factor_values": {
-     "accrual_ratio": null,
-     "altman_z": null,
-     "piotroski_f_score": null
-    },
-    "position": 1,
-    "ticker": "T00",
-    "verdict": "buy"
-   },
-   {
-    "combined_rank": 42.0,
-    "factor_ranks": {
-     "accrual_ratio": 14.0,
-     "altman_z": 14.0,
-     "piotroski_f_score": 14.0
-    },
-    "factor_sources": {
-     "accrual_ratio": "abstained: operating cash flow missing",
-     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
-     "piotroski_f_score": "abstained"
-    },
-    "factor_values": {
-     "accrual_ratio": null,
-     "altman_z": null,
-     "piotroski_f_score": null
-    },
-    "position": 1,
-    "ticker": "T01",
-    "verdict": "buy"
-   },
-   {
-    "combined_rank": 42.0,
-    "factor_ranks": {
-     "accrual_ratio": 14.0,
-     "altman_z": 14.0,
-     "piotroski_f_score": 14.0
-    },
-    "factor_sources": {
-     "accrual_ratio": "abstained: operating cash flow missing",
-     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
-     "piotroski_f_score": "abstained"
-    },
-    "factor_values": {
-     "accrual_ratio": null,
-     "altman_z": null,
-     "piotroski_f_score": null
-    },
-    "position": 1,
-    "ticker": "T02",
-    "verdict": "buy"
-   },
-   {
-    "combined_rank": 42.0,
-    "factor_ranks": {
-     "accrual_ratio": 14.0,
-     "altman_z": 14.0,
-     "piotroski_f_score": 14.0
-    },
-    "factor_sources": {
-     "accrual_ratio": "abstained: operating cash flow missing",
-     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
-     "piotroski_f_score": "abstained"
-    },
-    "factor_values": {
-     "accrual_ratio": null,
-     "altman_z": null,
-     "piotroski_f_score": null
-    },
-    "position": 1,
-    "ticker": "T03",
-    "verdict": "hold"
-   },
-   {
-    "combined_rank": 42.0,
-    "factor_ranks": {
-     "accrual_ratio": 14.0,
-     "altman_z": 14.0,
-     "piotroski_f_score": 14.0
-    },
-    "factor_sources": {
-     "accrual_ratio": "abstained: operating cash flow missing",
-     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
-     "piotroski_f_score": "abstained"
-    },
-    "factor_values": {
-     "accrual_ratio": null,
-     "altman_z": null,
-     "piotroski_f_score": null
-    },
-    "position": 1,
-    "ticker": "T04",
-    "verdict": "hold"
-   },
-   {
-    "combined_rank": 42.0,
-    "factor_ranks": {
-     "accrual_ratio": 14.0,
-     "altman_z": 14.0,
-     "piotroski_f_score": 14.0
-    },
-    "factor_sources": {
-     "accrual_ratio": "abstained: operating cash flow missing",
-     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
-     "piotroski_f_score": "abstained"
-    },
-    "factor_values": {
-     "accrual_ratio": null,
-     "altman_z": null,
-     "piotroski_f_score": null
-    },
-    "position": 1,
-    "ticker": "T05",
-    "verdict": "hold"
-   },
-   {
-    "combined_rank": 42.0,
-    "factor_ranks": {
-     "accrual_ratio": 14.0,
-     "altman_z": 14.0,
-     "piotroski_f_score": 14.0
-    },
-    "factor_sources": {
-     "accrual_ratio": "abstained: operating cash flow missing",
-     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
-     "piotroski_f_score": "abstained"
-    },
-    "factor_values": {
-     "accrual_ratio": null,
-     "altman_z": null,
-     "piotroski_f_score": null
-    },
-    "position": 1,
-    "ticker": "T06",
-    "verdict": "hold"
-   },
-   {
-    "combined_rank": 42.0,
-    "factor_ranks": {
-     "accrual_ratio": 14.0,
-     "altman_z": 14.0,
-     "piotroski_f_score": 14.0
-    },
-    "factor_sources": {
-     "accrual_ratio": "abstained: operating cash flow missing",
-     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
-     "piotroski_f_score": "abstained"
-    },
-    "factor_values": {
-     "accrual_ratio": null,
-     "altman_z": null,
-     "piotroski_f_score": null
-    },
-    "position": 1,
-    "ticker": "T07",
-    "verdict": "hold"
-   },
-   {
-    "combined_rank": 42.0,
-    "factor_ranks": {
-     "accrual_ratio": 14.0,
-     "altman_z": 14.0,
-     "piotroski_f_score": 14.0
-    },
-    "factor_sources": {
-     "accrual_ratio": "abstained: operating cash flow missing",
-     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
-     "piotroski_f_score": "abstained"
-    },
-    "factor_values": {
-     "accrual_ratio": null,
-     "altman_z": null,
-     "piotroski_f_score": null
-    },
-    "position": 1,
-    "ticker": "T08",
-    "verdict": "hold"
-   },
-   {
-    "combined_rank": 42.0,
-    "factor_ranks": {
-     "accrual_ratio": 14.0,
-     "altman_z": 14.0,
-     "piotroski_f_score": 14.0
-    },
-    "factor_sources": {
-     "accrual_ratio": "abstained: operating cash flow missing",
-     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
-     "piotroski_f_score": "abstained"
-    },
-    "factor_values": {
-     "accrual_ratio": null,
-     "altman_z": null,
-     "piotroski_f_score": null
-    },
-    "position": 1,
-    "ticker": "T09",
-    "verdict": "hold"
-   },
-   {
-    "combined_rank": 42.0,
-    "factor_ranks": {
-     "accrual_ratio": 14.0,
-     "altman_z": 14.0,
-     "piotroski_f_score": 14.0
-    },
-    "factor_sources": {
-     "accrual_ratio": "abstained: operating cash flow missing",
-     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
-     "piotroski_f_score": "abstained"
-    },
-    "factor_values": {
-     "accrual_ratio": null,
-     "altman_z": null,
-     "piotroski_f_score": null
-    },
-    "position": 1,
-    "ticker": "T10",
-    "verdict": "hold"
-   },
-   {
-    "combined_rank": 42.0,
-    "factor_ranks": {
-     "accrual_ratio": 14.0,
-     "altman_z": 14.0,
-     "piotroski_f_score": 14.0
-    },
-    "factor_sources": {
-     "accrual_ratio": "abstained: operating cash flow missing",
-     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
-     "piotroski_f_score": "abstained"
-    },
-    "factor_values": {
-     "accrual_ratio": null,
-     "altman_z": null,
-     "piotroski_f_score": null
-    },
-    "position": 1,
-    "ticker": "T11",
-    "verdict": "sell"
-   },
-   {
-    "combined_rank": 42.0,
-    "factor_ranks": {
-     "accrual_ratio": 14.0,
-     "altman_z": 14.0,
-     "piotroski_f_score": 14.0
-    },
-    "factor_sources": {
-     "accrual_ratio": "abstained: operating cash flow missing",
-     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
-     "piotroski_f_score": "abstained"
-    },
-    "factor_values": {
-     "accrual_ratio": null,
-     "altman_z": null,
-     "piotroski_f_score": null
-    },
-    "position": 1,
-    "ticker": "T12",
-    "verdict": "sell"
-   },
-   {
-    "combined_rank": 42.0,
-    "factor_ranks": {
-     "accrual_ratio": 14.0,
-     "altman_z": 14.0,
-     "piotroski_f_score": 14.0
-    },
-    "factor_sources": {
-     "accrual_ratio": "abstained: operating cash flow missing",
-     "altman_z": "abstained: current assets, current liabilities, retained earnings, total liabilities missing",
-     "piotroski_f_score": "abstained"
-    },
-    "factor_values": {
-     "accrual_ratio": null,
-     "altman_z": null,
-     "piotroski_f_score": null
-    },
-    "position": 1,
-    "ticker": "T13",
-    "verdict": "sell"
-   }
-  ],
+  "ranked": [],
   "unrateable": []
  },
  "growth_garp_v2": {

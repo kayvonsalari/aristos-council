@@ -31,7 +31,9 @@ ETF = "etf_dividend_v1"
 _ROWS = {   # ticker -> (quote_type, currency, yield, fee, total_assets)
     "SPY": ("ETF", "USD", 0.012, 0.09, 5.0e11),
     "SCHD": ("ETF", "USD", 0.033, 0.06, 9.5e10),
-    "VWRL.L": ("ETF", "GBP", None, None, 8.5e10),
+    # FIGURES-1: a fee is given so the fund is measured on two factors (fee, momentum); a fund measured
+    # on ONE factor is no longer ranked (tests/test_figures_batch_1.py)
+    "VWRL.L": ("ETF", "GBP", None, 0.22, 8.5e10),
     "AAPL": ("EQUITY", "USD", 0.005, None, None),
 }
 

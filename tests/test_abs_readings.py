@@ -565,6 +565,15 @@ def _viking(**kw):
                 aligned_period_ends={"free_cash_flow": ["2025-12-31", "2024-12-31"],
                                      "operating_cash_flow": ["2025-12-31", "2024-12-31"]})
     base.update(kw)
+    # FIGURES-1: the line now prints the GATE's runway (one method on the page), which reads the yearly
+    # cash flow lists. The lists are built here from the same figures each test states, the latest fiscal
+    # year's operating cash flow first (B23-N1), with a working-capital line of zero.
+    dated = (base.pop("aligned_annual", None) or {}).get("operating_cash_flow")
+    ocf = dated[0] if dated else base.get("operating_cash_flow")
+    base.setdefault("operating_cash_flow_annual", [] if ocf is None else [ocf])
+    base.setdefault("free_cash_flow_annual",
+                    [] if base.get("free_cash_flow") is None else [base["free_cash_flow"]])
+    base.setdefault("change_in_working_capital_annual", [0.0])
     return _f(**base)
 
 
@@ -574,7 +583,8 @@ def test_runway_negative_fcf_and_net_cash_says_how_long_the_cash_lasts():
     assert out.cash_runway.available
     assert out.cash_runway.label == ("at FY2025's spending ($278.7m) that lasts about 1.8 years "
                                      "(balance sheet of Jun 2026)")
-    assert out.cash_runway.value == pytest.approx(497.6 / 278.7)
+    # FIGURES-1: ALL cash over the burn (the gate's method), not cash net of debt. $502.6m / $278.7m.
+    assert out.cash_runway.value == pytest.approx(502.6 / 278.7)
     assert out.cash_runway.label in out.lines()
     assert (out.runway_span, out.runway_basis) == ("about 1.8 years", "FY2025's spending")
     assert out.balance_sheet_short == "balance sheet, Jun 2026"
@@ -586,10 +596,15 @@ def test_runway_without_a_period_end_says_latest_balance_sheet_and_last_year_wit
                                      "(latest balance sheet)")
 
 
-def test_runway_negative_operating_cash_and_net_debt_says_there_is_no_cushion():
+def test_runway_with_net_debt_is_the_gates_runway_and_the_debt_is_said_beside_it():
+    """FIGURES-1 (owner's ruling 2026-11-20): one runway on the page, all cash over the burn, debt shown
+    beside it. This case used to print "no cash cushion: spending is funded by debt" while the gate, on
+    the same accounts, printed a runway in months."""
     out = debt_and_cash(_viking(total_debt=900e6, total_cash=100e6))
-    assert out.cash_runway.label == "no cash cushion: spending is funded by debt"
-    assert "no cash cushion: spending is funded by debt" in out.lines()
+    assert out.net_debt.label == "owes $800.0m net of cash"
+    assert out.cash_runway.label == ("at FY2025's spending ($278.7m) that lasts about 4 months "
+                                     "(balance sheet of Jun 2026)")
+    assert not any("cushion" in ln for ln in out.lines())
 
 
 def test_b23_n1_a_business_that_makes_cash_but_invests_heavily_gets_no_runway_line():
@@ -625,9 +640,10 @@ def test_runway_positive_missing_or_unknown_operating_cash_flow_gives_no_line():
         assert not any("lasts about" in ln or "cushion" in ln for ln in out.lines())
 
 
-def test_runway_missing_cash_or_debt_gives_no_line():
+def test_runway_missing_cash_gives_no_line_and_missing_debt_does_not_stop_it():
     assert not debt_and_cash(_viking(total_cash=None)).cash_runway.available
-    assert not debt_and_cash(_viking(total_debt=None)).cash_runway.available
+    # FIGURES-1: the runway is all cash over the burn, so it no longer needs the debt figure
+    assert debt_and_cash(_viking(total_debt=None)).cash_runway.available
 
 
 def test_runway_a_bank_gets_no_line():
@@ -657,9 +673,9 @@ def test_runway_reaches_the_story_the_text_page_and_the_summary_facts(tmp_path):
 
 
 def test_runway_under_a_year_is_said_in_months_and_under_a_month_as_such():
-    five_months = debt_and_cash(_viking(total_cash=5.0e6 + 116.1e6))      # net cash 116.1m / 278.7m
+    five_months = debt_and_cash(_viking(total_cash=5.0e6 + 116.1e6))      # cash 121.1m / 278.7m
     assert "that lasts about 5 months (balance sheet of Jun 2026)" in five_months.cash_runway.label
-    one_month = debt_and_cash(_viking(total_cash=5.0e6 + 25.0e6))         # 25m / 278.7m -> 1.08 months
+    one_month = debt_and_cash(_viking(total_cash=5.0e6 + 25.0e6))         # 30m / 278.7m -> 1.29 months
     assert "that lasts about 1 month (" in one_month.cash_runway.label
     days = debt_and_cash(_viking(total_cash=5.0e6 + 2.8e6, free_cash_flow=-97.7e9, operating_cash_flow=-50e9))
     assert "that lasts less than a month (" in days.cash_runway.label
