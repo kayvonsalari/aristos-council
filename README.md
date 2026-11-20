@@ -1,3 +1,5 @@
+**Case study: [I built an AI stock council, measured it, demoted it, and published the null](docs/CASE_STUDY.md)**
+
 # Aristos Council
 
 Most AI stock analysis gives you one model's snap opinion. Aristos went further: it built
