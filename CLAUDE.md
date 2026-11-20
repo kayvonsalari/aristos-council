@@ -170,10 +170,12 @@ Docs: `README.md` (start here), `docs/COUNCIL_EXPLAINER.md`, `docs/CALCULATIONS.
   call (`--explain`, off by default) may only write one line of prose about headlines it was
   handed — it cannot select a name or produce a number, enforced structurally.
   Times are **New York**, not Berlin: a session has one clock.
-  **It is a running experiment under a FEATURE FREEZE** until 40 scored days exist (three Windows
-  scheduled tasks: run 15:00 Berlin, outcomes 22:30, backup 23:00): no new filters, thresholds or
-  checkpoints, only bug fixes — a test that changes its own rules measures nothing. Verdict criteria
-  and the schedule are in `docs/GAP_LEDGER.md`.
+  **The experiment ENDED on 2026-11-20 as a CLEAR FAIL** (10 good IBKR-verified days of the 40
+  planned; the average move from the open was under the 0.5% bar at every checkpoint). The feature
+  freeze ended with it. The three Windows scheduled tasks (run, outcomes, backup) are DISABLED, not
+  deleted; code and logged days are kept as the record. Do not re-enable the tasks or build on the
+  screen without the owner asking: a restart is a new test with its rules written first. The verdict
+  note and the criteria are in `docs/GAP_LEDGER.md`.
   **GAP-IBKR-1 licence boundary:** `gap_ledger/ibkr.py` reads the owner's local IB Gateway
   (read-only) for the real pre-market VOLUME yfinance does not publish. That data is licensed
   for the owner's PERSONAL, NON-PROFESSIONAL use, so it stays inside `gap_ledger/` — **nothing

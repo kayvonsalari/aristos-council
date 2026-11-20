@@ -52,10 +52,11 @@ files (the market index, a cohort's `members.csv`, a strategy YAML, a verdict or
   into one surface. Nothing about this changes the licence boundary above: a shared engine reads Gap
   Ledger's OWN outputs (CSVs, scores), never `gap_ledger.ibkr` directly.
 
-**Feature freeze.** Gap Ledger is under a feature freeze until it has a verdict from 40 scored trading
-days (see "Feature freeze and the verdict" below) — expected around late November 2026 at the current
-pace. Until then, only bug fixes land on it; no new filters, thresholds, checkpoints, or surfaces
-(including the planned tab above).
+**The test has ended (2026-11-20): CLEAR FAIL.** The owner called the verdict on the agreed day, on
+10 good IBKR-verified days rather than the 40 planned, under a rule fixed beforehand (see
+"Verdict, 20 Nov 2026" below). The scheduled runs are disabled; the code and every logged day are
+kept. The feature freeze that protected the test is over because the test is. Nothing planned above
+(the results tab, the shared engine) is being built on this screen.
 
 ## The daily pipeline at a glance
 
@@ -214,7 +215,70 @@ weaker news matching or restated pre-market tape can never be silently averaged 
 verdict without anyone being able to tell. `python -m aristos_council.gap_ledger score` prints the
 split automatically once any day has been backfilled, and says nothing extra otherwise.
 
+## Verdict, 20 Nov 2026
+
+**CLEAR FAIL.** Provisional in the sense that it rests on 10 days, not 40; final under the owner's
+rule, which was stated before the numbers were read:
+
+- CLEAR FAIL: candidates no better than control, **or** an average move from the open under 0.5%.
+  Final.
+- CLEAR PASS: all three bars met with room to spare (candidates carry on clearly more often than
+  control, about 60% against about 50%; the result holds against SPY; the average move is at least
+  0.5% per trade).
+- TOO CLOSE TO CALL: anything else.
+
+**Days counted: 10**, each a live, complete run with IBKR-verified candidates and filled outcomes:
+2026-09-24, 09-25, 09-28, 09-29, 10-08, 10-13, 10-20, 11-02, 11-11 and 11-17. 187 candidates and
+187 control names. Left out: 2026-09-22 (yfinance-only, before IBKR verification), five stub days
+marked "ibkr unreachable" that hold no names, and every trading day with no file at all. No day was
+backfilled.
+
+All figures are from the open, in the gap's direction:
+
+| Checkpoint | Candidates carried on | Control carried on | Edge | Candidates' average move | Beyond SPY |
+|---|---|---|---|---|---|
+| 10:00 ET | 41% (77/187) | 41% (75/185) | +1 point | −0.11% | −0.09% |
+| 11:30 ET | 51% (95/187) | 48% (88/185) | +3 points | +0.18% | +0.07% |
+| The close | 48% (89/187) | 42% (77/185) | +6 points | −0.15% | −0.22% |
+
+1. **Clearly beats control: not met.** 48% to the close is below a coin flip and far from 60%.
+   Candidates beat control on 6 of the 10 days.
+2. **Holds against SPY: not met.** Negative at the close, effectively zero at 11:30.
+3. **Average of at least 0.5% per trade: not met** at any checkpoint. This is the bar that makes it
+   a clear fail. The control group did worse still (−0.62% to the close), so the candidates look
+   better than control while both lose from the open.
+
+**Caveats.**
+
+- **Ten days is very few.** A single name moved about 9.6% (standard deviation) from open to close,
+  and names on one day move together. Resampling whole days puts the true average at the close
+  anywhere from about −1.1% to +1.2%, and the edge over control from about −7 to +24 points.
+- **The fail is by the rule, not by proof.** About 15% of those resamples put the average at 0.5%
+  or more. A true 60% continuation rate is far less likely: 2% of resamples reach it.
+- **Two names dominate the average** (one about +86%, one about −68%). With the top and bottom 5%
+  of names removed, the average at the close is −0.37%.
+- **One day supplied 39 of the 187 candidates** (2026-11-11). Removing any single day moves the
+  average at the close between −0.47% and +0.15%; no single day rescues the 0.5% bar.
+- **The index was calm on these days.** SPY moved 0.42% on average from open to close, five days
+  up and five down. The volatility was in the gapping names.
+- **Costs were never modelled,** and the paper-trade side filled no order, so there is no
+  execution evidence. Costs could only have made the result worse.
+- **The early-signal comparison was not one of the three bars.** Entering at the first pre-market
+  signal averaged +1.69% to the close (83 names, 9 days, median +0.40%). It assumes pre-market fills
+  nobody tested, and it is a hint, not a finding.
+
+The whole record, including the yfinance-only day, reads 50% against 41% at the close with an
+average move of 0.00%: flattered, and still under the 0.5% bar.
+
+**What stays.** The code, the tests, the logged days and the licence boundary below are all
+unchanged. The three scheduled tasks (run, outcomes, backup) are disabled, not deleted. The
+sections that follow describe the test as it was designed and run; they are kept as the record. A
+restart would be a new test with its rules written down first, not a continuation of this one.
+
 ## Feature freeze and the verdict
+
+**The freeze ended with the test on 2026-11-20** (see "Verdict, 20 Nov 2026" above). What follows
+is the rule the test ran under, kept as written.
 
 **The screen is frozen for the duration of the test.** Every threshold lives in `GapConfig` and is
 stamped into every CSV row (`cfg_*` columns), so a change can never silently reinterpret an earlier
