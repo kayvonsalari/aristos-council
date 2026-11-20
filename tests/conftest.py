@@ -303,6 +303,18 @@ def _no_ambient_market_index_in_list_input(monkeypatch):
     yield
 
 
+@pytest.fixture(autouse=True)
+def _no_ambient_market_index_in_the_company_box(monkeypatch):
+    """PAGE-LAYOUT-1: the one company box resolves what is typed against the local market index (it used to
+    be a separate search box that a test had to drive on purpose). Same rule as the list input above: a test
+    must not depend on whether THIS machine has an index, so the default pool is empty (= nothing matches,
+    the text is used as the ticker exactly as typed) unless a test passes ``rows`` or patches the search."""
+    import aristos_council.company_search as cs
+    from aristos_council.market_index import CleanPool
+    monkeypatch.setitem(cs._POOL_CACHE, "__default__", CleanPool())
+    yield
+
+
 # --------------------------------------------------------------------------- #
 # B25-1 - MIN-GROUP-5: a lens that ranks fewer than FIVE companies gives no verdict (it was three).
 # --------------------------------------------------------------------------- #

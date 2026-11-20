@@ -695,9 +695,10 @@ def test_the_judge_panel_box_is_not_offered_for_a_list_run():
     assert not any(str(getattr(c, "key", "")).startswith("opt_judges") for c in at.checkbox)
 
 
-def test_find_a_company_search_fills_the_ticker_box(monkeypatch):
-    """FIND-COMPANY-1 — a picked match fills the Ticker box; the search itself is faked (no
-    real market index read in a test)."""
+def test_the_one_company_box_lists_its_matches_and_runs_the_selected_one(monkeypatch):
+    """FIND-COMPANY-1, PAGE-LAYOUT-1 — ONE box: what is typed is searched, the matches are listed under it
+    with the best one selected, and that match is the company that runs. There is no second "Ticker" box
+    and no "Use this company" button. The search itself is faked (no real market index read in a test)."""
     from streamlit.testing.v1 import AppTest
 
     from aristos_council.company_search import CompanyMatch, SearchResult
@@ -712,20 +713,35 @@ def test_find_a_company_search_fills_the_ticker_box(monkeypatch):
                         lambda *a, **kw: fake_result)
 
     at = _company_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
-    at.text_input(key="cc_find").set_value("siemens").run()
+    at.text_input(key="cc_ticker").set_value("siemens").run()
     assert not at.exception
-    options = next(sb for sb in at.selectbox if str(getattr(sb, "key", "")) == "cc_find_pick"
+    options = next(sb for sb in at.selectbox if str(getattr(sb, "key", "")).startswith("cc_find_pick")
                   ).options
     assert options == ["Siemens Aktiengesellschaft (SIE.XETRA) — Germany — Xetra — $236.4bn "
                        "— Industrials - Industrial Machinery"]
 
-    at.button(key="cc_find_use").click().run()
-    assert not at.exception
-    ticker_box = next(t for t in at.text_input if str(getattr(t, "key", "")) == "cc_ticker")
-    assert ticker_box.value == "SIE.XETRA"
+    keys = [str(getattr(w, "key", "")) for w in list(at.text_input) + list(at.button)]
+    assert "cc_find" not in keys and "cc_find_use" not in keys          # one box, no "Use this company"
+    assert [str(t.label) for t in at.text_input] == ["Find a company"]
+    box = next(t for t in at.text_input if str(getattr(t, "key", "")) == "cc_ticker")
+    assert box.value == "siemens"                                        # the box keeps what was typed
+
+    ran = {}
+    import aristos_council.company_report as cr
+
+    def _fake_run(ticker, lens_ids, **kw):
+        ran["ticker"] = ticker
+        raise RuntimeError("stop before the real engine runs")
+
+    monkeypatch.setattr(cr, "run_company_report", _fake_run)
+    # the page builds its (cached) data adapter before it calls the run: a stand-in, never the real one
+    from tests.test_tab_merge_commit3 import _patch_real_adapter
+    _patch_real_adapter(monkeypatch)
+    at.button(key="cc_run").click().run()
+    assert ran["ticker"] == "SIE.XETRA"                                  # the selected match is what runs
 
 
-def test_find_a_company_says_so_when_nothing_matches(monkeypatch):
+def test_text_that_matches_nothing_is_used_as_the_ticker_exactly_as_typed(monkeypatch):
     from streamlit.testing.v1 import AppTest
 
     from aristos_council.company_search import SearchResult
@@ -733,10 +749,25 @@ def test_find_a_company_says_so_when_nothing_matches(monkeypatch):
     monkeypatch.setattr("aristos_council.company_search.search_companies",
                         lambda *a, **kw: SearchResult(matches=(), cohorts_known=True))
     at = _company_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
-    at.text_input(key="cc_find").set_value("zzznotacompany").run()
+    at.text_input(key="cc_ticker").set_value("rio.l").run()
     assert not at.exception
-    assert any("No match in the local market index" in str(getattr(c, "value", ""))
-              for c in at.caption)
+    assert any("Not in the local market index. It will be looked up exactly as typed."
+               in str(getattr(c, "value", "")) for c in at.caption)
+    assert not any(str(getattr(sb, "key", "")).startswith("cc_find_pick") for sb in at.selectbox)
+
+    ran = {}
+    import aristos_council.company_report as cr
+
+    def _fake_run(ticker, lens_ids, **kw):
+        ran["ticker"] = ticker
+        raise RuntimeError("stop before the real engine runs")
+
+    monkeypatch.setattr(cr, "run_company_report", _fake_run)
+    # the page builds its (cached) data adapter before it calls the run: a stand-in, never the real one
+    from tests.test_tab_merge_commit3 import _patch_real_adapter
+    _patch_real_adapter(monkeypatch)
+    at.button(key="cc_run").click().run()
+    assert ran["ticker"] == "RIO.L"                                      # as the old Ticker box took it
 
 
 def test_find_a_company_notes_when_no_cohort_has_been_built(monkeypatch):
@@ -751,11 +782,11 @@ def test_find_a_company_notes_when_no_cohort_has_been_built(monkeypatch):
                                   country="US", market_cap_usd=1e9, is_home=True, cohorts=()),),
             cohorts_known=False))
     at = _company_mode(AppTest.from_file(str(_APP), default_timeout=60).run())
-    at.text_input(key="cc_find").set_value("x corp").run()
+    at.text_input(key="cc_ticker").set_value("x corp").run()
     assert not at.exception
     assert any("No cohort has been built locally yet" in str(getattr(c, "value", ""))
               for c in at.caption)
-    options = next(sb for sb in at.selectbox if str(getattr(sb, "key", "")) == "cc_find_pick"
+    options = next(sb for sb in at.selectbox if str(getattr(sb, "key", "")).startswith("cc_find_pick")
                   ).options
     # FIND-COMPANY-2: "where" names the country in full ("US" -> "United States").
     assert options == ["X Corp (X.US) — United States — NYSE — $1.0bn"]   # no "— no cohort" suffix
