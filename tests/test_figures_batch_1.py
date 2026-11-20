@@ -14,7 +14,7 @@ No test reaches a provider: the adapter helpers are fed hand-built frames, the r
   15 RVMD          two cash runways on one page (48 months and 3.3 years)
   K1 RVMD          a product launch read as "statements not in one currency"
   K2 RVMD          the share price blanked in the price test
-  K3 RVMD          the runway on last year's spending, not the latest quarter's
+  K3 RVMD          the runway on last year's spending, not the latest twelve months'
 """
 from __future__ import annotations
 
@@ -376,7 +376,7 @@ def _rvmd(**kw) -> Fundamentals:
 def test_the_page_evaluates_gate_version_3_and_the_backtest_stays_on_version_2():
     assert DEFAULT_GATE_ID == "absolute_gate_v3" and BACKTEST_GATE_ID == "absolute_gate_v2"
     v3, v2 = load_gate(), load_gate(BACKTEST_GATE_ID)
-    assert (v3.version, v3.runway_burn_basis) == (3, "latest_quarter")
+    assert (v3.version, v3.runway_burn_basis) == (3, "trailing_twelve_months")
     assert (v2.version, v2.runway_burn_basis) == (2, "latest_year")
     # nothing else moved between the two versions
     for name in ("accrual_exclude_above", "solvency_exclude_below", "f_exclude_at_or_below",
@@ -405,28 +405,32 @@ def test_k3_without_a_usable_interim_statement_the_fiscal_year_is_the_fallback(q
     assert r.months == pytest.approx(12 * 3651.4 / 913.7)              # 48 months
 
 
-def test_k3_gate_version_2_still_reads_the_fiscal_year_whatever_the_quarter_says():
-    f = _rvmd(latest_quarter_free_cash_flow=-400.0e6, latest_quarter_end="2026-09-30", latest_quarter_months=3)
+def _rvmd_with_interims() -> Fundamentals:
+    """The four quarters to Sep 2026: -276.2, -355.7, -745.3, -63.6 ($m), -1,440.8 in all."""
+    return _rvmd(latest_quarter_free_cash_flow=-63.6e6, latest_quarter_end="2026-09-30", latest_quarter_months=3,
+              trailing_interim_free_cash_flow=-1440.8e6)
+
+
+def test_k3_gate_version_2_still_reads_the_fiscal_year_whatever_the_quarters_say():
+    f = _rvmd_with_interims()
     v2 = gate_engine._cash_runway(f, load_gate(BACKTEST_GATE_ID))
     v3 = gate_engine._cash_runway(f, load_gate())
-    assert v2.value == pytest.approx(12 * 3651.4 / 913.7)
-    assert v3.value == pytest.approx(12 * 3651.4 / 1600.0)
+    assert v2.value == pytest.approx(12 * 3651.4 / 913.7)              # 48 months, on fiscal 2025
+    assert v3.value == pytest.approx(12 * 3651.4 / 1440.8)             # 30 months, on the last twelve months
 
 
 def test_15_the_gate_and_the_debt_and_cash_line_give_the_same_runway():
     """Before: 48 months in the gate, "about 3.3 years" (40 months) four sections lower."""
-    for f in (_rvmd(), _rvmd(latest_quarter_free_cash_flow=-400.0e6, latest_quarter_end="2026-09-30",
-                             latest_quarter_months=3)):
+    for f in (_rvmd(), _rvmd_with_interims()):
         gate_months = gate_engine._cash_runway(f, load_gate()).value
         line = debt_and_cash(f).cash_runway
         assert line.available and line.value * 12 == pytest.approx(gate_months)
 
 
 def test_15_the_line_names_the_burn_it_used():
-    quarter = debt_and_cash(_rvmd(latest_quarter_free_cash_flow=-400.0e6, latest_quarter_end="2026-09-30",
-                                  latest_quarter_months=3))
-    assert quarter.cash_runway.label == ("at the spending of the three months to Sep 2026, on a yearly footing "
-                                         "($1.6bn) that lasts about 2.3 years (balance sheet of Sep 2026)")
+    twelve = debt_and_cash(_rvmd_with_interims())
+    assert twelve.cash_runway.label == ("at the spending of the twelve months to Sep 2026 ($1.4bn) that lasts "
+                                        "about 2.5 years (balance sheet of Sep 2026)")
     year = debt_and_cash(_rvmd())
     assert year.cash_runway.label == ("at FY2025's spending ($913.7m) that lasts about 4.0 years "
                                       "(balance sheet of Sep 2026)")
@@ -446,7 +450,7 @@ def test_k3_the_latest_interim_statement_is_read_with_its_length():
 
 
 # --------------------------------------------------------------------------- #
-# the twelve-month burn: available as a basis, not the one version 3 uses
+# the twelve-month burn: the basis version 3 uses (owner's decision 2026-11-20, after one quarter proved lumpy)
 # --------------------------------------------------------------------------- #
 def test_one_quarter_can_be_far_from_typical_so_the_twelve_month_burn_is_also_carried():
     """Revolution Medicines' interim free cash flow, newest first: -63.6, -745.3, -355.7, -276.2 ($m)."""

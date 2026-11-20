@@ -3,10 +3,13 @@
 # interim statements, and its saved results were produced under version 2.
 #
 # What changed from version 2 (owner's decision, 2026-11-20): ONE thing. The cash runway's burn is the
-# latest interim statement's negative free cash flow on a yearly footing (rules.cash_runway.burn_basis:
-# latest_quarter), not last fiscal year's. Revolution Medicines burned $913.7m in 2025 and far more by
-# its September 2026 quarter; the runway on last year's figure was too long. Cash is still ALL cash and
-# short-term investments (debt is shown beside it, not netted off), and both thresholds are unchanged.
+# negative free cash flow of the latest TWELVE MONTHS, summed from the interim statements (four quarters,
+# or two half-years; rules.cash_runway.burn_basis: trailing_twelve_months), not last fiscal year's.
+# Revolution Medicines burned $913.7m in 2025 and $1,440.8m in the twelve months to September 2026; the
+# runway on last year's figure (48 months) was too long, and it is 30 months on the newer one. A single
+# quarter was tried first and rejected the same day: that company's quarters ran -$745m and then -$64m,
+# and the latest one alone gave 172 months. Cash is still ALL cash and short-term investments (debt is
+# shown beside it, not netted off), and both thresholds are unchanged.
 # The calibration block below was measured under version 2 and is carried over as that record.
 #
 # The version 2 header, kept for the history of the other rules:
@@ -74,10 +77,10 @@ rules:
     measure: (cash plus short-term investments) / yearly burn, months
     applies_when: operating cash flow of the latest year is negative
     burn: >-
-      negative free cash flow of the latest interim statement (three or six months), put on a yearly
-      footing; the latest fiscal year when there is no interim statement or its free cash flow is not
-      negative
-    burn_basis: latest_quarter
+      negative free cash flow of the latest twelve months, summed from the interim statements (four
+      quarters, or two half-years); the latest fiscal year when those statements are not all on file or
+      their sum is not negative
+    burn_basis: trailing_twelve_months
     exclude_below_months: 12
     warn_below_months: 24
     source: >-

@@ -686,7 +686,7 @@ def test_abnormal_investment_needs_four_years_and_positive_sales():
 def test_the_gate_file_loads_with_every_threshold_the_owner_set():
     # FIGURES-1: version 3 is the page's gate; it differs from version 2 in the runway's burn only
     assert D.id == "absolute_gate_v3" and D.version == 3 and D.frozen
-    assert D.runway_burn_basis == "latest_quarter"
+    assert D.runway_burn_basis == "trailing_twelve_months"
     v2 = load_gate("absolute_gate_v2")
     assert v2.version == 2 and v2.frozen and v2.runway_burn_basis == "latest_year"
     assert D.accrual_exclude_above == 0.10

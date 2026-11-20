@@ -14,7 +14,7 @@ import yaml
 
 _ROOT = Path(__file__).resolve().parents[3]
 GATES_DIR = _ROOT / "gates"
-# FIGURES-1: version 3 is the page's gate (the runway reads the latest quarter's burn). Version 2 stays on
+# FIGURES-1: version 3 is the page's gate (the runway reads the burn of the latest twelve months). Version 2 stays on
 # disk unchanged and is what the BACKTEST evaluates: its history has no interim statements, and its saved
 # results were produced under version 2.
 DEFAULT_GATE_ID = "absolute_gate_v3"
@@ -47,7 +47,7 @@ class GateDefinition:
     cover_not_covered_below: float
     cover_years: int
     intensity_warn_above: Optional[float] = None
-    runway_burn_basis: str = "latest_year"   # "latest_year" (version 2) or "latest_quarter" (version 3)
+    runway_burn_basis: str = "latest_year"   # "latest_year" (version 2); "trailing_twelve_months" (version 3)
     not_covered_industries: tuple = ()
     calibration: dict = field(default_factory=dict)
     raw: dict = field(default_factory=dict)
