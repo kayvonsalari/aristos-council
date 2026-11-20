@@ -69,7 +69,24 @@ _DEFAULTS = {
     # were unpublishable. It is one call per RUN, not per name, so the stronger tier costs
     # a cent or two rather than a multiple of anything.
     "reader": "anthropic:claude-sonnet-4-6",
+    # PILOT-STRIP-1 item 7 - the COMPANY page's plain-English summary, on the cheapest Claude Haiku. It used to
+    # share the "reader" tier above (claude-sonnet-4-6). Its own tier, so the list report's run summary (the
+    # five-live-runs evidence in the comment above is about THAT job) is not changed by this, and so the choice
+    # can be overridden on its own with ARISTOS_MODEL_COMPANY_READER. The company summary is the narrower job:
+    # one company, a facts pack of fixed shape, and five deterministic checks that withhold a wrong one.
+    "company_reader": "anthropic:claude-haiku-5-5",
 }
+
+# Models that reject a sampling temperature (the request fails with a 400 if one is sent): the Claude 5 family
+# and Opus 4.7 / 4.8. For these the runner sends none, and records ``temperature: None``, which says honestly
+# that the wording of a summary is not pinned the way a temperature-0 call's is; the checks are what hold it.
+_NO_TEMPERATURE_PREFIXES = ("claude-haiku-5", "claude-sonnet-5", "claude-opus-5", "claude-opus-4-7",
+                            "claude-opus-4-8", "claude-fable", "claude-mythos")
+
+
+def _accepts_temperature(model_id: str) -> bool:
+    name = str(model_id or "").split(":", 1)[-1]
+    return not name.startswith(_NO_TEMPERATURE_PREFIXES)
 
 # Default temperature per tier. 0.0 everywhere — reproducibility first; the
 # verdict (decision) in particular MUST be stable. Raise ONLY via env var if you
@@ -79,6 +96,7 @@ _DEFAULT_TEMPS = {
     "critic": 0.0,
     "decision": 0.0,     # the verdict MUST be stable — temp 0
     "reader": 0.0,       # the same run must not produce a differently-worded summary
+    "company_reader": 0.0,   # asked for, but only SENT to a model that accepts one (_accepts_temperature)
 }
 
 
@@ -173,7 +191,7 @@ class LangChainRunner:
         self.tier = tier
         self.schema = schema
         self.model_id = _model_for(tier)
-        self.temperature = _temp_for(tier)
+        self.temperature = _temp_for(tier) if _accepts_temperature(self.model_id) else None
         # NARR-PARSE-1: how many stringified nested objects this runner has had to repair.
         # Counted rather than merely logged, because "it happens sometimes" is not a thing
         # anyone can act on and "it happened 4 times in this run" is.
@@ -190,8 +208,9 @@ class LangChainRunner:
         # discarded at the seam and the only cost figure available is the estimate. The
         # parsed value is unwrapped below, so this class's contract is unchanged:
         # invoke() still returns the schema instance, and a parse failure still raises.
+        kwargs = {} if self.temperature is None else {"temperature": self.temperature}
         self._llm = init_chat_model(
-            self.model_id, temperature=self.temperature
+            self.model_id, **kwargs
         ).with_structured_output(schema, include_raw=True)
 
     def invoke(self, system: str, user: str):

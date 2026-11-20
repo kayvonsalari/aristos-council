@@ -381,6 +381,12 @@ def _pinned_tie_rule(request):
 # tests marked ``index_age`` get the real thing.
 os.environ["ARISTOS_NO_INDEX_AGE"] = "1"
 
+# PILOT-STRIP-1: pilot mode HIDES the asset switch, the Display section, the Scoreboard tab, the list input and
+# the council / judge tick boxes; it deletes none of them. The suite therefore runs with pilot mode OFF, so every
+# hidden control keeps its tests and can come back; tests/test_pilot_strip.py turns it on (and checks that ON is
+# the default when the variable is unset).
+os.environ["ARISTOS_PILOT_MODE"] = "0"
+
 
 @pytest.fixture(autouse=True)
 def _index_age_for_marked_tests(request, monkeypatch):

@@ -1555,12 +1555,15 @@ def company_report_html(report, *, run_start: Optional[datetime] = None) -> str:
     opinion (if asked for), the full peers table, Sources. The same objects the text
     export prints, so the two cannot drift."""
     from ..company_check import company_sources
-    from ..company_report import HOUSE_LINE, KICKER, NO_LENS_REASON, OUTSIDE_TESTED_RANGE_LINE, context_row
+    from ..company_report import (HOUSE_LINE, HOW_TO_READ, KICKER, NO_LENS_REASON, OUTSIDE_TESTED_RANGE_LINE,
+                                  context_row)
     from ..peer_table import rank_columns
 
     c = report.check
     stamp = _local_stamp(run_start)
-    header_tail = f'<p class="house">{_esc(HOUSE_LINE)}</p>'
+    # PILOT-STRIP-1 item 10: what the report is and how to read it, then the house line
+    header_tail = ("".join(f'<p class="house">{_esc(ln)}</p>' for ln in HOW_TO_READ)
+                   + f'<p class="house">{_esc(HOUSE_LINE)}</p>')
     # ABSOLUTE-PAGE-1: the header names no lens (the lenses no longer decide anything; they sit in the relative view)
     parts = [f'<header class="doc"><p class="kicker">Aristos · company report · {_esc(KICKER.lower())}</p>'
              f"<h1>{_esc(report.display)}</h1>"
@@ -1716,7 +1719,7 @@ def _workings_html(report) -> str:
                 items.append(f"<strong>{_esc(r.lens)}</strong> track record: {_esc(r.badge_detail)}")
         chance = lens_notes_chance(notes)
         lead = f'<p class="note">{_esc(chance)}</p>' if chance else ""
-        inner.append('<section class="section"><h2>Lens notes</h2>' + lead + _bullets(items)
+        inner.append('<section class="section"><h2>Lens descriptions</h2>' + lead + _bullets(items)
                      + "</section>")
     sources = company_sources(c)
     if sources:
@@ -1829,9 +1832,12 @@ def _company_peers_html(result, columns=None, company_ticker: str = "") -> str:
         n_cols = 6 + len(columns)
         cell_classes = ({(0, i): "this-company" for i in range(n_cols)}
                        if columns and company_ticker and rows else {})
-        out.append(_table(["Ticker", "Name", "Exchange", "Market cap (USD)", "Market cap (local)",
+        from ..peer_table import cap_headers, cap_snapshot_note
+        out.append(_table(["Ticker", "Name", "Exchange", *cap_headers(group),
                            *(c.header for c in columns), "Sub-industry"], body,
                           cell_classes=cell_classes))
+        if cap_snapshot_note(group):
+            out.append(f'<p class="note">{_esc(cap_snapshot_note(group))}</p>')
         if has_one_system_peers(rows):
             out.append(f'<p class="note">{_esc(ONE_SYSTEM_NOTE)}</p>')
         from ..peer_table import PEER_METHOD_TITLE

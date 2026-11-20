@@ -64,6 +64,17 @@ _ROOT = Path(__file__).resolve().parents[2]
 HOUSE_LINE = ("The gate and the price test decide: the answer below comes from fixed rules applied to the company's "
               "accounts and its price. The writing explains it and cannot change a number. Nothing here is a "
               "recommendation.")
+# PILOT-STRIP-1 item 10: two plain lines at the top, for someone who has never seen the page: what it is and how
+# to read it. The house line above is the third. Same words in the page, the text, the Markdown and the HTML.
+HOW_TO_READ = (
+    "What this is: a check of one company, in two steps. First a safety check of its accounts and its debt (the "
+    "gate). Then a price test: could someone who buys the shares today and holds them for ten years earn the "
+    "return this report asks for (the hurdle: the ten-year government bond yield plus 5 points a year)?",
+    "How to read it: the answer comes first, in one plain sentence, then a short summary. The sections after "
+    "that show the working behind it, and the last part, the workings, is detail you can skip.",
+)
+# (The line names no section by its heading: the report sweep and the page-order tests find sections by their
+# heading text, and a heading quoted in the header would be found there first.)
 # ABSOLUTE-UI-1: the one kicker above the company page's title, in every rendering and in the saved record.
 KICKER = "What the price requires, and what the record shows"
 NO_LENS_REASON = "No lens is ticked, so there is nothing to vote."
@@ -1401,6 +1412,8 @@ def report_record(report: CompanyReport) -> dict:
         "schema_version": 2,
         "kind": "company_report", "ticker": report.ticker, "company": report.display,
         "run_at": report.run_at, "lenses": list(report.lens_ids),
+        "summary_meta": ({k: v for k, v in (getattr(report.summary, "meta", None) or {}).items()
+                          if k != "withheld_text"} if report.summary is not None else None),
         "kicker": KICKER, "house_line": HOUSE_LINE,       # ABSOLUTE-UI-1: the same wording as every rendering
         "context_row": context_row(report),
         "peer_snapshot": peer_snapshot(group) if group is not None and group.subject else None,
@@ -1759,7 +1772,7 @@ def workings_text_lines(report: CompanyReport) -> list[str]:
 
     notes = [r for r in table_rows(report) if r.asks or r.badge_detail or r.full_reason]
     if notes:
-        lines.append("LENS NOTES (what each lens asks, its full reason, its track record)")
+        lines.append("LENS DESCRIPTIONS (what each lens asks, its full reason, its track record)")
         if shows_track_record(report):                                # BADGE-EXPLAIN-1: the legend opens the notes
             lines += [f"  {line}" for line in badge_legend()]
         chance = lens_notes_chance(notes)
@@ -1783,7 +1796,7 @@ def format_company_report(report: CompanyReport) -> str:
     """The report as text, in the page order: the answer, the story, the gate, the price test, the return
     range, the context, the judge panel and the council opinion (only when ticked), then the workings."""
     c = report.check
-    lines = [f"Company Report - {report.display}", KICKER, context_row(report), HOUSE_LINE, ""]
+    lines = [f"Company Report - {report.display}", KICKER, context_row(report), *HOW_TO_READ, HOUSE_LINE, ""]
     if report.unrateable:
         lines += [f"UNRATEABLE - {c.data_integrity.note}. No data, so no ranking and no readings.",
                   c.pointer]
@@ -1809,7 +1822,13 @@ def format_company_report(report: CompanyReport) -> str:
 # --------------------------------------------------------------------------- #
 # The plain-English summary (opt-in; the only place a model is reached)
 # --------------------------------------------------------------------------- #
-COMPANY_PROMPT_VERSION = "reader_company_v2"
+# PILOT-STRIP-1: v3 (v2 stays on disk, so a summary recorded under it stays reproducible). v2 told the writer to
+# say "no backtest of this method exists yet" in every summary, which became false the day the backtest shipped;
+# v3 reads the backtest from the pack, names the four exclusion rules in plain words, gives the price test in a
+# fixed plain order, drops the consensus sentence, and adds the fifth check (nothing contradicts the report).
+COMPANY_PROMPT_VERSION = "reader_company_v3"
+# The model tier the company summary runs on: the cheapest Claude Haiku (agents/runners.py, "company_reader").
+COMPANY_READER_TIER = "company_reader"
 _COMPANY_PROMPT = Path(__file__).resolve().parent / "agents" / "prompts" / f"{COMPANY_PROMPT_VERSION}.md"
 
 # ABSOLUTE-PAGE-1: the role each growth case plays on the page, for the summary's role check
@@ -1835,9 +1854,18 @@ def company_facts_pack(report: CompanyReport) -> dict:
     gate, av = getattr(c, "gate", None), getattr(c, "absolute", None)
     first, second = answer_lines(report)
 
+    from .company_page import rule_plain
+    from .summary_contradictions import position_sentence
+
     def rule(r, role):
-        return {"name": r.label, "role": role, "reading": r.reading, "limit": r.limit, "result": r.result,
-                "note": r.note}
+        out = {"name": r.label, "role": role, "reading": r.reading, "limit": r.limit, "result": r.result,
+               "note": r.note}
+        if role == "exclusion" and rule_plain(r.key):
+            out["plain"] = rule_plain(r.key)            # item 12: what the rule checks, in plain words
+        position = position_sentence(r.label, r.reading, r.limit)
+        if position:
+            out["position"] = position                  # item 17: the reading against its range, worked out by code
+        return out
 
     gate_block = None
     if gate is not None:
@@ -1866,8 +1894,16 @@ def company_facts_pack(report: CompanyReport) -> dict:
         if av.hurdle.available:
             # "US (USD)": the two-letter country code and the currency are names the summary may use
             hurdle_name = f"{av.hurdle.currency} ({av.hurdle.bond_symbol[:2]})"
+    # item 16: whether THIS report carries a backtest of the method for the company's industry, and the one
+    # sentence the page itself prints about it. The summary must agree with it (summary_contradictions).
+    from .absolute_backtest.lookup import NO_RESULT, cannot_sentence, workings_lines
+    slug = getattr(report, "cohort_slug", None)
+    has_backtest = bool(workings_lines(slug))
+    backtest = {"exists": has_backtest,
+                "statement": (cannot_sentence(slug) or NO_RESULT) if has_backtest else NO_RESULT}
     return {
         "company": {"name": report.display},
+        "backtest": backtest,
         "currency_and_bond": ({"name": hurdle_name} if hurdle_name else None),
         "answer": [first, second],
         "gate": gate_block,
@@ -1909,12 +1945,20 @@ def write_company_summary(report: CompanyReport, *, runner=None):
         from .agents.runners import LangChainRunner
         from .agents.schemas import ReaderSummary
         from .costs import CostMeter
-        runner = LangChainRunner("reader", ReaderSummary, meter=CostMeter())
+        runner = LangChainRunner(COMPANY_READER_TIER, ReaderSummary, meter=CostMeter())
     if runner is None:
         return ReaderResult(note=NO_KEY_NOTE, meta={"written": False, "reason": "no key"})
-    return write_summary_from_pack(company_facts_pack(report), runner=runner,
-                                   prompt=company_prompt_text(),
-                                   prompt_version=COMPANY_PROMPT_VERSION)
+    result = write_summary_from_pack(company_facts_pack(report), runner=runner,
+                                     prompt=company_prompt_text(),
+                                     prompt_version=COMPANY_PROMPT_VERSION)
+    # what the call(s) cost, measured from the provider's own token counts (None for a fake runner: never a
+    # silent zero). One summary is one call, or two when the check sent it back once.
+    meter = getattr(runner, "meter", None)
+    if meter is not None and result.meta is not None:
+        total = meter.total()
+        result.meta.update({"calls": total.calls, "input_tokens": total.input_tokens,
+                            "output_tokens": total.output_tokens, "usd": total.usd})
+    return result
 
 
 # --------------------------------------------------------------------------- #

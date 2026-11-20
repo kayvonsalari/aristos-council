@@ -40,6 +40,7 @@ from aristos_council.demo_surface import (
     lens_caption, strategy_label, strategy_role, suggested_first,
     universe_label, universe_role, visible_universes)
 from aristos_council.costs import actual_vs_estimate, cost_phrase
+from aristos_council.pilot import pilot_mode
 
 # READER-1 — what one summary costs, for the checkbox label and the Run-button line. One
 # call on the cheapest tier over a facts pack of a few thousand tokens; stated as "about"
@@ -488,6 +489,9 @@ def company_page_offered(mode: str) -> bool:
 
 
 OPTIONAL_EXTRAS_HEADING = "Optional extras (paid AI calls)"
+# PILOT-STRIP-1: said once where the tick boxes used to be, so the one model call is never a surprise
+PILOT_SUMMARY_NOTE = ("A plain-English summary is written with every run: one small AI call, well under one cent. "
+                      "The answer itself comes from fixed rules and uses no AI.")
 OPTIONAL_EXTRAS_TIME = "Adds a few minutes to the run."          # B24-E6: a council + summary run took 6.6 min
 
 
@@ -521,6 +525,12 @@ def render_run_options(choices, *, input_kind: str, show_council: bool,
         # ABSOLUTE-UI-1: the company page has no lens tick boxes. Every relative lens runs, and appears only as
         # context. The shared tick store is left alone, so a list run keeps the ticks the reader chose.
         strategies = [c.strategy for c in choices]
+    if pilot_mode() and input_kind == "company":
+        # PILOT-STRIP-1 (items 5 to 7): no tick boxes. The plain-English summary is always written; the council
+        # opinion and the judge panel are hidden (their code and their tick boxes return with pilot mode off).
+        st.caption(PILOT_SUMMARY_NOTE)
+        st.session_state["_opts_last_kind"] = input_kind
+        return RunOptions(strategies=strategies, with_summary=True, with_council=False, with_judges=False)
     # B22-U3: the two paid AI extras are not lenses - their own small heading sets them apart from the grid
     st.markdown(f'<div class="ar-sub" style="margin-top:14px">{OPTIONAL_EXTRAS_HEADING}<br>'
                 f"{OPTIONAL_EXTRAS_TIME}</div>", unsafe_allow_html=True)
@@ -2522,7 +2532,10 @@ def render_input() -> InputChoice:
             _carry_lenses_to_store(lens_ids)
 
     etf_mode = asset_mode() == ETFS
-    if etf_mode:
+    if pilot_mode():
+        # PILOT-STRIP-1 (item 4): company only. The Company / Cohort-list switch is not drawn.
+        kind = INPUT_COMPANY
+    elif etf_mode:
         kind = INPUT_LIST
         st.caption("ETF mode: a list of fund tickers only — there is no per-fund peer "
                   "group to check one against.")
@@ -2808,7 +2821,7 @@ def render_run_tab() -> None:
     ``run_multi_strategy_pipeline``/``run_rank_pipeline`` for a list) and their own
     result renderers are UNCHANGED — this only decides which one runs and shows its
     EXISTING page, in its EXISTING order (Part 2 reorders the company page)."""
-    st.subheader("Analyse — one company, or a cohort")
+    st.subheader(PILOT_HEADING if pilot_mode() else "Analyse — one company, or a cohort")
     st.caption(COMPANY_TOP_LINE if company_path_active() else TOP_LINE)
     _index_age_caption()
 
@@ -2864,6 +2877,13 @@ START_PANEL = (
 )
 
 
+# PILOT-STRIP-1: the same panel with no "extras" step and no pointer to the hidden list input
+PILOT_HEADING = "Analyse a company"
+PILOT_NO_KEY_NOTE = ("No ANTHROPIC_API_KEY was found in the environment or `.env`, so the summary will be written "
+                     "by fixed templates instead of the AI. Every figure and the answer are the same either way.")
+PILOT_START_PANEL = (START_PANEL[0], START_PANEL[1], ("1. Find a company", "2. Run"), "")
+
+
 def _render_company_run(choice: InputChoice, choices) -> None:
     """The company-input half of the Analyse tab — unchanged from the pre-merge Company
     Check tab, except: options come from the shared block (commit 1), and
@@ -2882,7 +2902,8 @@ def _render_company_run(choice: InputChoice, choices) -> None:
 
     has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
     if (with_summary or with_council) and not has_key:
-        st.info("This needs ANTHROPIC_API_KEY in the environment or `.env`; without it the page "
+        st.info(PILOT_NO_KEY_NOTE if pilot_mode() else
+                "This needs ANTHROPIC_API_KEY in the environment or `.env`; without it the page "
                 "runs without it and says so.")
 
     if not strategies:                       # only when the mode offers no lens at all
@@ -2918,7 +2939,8 @@ def _render_company_run(choice: InputChoice, choices) -> None:
     report = st.session_state.get("cc_report")
     if report is None and not run:
         # UI-POLISH-1 item 6: the start state - a quiet panel where the result will appear
-        st.markdown(ui_style.empty_panel(*START_PANEL), unsafe_allow_html=True)
+        st.markdown(ui_style.empty_panel(*(PILOT_START_PANEL if pilot_mode() else START_PANEL)),
+                    unsafe_allow_html=True)
     if report is not None:
         st.divider()
         _note = _stale_results_note(
@@ -3344,6 +3366,8 @@ def _render_peers(result, columns=None, company_ticker: str = "", *,
     import pandas as pd
 
     from aristos_council.peer_table import PEER_METHOD_TITLE, rank_display
+    from aristos_council.peer_table import cap_headers as _cap_headers
+    from aristos_council.peer_table import cap_snapshot_note as _cap_snapshot_note
     # Numbers stay numbers (sortable by size), largest USD cap first. The local column is in the
     # MAJOR unit: a London cap is pounds although its quote code says GBX (INDEX-GBX-SCALE-1).
     columns = list(columns or ())
@@ -3368,9 +3392,11 @@ def _render_peers(result, columns=None, company_ticker: str = "", *,
     st.dataframe(
         data, hide_index=True, width="stretch",
         column_config={
-            USD_COLUMN: st.column_config.NumberColumn(USD_COLUMN, format=USD_FORMAT),
-            LOCAL_COLUMN: st.column_config.NumberColumn(LOCAL_COLUMN, format=LOCAL_FORMAT),
+            USD_COLUMN: st.column_config.NumberColumn(_cap_headers(group)[0], format=USD_FORMAT),
+            LOCAL_COLUMN: st.column_config.NumberColumn(_cap_headers(group)[1], format=LOCAL_FORMAT),
         })
+    if _cap_snapshot_note(group):           # PILOT-STRIP-1 item 20: the sizes are the snapshot's, not today's
+        st.caption(_cap_snapshot_note(group))
     if has_one_system_peers(peer_rows(group)):
         st.caption(ONE_SYSTEM_NOTE)
     # PEERS-METHOD-1: how the group was built is a diagnostic, collapsed by default.
@@ -3392,7 +3418,7 @@ def _render_company_report(report) -> None:
     the same order."""
     import pandas as pd
 
-    from aristos_council.company_report import (HOUSE_LINE, KICKER, NO_LENS_REASON,
+    from aristos_council.company_report import (HOUSE_LINE, HOW_TO_READ, KICKER, NO_LENS_REASON,
                                                 OUTSIDE_TESTED_RANGE_LINE, context_row,
                                                 format_company_report)
     from aristos_council.export.report_html import company_report_html
@@ -3407,6 +3433,8 @@ def _render_company_report(report) -> None:
         st.markdown(company_cards.header_card(report), unsafe_allow_html=True)
         st.caption(context_row(report))
         st.markdown(company_cards.summary_chips(report), unsafe_allow_html=True)
+    for _how in HOW_TO_READ:                # PILOT-STRIP-1 item 10: what this is, how to read it
+        st.markdown(_how)
     st.caption(HOUSE_LINE)
 
     # TAB-MERGE-1 part 2 commit 4 — click-through from a list result. Shown ONLY when
@@ -3577,7 +3605,7 @@ def _render_company_report(report) -> None:
                 st.markdown(f"- \"{_claim_text}\" - {_why}")
         _notes = [r for r in table_rows(report) if r.full_reason or r.badge_detail]
         if _notes or page.track_intro:
-            st.markdown("**Lens notes**")
+            st.markdown("**Lens descriptions**")
             from aristos_council.company_story import badge_legend
             for _legend in (badge_legend() if page.track_intro else []):   # BADGE-EXPLAIN-1: legend first
                 st.caption(_legend)
@@ -3681,6 +3709,8 @@ def _render_sources(result) -> None:
 def company_path_active() -> bool:
     """ABSOLUTE-UI-1: True when the Analyse tab is on the company page (the "Company" input, stocks mode). The
     sidebar reads it to switch the lens-description toggle off, because the company page has no lens tick boxes."""
+    if pilot_mode():                        # PILOT-STRIP-1: company only, stocks only
+        return True
     return (st.session_state.get("run_input_kind", "Company") == "Company"
             and asset_mode() != ETFS)
 
@@ -3692,6 +3722,8 @@ LENS_DESC_COMPANY_NOTE = ("Applies to cohort and list runs only. The company pag
 def asset_mode() -> str:
     """The current Stocks / ETFs mode. Stocks whenever nothing has been chosen — on a
     fresh start, after a refresh, and in every test that never touches the switch."""
+    if pilot_mode():                        # PILOT-STRIP-1 (item 1): the switch is hidden; stocks is always used
+        return DEFAULT_ASSET_MODE
     return st.session_state.get("asset_mode") or DEFAULT_ASSET_MODE
 
 
@@ -3761,6 +3793,11 @@ def main() -> None:
                 icon_image=str(MARK_PATH), size="large")
     except Exception:               # noqa: BLE001 - a missing image must never stop the app
         pass
+
+    if pilot_mode():
+        # PILOT-STRIP-1 (items 1 to 3): no asset-type switch, no Display section, no Scoreboard tab. One page.
+        render_run_tab()
+        return
 
     with st.sidebar:
         # ASSET-MODE-1 — the one control that decides what every picker offers. In the

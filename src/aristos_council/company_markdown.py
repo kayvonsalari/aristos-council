@@ -33,12 +33,12 @@ def _bullets(lines) -> list[str]:
 def company_report_markdown(report) -> str:
     """The Markdown export of ONE company report."""
     from .company_check import analyst_forecast_lines, absolute_reading_lines, company_sources
-    from .company_report import HOUSE_LINE, KICKER, context_row, price_and_cash_lines
+    from .company_report import HOUSE_LINE, HOW_TO_READ, KICKER, context_row, price_and_cash_lines
     from .peer_table import rank_columns
 
     c = report.check
     out = [f"# Company Report — {report.display}", "", f"**{KICKER}**", "", f"*{context_row(report)}*", "",
-           f"*{HOUSE_LINE}*", ""]
+           *[x for ln in HOW_TO_READ for x in (ln, "")], f"*{HOUSE_LINE}*", ""]
     if report.unrateable:
         out += [f"**UNRATEABLE** — {c.data_integrity.note}. No data, so no ranking and no readings.",
                 "", c.pointer]
@@ -125,7 +125,7 @@ def company_report_markdown(report) -> str:
         out += ["### AI text check", "", line, ""]
     extra = [r for r in table_rows(report) if r.full_reason or r.badge_detail]
     if extra or page.track_intro:
-        out += ["### Lens notes", ""]
+        out += ["### Lens descriptions", ""]
         if page.track_intro:                                          # BADGE-EXPLAIN-1: legend first
             out += [f"- {line}" for line in badge_legend()] + [""]
         chance = lens_notes_chance(extra)

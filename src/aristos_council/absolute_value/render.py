@@ -183,6 +183,13 @@ def _return_rows(av: AbsoluteValue) -> list[list[str]]:
     return rows
 
 
+# PILOT-STRIP-1 item 21: KO read "operating profit over enterprise value 4.0%" beside a valuation band of EV/EBIT
+# 25.7, which is 3.9%. Both are right; they are built on different days' figures, and the page now says so.
+EV_BASIS_NOTE = ("That figure uses the data provider's market value at the time of the run and the latest quarterly "
+                 "balance sheet. The valuation band under the workings uses the last closing price and the latest "
+                 "annual accounts, so the two can differ by a few tenths of a point.")
+
+
 def context_lines(av: AbsoluteValue) -> list[str]:
     """Readings that carry no verdict and belong to section 6 (context, no vote): earnings over price and
     the earnings power value. Empty when neither could be worked out."""
@@ -190,7 +197,10 @@ def context_lines(av: AbsoluteValue) -> list[str]:
     out = []
     ey = ctx.get("ebit_over_ev")
     if ey is not None:
-        out.append(f"{ctx.get('ebit_over_ev_label') or 'Operating profit over enterprise value'}: {_pct(ey)}.")
+        label = ctx.get('ebit_over_ev_label') or 'Operating profit over enterprise value'
+        out.append(f"{label}: {_pct(ey)}.")
+        if label == "Operating profit over enterprise value":
+            out.append(EV_BASIS_NOTE)
     epv = ctx.get("epv")
     if epv is not None:
         ev = ctx.get("epv_enterprise_value")

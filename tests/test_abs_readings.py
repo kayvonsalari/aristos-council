@@ -55,7 +55,7 @@ def test_years_of_cash_flow_to_repay_the_debt():
     out = debt_and_cash(_f(total_debt=50e9, total_cash=10e9, operating_cash_flow=8e9))
     assert out.net_debt_to_ocf.value == pytest.approx(5.0)
     assert out.net_debt_to_ocf.label == (
-        "would take 5.0 years of operating cash flow to repay its debt")
+        "would take 5.0 years of operating cash flow to repay its debt after cash")
 
 
 def test_negative_operating_cash_flow_abstains_and_says_why():
@@ -104,7 +104,7 @@ def test_a_MISSING_interest_expense_abstains_differently_from_a_zero_one():
 def test_years_to_repay_from_free_cash_flow():
     out = debt_and_cash(_f(total_debt=50e9, total_cash=10e9, free_cash_flow=5e9))
     assert out.years_to_repay.value == pytest.approx(8.0)
-    assert "8.0 years of free cash flow" in out.years_to_repay.label
+    assert "8.0 years of the latest year's free cash flow to repay its debt after cash" in out.years_to_repay.label
 
 
 def test_non_positive_free_cash_flow_abstains_and_says_what_that_means():
@@ -463,7 +463,7 @@ def test_a_consistent_pair_is_still_reported():
     out = debt_and_cash(_f(total_debt=50e9, total_cash=10e9,
                            operating_cash_flow=10e9, free_cash_flow=8e9))
     assert out.years_to_repay.available
-    assert "5.0 years of free cash flow" in out.years_to_repay.label
+    assert "5.0 years of the latest year's free cash flow" in out.years_to_repay.label
 
 
 def test_equal_figures_are_not_a_disagreement():

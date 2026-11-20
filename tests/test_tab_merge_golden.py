@@ -39,6 +39,8 @@ _GATE_KEYS = {"gate", "absolute"}   # ABSOLUTE-VALUE-1 adds the second, additive
 _PAGE_KEYS = {"design_version", "verdict_of_record", "relative"}
 # ABSOLUTE-UI-1: the saved record carries the same header wording as every rendering (additive, display-only).
 _PAGE_KEYS |= {"kicker", "house_line", "context_row"}
+# PILOT-STRIP-1: which model wrote the summary, its checks and its measured cost (None when none was asked for).
+_PAGE_KEYS |= {"summary_meta"}
 
 
 def test_every_v1_key_is_still_present_unchanged(tmp_path):

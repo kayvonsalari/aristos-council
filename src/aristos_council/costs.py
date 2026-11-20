@@ -38,6 +38,7 @@ from typing import Optional
 # A model absent from here prices to None — the run reports "not priced", not "$0.00".
 MODEL_PRICES: dict[str, tuple[float, float]] = {
     "claude-haiku-4-5": (1.00, 5.00),
+    "claude-haiku-5-5": (0.10, 0.50),       # prompts up to 100K tokens; the company summary's pack is far under
     "claude-sonnet-4-6": (3.00, 15.00),
     "claude-sonnet-4-5": (3.00, 15.00),
     "claude-opus-4-1": (15.00, 75.00),

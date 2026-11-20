@@ -222,7 +222,7 @@ def test_4b_one_line_under_the_table_comes_before_the_existing_track_record_line
     assert shows_track_record(rep)
     assert TRACK_RECORD_INTRO == ("Track record: whether this lens beat its industry group in a ten-year test. It "
                                   "describes the lens, not the company, and changes no vote. Full definitions "
-                                  "under Lens notes.")
+                                  "under Lens descriptions.")
     page = story_page(rep)
     assert page.track_intro == TRACK_RECORD_INTRO
     text, md, html = format_company_report(rep), company_report_markdown(rep), company_report_html(rep)
@@ -244,9 +244,9 @@ def test_4c_lens_notes_open_with_a_legend_built_from_the_badge_codes_own_strings
         assert label in BADGE_LABELS
     rep = _real(tmp_path)
     text, md, html = format_company_report(rep), company_report_markdown(rep), company_report_html(rep)
-    notes_text = text[text.index("LENS NOTES"):]
-    notes_md = md[md.index("### Lens notes"):]
-    notes_html = html[html.index("<h2>Lens notes</h2>"):]
+    notes_text = text[text.index("LENS DESCRIPTIONS"):]              # PILOT-STRIP-1 item 15: renamed
+    notes_md = md[md.index("### Lens descriptions"):]
+    notes_html = html[html.index("<h2>Lens descriptions</h2>"):]
     assert notes_text.split("\n")[1].strip() == legend[0]               # first thing under the heading
     assert "passed the test here" in notes_html
     for line in legend:

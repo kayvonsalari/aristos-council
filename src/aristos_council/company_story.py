@@ -577,7 +577,7 @@ def usable_figures_note(report) -> str:
 TRACK_RECORD_HEADER = "Track record"
 TABLE_HEADERS = ["Lens", "Vote or mark", TRACK_RECORD_HEADER, "Reason"]
 TRACK_RECORD_INTRO = ("Track record: whether this lens beat its industry group in a ten-year test. It describes "
-                      "the lens, not the company, and changes no vote. Full definitions under Lens notes.")
+                      "the lens, not the company, and changes no vote. Full definitions under Lens descriptions.")
 
 
 def shows_track_record(report) -> bool:
@@ -822,11 +822,12 @@ def story_page(report) -> StoryPage:
         from .company_page import story_paragraphs as _new_story
         paragraphs = tuple(_new_story(report))
         model = False
-    from .company_page import answer_lines as _new_answer
+    from .company_page import answer_shown as _new_answer
     from .company_report import NO_LENS_REASON
+    old = answer_lines(report)
     return StoryPage(
         answer=_new_answer(report), paragraphs=paragraphs, model_summary=model,
-        relative_answer=answer_lines(report),
+        relative_answer=(f"{OLD_METHOD_LEAD} {old[0]}", *old[1:]),
         note=summary_note(report),
         tag=tuple(small_company_tag(report)) + ((index_age_line(report),) if index_age_line(report) else ()),
         headers=tuple(TABLE_HEADERS), rows=tuple(table_rows(report)), caption=track_caption(report),
@@ -836,12 +837,18 @@ def story_page(report) -> StoryPage:
         track_intro=TRACK_RECORD_INTRO if shows_track_record(report) else "")
 
 
+# PILOT-STRIP-1 item 21: the lens majority sits under a heading that says the lenses no longer vote, so the line
+# says whose count it is before it gives it.
+OLD_METHOD_LEAD = "What the old lens count would have said (it decides nothing now):"
+
+
 def _summary_check_line(model_summary: bool) -> str:
-    """The AI text check's line above a model summary. A summary that reaches the page has already passed
-    the READER-5 checks (a number, a name, a role or a count it got wrong WITHHOLDS it), so it reads "no
-    issues found"; a withheld summary shows nothing here."""
-    from .ai_text_check import top_line
-    return top_line(0) if model_summary else ""
+    """The AI text check's line above a model summary: "" always (PILOT-STRIP-1 item 11). A summary that
+    reaches the page has already passed the checks (a number, a name, a role, a count or a statement that
+    contradicts the report WITHHOLDS it, and the page then prints "Summary withheld: <why>" in its place), so
+    "AI text check: no issues found" told the reader nothing. A line appears there only when the check finds
+    a problem, and that line is the withheld note."""
+    return ""
 
 
 def narration_check_line(report) -> str:

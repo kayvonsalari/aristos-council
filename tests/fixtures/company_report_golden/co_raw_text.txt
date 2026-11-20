@@ -1,13 +1,15 @@
 Company Report - CO Corp (CO)
 What the price requires, and what the record shows
 context: ranked among rivals on 1 measure
+What this is: a check of one company, in two steps. First a safety check of its accounts and its debt (the gate). Then a price test: could someone who buys the shares today and holds them for ten years earn the return this report asks for (the hurdle: the ten-year government bond yield plus 5 points a year)?
+How to read it: the answer comes first, in one plain sentence, then a short summary. The sections after that show the working behind it, and the last part, the workings, is detail you can skip.
 The gate and the price test decide: the answer below comes from fixed rules applied to the company's accounts and its price. The writing explains it and cannot change a number. Nothing here is a recommendation.
 
-Not enough data: accrual ratio (net income and operating cash flow missing); solvency (operating cash flow missing).
-No verdict is given for CO: a missing item is neither a pass nor a fail.
+No answer: the data needed to judge this company is missing.
+Official label: Not enough data: accrual ratio (net income and operating cash flow missing); solvency (operating cash flow missing). No verdict is given for CO: a missing item is neither a pass nor a fail.
 
 What was asked. The question: would a person who buys CO at today's price and holds it for ten years more likely than not earn more than the ten-year government bond yield (USD) plus 5 points a year? Two steps answer it: a gate that looks for broken accounts and unsafe debt, then a price test that works out what growth the price needs and what the shares return if that growth holds.
-What the gate found. Earnings quality could not be evaluated: net income and operating cash flow missing; solvency could not be evaluated: operating cash flow missing; accounting health could not be evaluated: counts only when all 9 checks can be computed; cash runway could not be evaluated: operating cash flow missing. No warning fired. Not evaluated: highly leveraged, distress score, cash runway.
+What the gate found. The gate has four rules that can rule a company out. Earnings quality (are the reported profits backed by cash) could not be evaluated: net income and operating cash flow missing; solvency (does the cash coming in cover the debt) could not be evaluated: operating cash flow missing; accounting health (nine basic health checks on the accounts) could not be evaluated: counts only when all 9 checks can be computed; cash runway (if it is burning cash, how long the cash lasts) could not be evaluated: operating cash flow missing. No warning fired. Not evaluated: highly leveraged, distress score, cash runway.
 What the price requires. The price test has no base: operating cash flow, change in working capital, capital spending, share count missing for the latest year. The growth the price needs could not be worked out: not enough data: operating cash flow, change in working capital, capital spending, share count missing for the latest year.
 What to doubt. Not available: own 5-year growth (only 0 years of earnings per share reported; a compound rate needs at least 3); own 10-year growth (only 0 years of earnings per share reported; a compound rate needs at least 3); analyst consensus (EODHD_API_KEY is not set, so no analyst data was asked for); the downside case (no own 5-year rate to start from). The share count is the basic count, not the diluted one. This figure shows what today's price requires. Studies of company-level implied returns find they rank future returns only partly: where 1 would be perfect, the weakest model scores about 0.2 and the better ones 0.5 to 0.65, and four of five measures do no better than a fixed constant in the cross section. So the figure is a question put to the reader and not an answer. The gate and the cash yield carry the evidence; this figure carries the question.
 What this cannot tell you. These are what the price returns if the stated growth repeats. They are not a forecast and not advice. The method knows nothing of the company's plans, its management or today's news. On the form a backtest could test (no analyst figures) the verdict reads Not enough data. No backtest of this method exists yet, so nothing shows that companies with this reading went on to do better.
@@ -68,6 +70,7 @@ The share price moved +110% over twelve months and +36% over six.
 Valuation:
 Its valuation band could not be read: no monthly price history in the 5-year window.
 Operating profit over enterprise value: 0.0%.
+That figure uses the data provider's market value at the time of the run and the latest quarterly balance sheet. The valuation band under the workings uses the last closing price and the latest annual accounts, so the two can differ by a few tenths of a point.
 Analysts:
 Analyst forecasts are not shown: EODHD_API_KEY is not set, so no analyst data was asked for.
 Where it sits among rivals:
@@ -88,7 +91,7 @@ PRICE AND CASH (no comparison group; they do not vote)
   annualised volatility 1.5%
   not stated — period labels unavailable
   not stated — trailing EPS not reported
-  trailing P/E 22.5, twelve months to the latest reported quarter
+  trailing P/E 22.5, twelve months to the latest reported quarter (the data provider's own figure)
   not stated — no analyst consensus EPS for this year
   not stated — no analyst consensus EPS for next year
   Recent news: not shown — test fixture: no news modelled
@@ -98,7 +101,7 @@ ABSOLUTE READINGS (no comparison group; they do not vote)
     - owes $600 net of cash
     - total debt $1,000
     - cash and short-term investments $400
-    - would take 2.4 years of operating cash flow to repay its debt
+    - would take 2.4 years of operating cash flow to repay its debt after cash
     - not stated — interest expense is not reported
     - not stated — free cash flow is not reported
   Growth record (see Sources)
@@ -114,11 +117,11 @@ WHAT ANALYSTS SAY (a mark: it does not vote and changes no verdict) (see Sources
 
 RELATIVE VIEW (PEER RANKS): NO LONGER VOTES
   How the company ranks against similar companies, lens by lens. These ranks used to decide the verdict. They no longer decide anything here; they are kept for comparison and carry their track records.
-  HOLD, on the one lens that voted (Magic Formula RAW, 10th of 14).
+  What the old lens count would have said (it decides nothing now): HOLD, on the one lens that voted (Magic Formula RAW, 10th of 14).
   Track record: 1 behind random picks.
   Lens               Vote or mark       Track record              Reason
   Magic Formula RAW  HOLD - 10th of 14  behind random picks here  return on invested capital 14th of 14 against 12-month price momentum 1st of 14
-  Track record: whether this lens beat its industry group in a ten-year test. It describes the lens, not the company, and changes no vote. Full definitions under Lens notes.
+  Track record: whether this lens beat its industry group in a ten-year test. It describes the lens, not the company, and changes no vote. Full definitions under Lens descriptions.
   Track record from tests on Semiconductors companies, 10 years to Oct 2026
 
 PEERS (who this company would be measured against):
@@ -138,11 +141,12 @@ PEERS (who this company would be measured against):
   P10.US                     P10 Corp                             US                $20.0bn         $20.0bn                               3  Semiconductors
   P11.US                     P11 Corp                             US                $20.0bn         $20.0bn                               2  Semiconductors
   P12.US                     P12 Corp                             US                $20.0bn         $20.0bn                               1  Semiconductors
+  Market caps in this table are from the index snapshot of 2026-09-26, for every company including this one, so that all rows are sized on the same day. Today's share price gives a different figure.
   How this peer group was built:
     · index snapshot 2026-09-26; 13 distinct companies among 13 peers
     · matched on: GICS only 0, EODHD label only 0, both 13
 
-LENS NOTES (what each lens asks, its full reason, its track record)
+LENS DESCRIPTIONS (what each lens asks, its full reason, its track record)
   passed the test here: in this industry the lens beat the group average by at least 2 points a year in at least 6 of 10 years, and fewer than 1 in 20 random pickers matched it.
   passed the bar here, luck not ruled out: in this industry the lens beat the group average by at least 2 points a year in at least 6 of 10 years, but more than 1 in 20 random pickers matched it, so luck is not ruled out.
   behind random picks here: in this industry at least 9 in 10 random pickers did as well or better than the lens.

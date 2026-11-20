@@ -583,12 +583,23 @@ def test_b24_e9_the_page_marks_flagged_sentences_and_keeps_the_full_list_in_the_
     assert "AI text check: no issues found" in [str(c.value) for c in _render(report).caption]
 
 
-def test_b24_e9_a_model_summary_gets_the_ai_text_check_line(tmp_path):
+def test_b24_e9_a_model_summary_gets_no_ai_text_check_line_when_nothing_is_wrong(tmp_path):
+    """PILOT-STRIP-1 item 11 (this test used to pin the opposite): a summary that reached the page passed its
+    checks, so "AI text check: no issues found" said nothing and is gone. A problem still shows a line: the
+    summary is withheld and "Summary withheld: <why>" stands where it would have been."""
     from tests.test_company_report import RAW, _Writer, _fields, _run
     probe = _run([RAW], tmp_path=tmp_path, save=False)
     rep = _run([RAW], tmp_path=tmp_path, with_summary=True, reader_runner=_Writer(_fields(probe)), save=False)
     assert rep.summary.available
-    assert "AI text check: no issues found" in [str(c.value) for c in _render(rep).caption]
+    caps = [str(c.value) for c in _render(rep).caption]
+    assert not any("AI text check" in c for c in caps)
+    bad = dict(_fields(probe))
+    bad["doubt"] = bad["doubt"] + " Its profit grew 777 percent."
+    held = _run([RAW], tmp_path=tmp_path, with_summary=True, reader_runner=_Writer(bad), save=False)
+    assert not held.summary.available
+    at = _render(held)
+    shown = [str(e.value) for kind in ("caption", "markdown", "info", "warning") for e in getattr(at, kind)]
+    assert any("withheld" in c and "number not in the facts: 777" in c for c in shown), held.summary.note
 
 
 def test_b24_e9_the_marker_has_amber_css_and_reads_on_hover_or_tap():
