@@ -35,6 +35,9 @@ PRODUCT = "Aristos"
 DARK = {
     "bg": "#0E1217", "panel": "#161D26", "border": "#263241", "text": "#E6EAF0",
     "muted": "#8B97A8", "accent": "#7FB2FF",
+    # PAGE-LAYOUT-1: text ON the accent. Streamlit drew the run button's label white on this pale blue
+    # (contrast 2.2 to 1), which read as a greyed-out button.
+    "on_accent": "#0E1217",
     "buy_fg": "#6FD3AA", "buy_bg": "rgba(63,182,139,.16)",
     "hold_fg": "#EBC46E", "hold_bg": "rgba(230,178,70,.16)",
     "sell_fg": "#F2858A", "sell_bg": "rgba(229,72,77,.18)",
@@ -45,6 +48,7 @@ DARK = {
 LIGHT = {
     "bg": "#F5F7FA", "panel": "#FFFFFF", "border": "#D3DBE6", "text": "#16202C",
     "muted": "#526074", "accent": "#1D5FC0",
+    "on_accent": "#FFFFFF",
     "buy_fg": "#0A6B46", "buy_bg": "rgba(34,150,100,.14)",
     "hold_fg": "#7A5300", "hold_bg": "rgba(210,150,20,.18)",
     "sell_fg": "#A3202A", "sell_bg": "rgba(210,50,60,.13)",
@@ -207,14 +211,74 @@ def css(theme: str = "dark") -> str:
   font-size: .84rem; color: var(--ar-text); }}
 .ar-hint {{ color: var(--ar-muted); font-size: .84rem; }}
 
+/* PAGE-LAYOUT-1: the logo in the page's own column (pilot page). Streamlit's header logo sits in the top
+   bar, which this stylesheet makes zero-height, so it was drawn half above the window. */
+.ar-logo {{ margin: 4px 0 18px; line-height: 0; }}
+/* object-fit: Streamlit gives a markdown image "scale-down", which drew the logo at its file size (32px)
+   in the middle of the taller box, so it was neither bigger nor at the column's left edge */
+.ar-logo img {{ height: {LOGO_HEIGHT_PX}px; width: auto; max-width: 100%; display: block;
+  object-fit: contain !important; object-position: left center; }}
+/* PAGE-LAYOUT-1: the run button is the page's one action: solid accent, a label that contrasts with it
+   (STREAMLIT INTERNAL: stBaseButton-primary is the testid of a type="primary" button) */
+[data-testid="stBaseButton-primary"], [data-testid="stBaseButton-primary"]:focus:not(:active) {{
+  background: var(--ar-accent) !important; border-color: var(--ar-accent) !important;
+  color: {p['on_accent']} !important; font-weight: 600; padding: .5rem 1.15rem; }}
+[data-testid="stBaseButton-primary"] p {{ color: {p['on_accent']} !important; font-weight: 600; }}
+[data-testid="stBaseButton-primary"]:hover {{ filter: brightness(1.1); }}
+[data-testid="stBaseButton-primary"]:disabled {{ opacity: .45; filter: none; }}
+/* the start panel when it sits ABOVE the search box: shorter, so the box and the button stay in view */
+.ar-empty.ar-empty-top {{ padding: 22px 20px 18px; margin: 4px 0 6px; }}
+.ar-empty.ar-empty-top h3 {{ font-size: 1.35rem; }}
+.ar-empty.ar-empty-top .ar-steps {{ margin-bottom: 0; }}
+
 /* phone width: cards stack (the grid already wraps), the header lets the price drop under the name */
 @media (max-width: 640px) {{
+  .ar-logo img {{ height: {LOGO_HEIGHT_PHONE_PX}px; }}
+  .ar-empty.ar-empty-top {{ padding: 16px 14px 14px; }}
+  .ar-empty.ar-empty-top h3 {{ font-size: 1.15rem; }}
   [data-testid="stMainBlockContainer"] {{ padding-top: 3rem !important; }}   /* room for the sidebar toggle */
   .ar-name {{ font-size: 1.35rem; }}
   .ar-price {{ text-align: left; }}
   .ar-card {{ padding: 14px; }}
 }}
 """
+
+
+# PAGE-LAYOUT-1 - the logo drawn in the page column, and the narrow start page.
+LOGO_HEIGHT_PX = 48            # the header logo Streamlit drew was 32px and half off the page
+LOGO_HEIGHT_PHONE_PX = 40
+START_COLUMN_PX = 760
+
+# Before a company is picked the page is a short form: one centred column, not a 1,280px-wide strip with
+# everything on its left edge. It is a max-width, so a phone (narrower than the cap) is unaffected. Removed
+# once a report is on the page, which then uses the full width again.
+START_WIDTH_CSS = (f'[data-testid="stMainBlockContainer"] {{ max-width: {START_COLUMN_PX}px !important; '
+                   f'margin-left: auto !important; margin-right: auto !important; }}')
+
+
+# The pilot page has no sidebar, so the phone layout does not need the 3rem of top room kept for the
+# sidebar toggle; without this the logo sat 52px down a phone screen.
+PILOT_PAGE_CSS = ('@media (max-width: 640px) { [data-testid="stMainBlockContainer"] '
+                  '{ padding-top: 1.1rem !important; } }')
+
+
+def start_width_style() -> str:
+    return f"<style>{START_WIDTH_CSS}</style>"
+
+
+def pilot_page_style() -> str:
+    return f"<style>{PILOT_PAGE_CSS}</style>"
+
+
+def logo_html(svg_text: str) -> str:
+    """The logo as one inline image (the SVG file's own text, base64 in a data URI), for the page column.
+    "" when there is no SVG text: a missing image must never stop the page."""
+    import base64
+    text = (svg_text or "").strip()
+    if not text.startswith("<svg"):
+        return ""
+    data = base64.b64encode(text.encode("utf-8")).decode("ascii")
+    return _one_line(f'<div class="ar-logo"><img alt="Aristos" src="data:image/svg+xml;base64,{data}"></div>')
 
 
 def inject() -> None:
@@ -287,10 +351,14 @@ def table(headers: list[str], rows: list[list[str]], *, raw_cols: Iterable[int] 
                      f'<tbody>{"".join(body)}</tbody></table></div>')
 
 
-def empty_panel(title: str, sentence: str, steps: Iterable[str], hint: str) -> str:
+def empty_panel(title: str, sentence: str, steps: Iterable[str], hint: str, *, top: bool = False) -> str:
+    """``top`` (PAGE-LAYOUT-1): the shorter form for the panel drawn ABOVE the search box; an empty hint
+    is then left out so it takes no line."""
     chips = "".join(f'<span class="ar-step">{esc(s)}</span>' for s in steps)
-    return _one_line(f'<div class="ar-card ar-empty"><h3>{esc(title)}</h3><p>{esc(sentence)}</p>'
-                     f'<div class="ar-steps">{chips}</div><div class="ar-hint">{esc(hint)}</div></div>')
+    cls = "ar-card ar-empty ar-empty-top" if top else "ar-card ar-empty"
+    hint_html = "" if (top and not hint) else f'<div class="ar-hint">{esc(hint)}</div>'
+    return _one_line(f'<div class="{cls}"><h3>{esc(title)}</h3><p>{esc(sentence)}</p>'
+                     f'<div class="ar-steps">{chips}</div>{hint_html}</div>')
 
 
 # --------------------------------------------------------------------------- #

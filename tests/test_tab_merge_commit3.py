@@ -194,8 +194,7 @@ def test_a_subcap_pick_from_the_find_box_shows_the_line_and_runs_small(monkeypat
 
     _patch_real_adapter(monkeypatch)
     at = _company_mode(_run_tab())
-    at.text_input(key="cc_find").set_value("small").run()
-    at.button(key="cc_find_use").click().run()
+    at.text_input(key="cc_ticker").set_value("small").run()
     assert not at.exception
 
     blob = " ".join(str(getattr(i, "value", "")) for i in at.info)
@@ -228,8 +227,7 @@ def test_an_over_5bn_pick_shows_no_line_and_runs_normally(monkeypatch):
 
     _patch_real_adapter(monkeypatch)
     at = _company_mode(_run_tab())
-    at.text_input(key="cc_find").set_value("big").run()
-    at.button(key="cc_find_use").click().run()
+    at.text_input(key="cc_ticker").set_value("big").run()
     assert not at.exception
     blob = " ".join(str(getattr(i, "value", "")) for i in at.info)
     assert r"below the \$5bn rule" not in blob

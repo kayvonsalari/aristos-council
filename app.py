@@ -2503,6 +2503,46 @@ def small_company_notice(cap_usd: Optional[float], *, live_fetched: bool) -> str
            f"range.{tail}")
 
 
+COMPANY_BOX_HINT = "Name or ticker, e.g. Novo Nordisk or NVO"
+NO_COMPANY_YET = "Type a company name or ticker first."
+AS_TYPED_NOTE = "Not in the local market index. It will be looked up exactly as typed."
+
+
+def match_label(m, *, cohorts_known: bool) -> str:
+    where = f"{m.name} ({m.ticker}) — {m.where} — {m.market_cap_display}"
+    if m.cohorts:
+        return f"{where} — {', '.join(m.cohorts)}"
+    return where if not cohorts_known else f"{where} — no cohort"
+
+
+def match_list_key(query: str) -> str:
+    return f"cc_find_pick::{query.strip().lower()}"
+
+
+def pick_company(query: str):
+    """``(ticker, market cap in USD or None)`` for what is typed in the one company box.
+
+    Empty text: no company. Matches in the local index: they are listed under the box, best first (an
+    exact ticker leads, then the largest company), and the selected one is the company; its index size
+    is carried so the small-company check does not look it up twice. No match: the text itself, as a
+    ticker, exactly as the old Ticker box took it."""
+    if not query:
+        return "", None
+    from aristos_council.company_search import search_companies
+    found = search_companies(query)
+    if not found.matches:
+        st.caption(AS_TYPED_NOTE)
+        return normalize_ticker(query), None
+    if not found.cohorts_known:
+        st.caption("No cohort has been built locally yet, so cohort membership is not shown.")
+    options = [match_label(m, cohorts_known=found.cohorts_known) for m in found.matches]
+    # One list PER typed text (the text is part of the widget's key). With one shared key the list went on
+    # showing the previous company's name after the text changed, while the new company was the one run.
+    picked = st.selectbox("Matches", options, key=match_list_key(query), label_visibility="collapsed")
+    chosen = found.matches[options.index(picked)] if picked in options else found.matches[0]
+    return normalize_ticker(chosen.ticker), chosen.market_cap_usd
+
+
 def render_input() -> InputChoice:
     """ONE switch — "Company" or "Cohort / list" — never inferred from the ticker box's
     contents. Hidden (not greyed) in ETF mode: the market index covers listed common
@@ -2562,44 +2602,17 @@ def render_input() -> InputChoice:
         # pick a match, it fills the box below. Offline (the local market index and the
         # built cohorts' own member lists only, each read once and cached) — no network
         # call, no holdings data.
+        # PAGE-LAYOUT-1 — ONE box (it was a search box that filled a second "Ticker" box through a "Use
+        # this company" button). Type part of a name or a ticker: the matches from the local market index
+        # appear under it with the best one selected, and that is the company. Nothing in the index
+        # matches: the text is used as the ticker exactly as typed (a Yahoo symbol such as RIO.L, or a name
+        # the index does not hold). No example ticker is shown in the box as if it were a value. The key
+        # stays "cc_ticker": the click-through from a list result and the remembered text both write it.
         st.markdown("**Find a company**")
-        find_query = st.text_input(
-            "Find a company", value="", key="cc_find", label_visibility="collapsed",
-            placeholder="Name or ticker, e.g. Novo Nordisk or NVO")
-        if find_query.strip():
-            from aristos_council.company_search import search_companies
-            found = search_companies(find_query)
-            if not found.matches:
-                st.caption("No match in the local market index.")
-            else:
-                if not found.cohorts_known:
-                    st.caption("No cohort has been built locally yet, so cohort "
-                              "membership is not shown.")
-
-                def _match_label(m) -> str:
-                    where = f"{m.name} ({m.ticker}) — {m.where} — {m.market_cap_display}"
-                    if m.cohorts:
-                        return f"{where} — {', '.join(m.cohorts)}"
-                    return where if not found.cohorts_known else f"{where} — no cohort"
-
-                match_options = [_match_label(m) for m in found.matches]
-                picked = st.selectbox("Matches", match_options, key="cc_find_pick",
-                                      label_visibility="collapsed")
-                if st.button("Use this company", key="cc_find_use"):
-                    chosen = found.matches[match_options.index(picked)]
-                    st.session_state["cc_ticker"] = chosen.ticker
-                    # SMALLCAP-VIEW-1 — the find box already paid for this fetch; carry
-                    # it to the cap-resolution check below so a hand-edit of the ticker
-                    # box (NOT matching what was just picked) can tell "stale pick" from
-                    # "still the one I picked" and never trust a cap for the wrong name.
-                    st.session_state["cc_matched_cap"] = (chosen.ticker, chosen.market_cap_usd)
-                    st.rerun()
-
         remember_text("cc_ticker", "company", scope="all")      # SHARED-OPTIONS-1
-        ticker = normalize_ticker(st.text_input("Ticker", value="", key="cc_ticker",
-                                                placeholder="MU"))
-        matched = st.session_state.get("cc_matched_cap")
-        match_cap_usd = matched[1] if matched and matched[0] == ticker else None
+        query = st.text_input("Find a company", value="", key="cc_ticker", label_visibility="collapsed",
+                              placeholder=COMPANY_BOX_HINT).strip()
+        ticker, match_cap_usd = pick_company(query)
 
         small_line = ""
         include_small = False
@@ -2823,7 +2836,20 @@ def render_run_tab() -> None:
     EXISTING page, in its EXISTING order (Part 2 reorders the company page)."""
     st.subheader(PILOT_HEADING if pilot_mode() else "Analyse — one company, or a cohort")
     st.caption(COMPANY_TOP_LINE if company_path_active() else TOP_LINE)
-    _index_age_caption()
+    start_slots = None
+    if pilot_mode():
+        # PAGE-LAYOUT-1. The explanation sits ABOVE the search box (it was under the button, below the
+        # fold on a phone), and the start page is one narrow centred column. Both are placeholders so
+        # that a run started further down this same script can clear them once its report is drawn.
+        # The "Market index: peer sizes ..." line is not shown here: it is a working detail, and the
+        # report already prints it in the workings (relative view), where the peer group it dates is.
+        panel_slot, width_slot = st.empty(), st.empty()
+        start_slots = (panel_slot, width_slot)
+        if st.session_state.get("cc_report") is None:
+            panel_slot.markdown(ui_style.empty_panel(*PILOT_START_PANEL, top=True), unsafe_allow_html=True)
+            width_slot.markdown(ui_style.start_width_style(), unsafe_allow_html=True)
+    else:
+        _index_age_caption()
 
     choice = render_input()
 
@@ -2837,7 +2863,7 @@ def render_run_tab() -> None:
     labels = choice_labels(choices)          # kept, as before (unused; see the Part 2 cleanup)
 
     if choice.kind == INPUT_COMPANY:
-        _render_company_run(choice, choices)
+        _render_company_run(choice, choices, start_slots=start_slots)
     else:
         _render_list_run(choice, choices)
 
@@ -2884,7 +2910,7 @@ PILOT_NO_KEY_NOTE = ("No ANTHROPIC_API_KEY was found in the environment or `.env
 PILOT_START_PANEL = (START_PANEL[0], START_PANEL[1], ("1. Find a company", "2. Run"), "")
 
 
-def _render_company_run(choice: InputChoice, choices) -> None:
+def _render_company_run(choice: InputChoice, choices, start_slots=None) -> None:
     """The company-input half of the Analyse tab — unchanged from the pre-merge Company
     Check tab, except: options come from the shared block (commit 1), and
     ``include_small``/the adapter come from ``render_input``'s own auto-detection
@@ -2912,8 +2938,13 @@ def _render_company_run(choice: InputChoice, choices) -> None:
                                          with_reader=with_summary,
                                          with_council=with_council,
                                          with_judges=with_judges)),
-                    type="primary", disabled=not choice.ticker or not strategies,
+                    type="primary", disabled=not strategies,
                     key="cc_run")
+    # PAGE-LAYOUT-1: the button is never greyed out for an empty box (it read as broken). Pressing it with
+    # nothing typed says what to do instead.
+    if run and not choice.ticker:
+        st.warning(NO_COMPANY_YET)
+        run = False
     if run:
         run_start = datetime.now(timezone.utc)       # run-start for the download name (ITEM 6)
         status = st.status("Starting…", expanded=True)
@@ -2931,16 +2962,18 @@ def _render_company_run(choice: InputChoice, choices) -> None:
             st.session_state.pop("cc_report", None)
         else:
             status.update(label="Done.", state="complete")
+            for slot in (start_slots or ()):          # PAGE-LAYOUT-1: the report takes the full width, no start panel
+                slot.empty()
             st.session_state["cc_report"] = report
             st.session_state["cc_run_start"] = run_start
             st.session_state["cc_report_input"] = (asset_mode(), choice.ticker)
 
     _drop_results_from_another_asset("cc_report", "cc_report_input")
     report = st.session_state.get("cc_report")
-    if report is None and not run:
-        # UI-POLISH-1 item 6: the start state - a quiet panel where the result will appear
-        st.markdown(ui_style.empty_panel(*(PILOT_START_PANEL if pilot_mode() else START_PANEL)),
-                    unsafe_allow_html=True)
+    if report is None and not run and start_slots is None:
+        # UI-POLISH-1 item 6: the start state - a quiet panel where the result will appear. (The pilot
+        # page draws its panel ABOVE the search box, in render_run_tab: PAGE-LAYOUT-1.)
+        st.markdown(ui_style.empty_panel(*START_PANEL), unsafe_allow_html=True)
     if report is not None:
         st.divider()
         _note = _stale_results_note(
@@ -3788,16 +3821,23 @@ def main() -> None:
     _inject_chrome()
     ui_style.inject()               # UI-POLISH-1: the ONE custom-CSS block (chips, cards, fonts)
     install_dollar_safety(st)       # DOLLAR-MATH-1: every markdown-rendering call is $-safe
-    try:                            # the logo; st.logo exists from Streamlit 1.35
-        st.logo(str(LOGO_LIGHT_PATH if ui_style.theme_name() == "light" else LOGO_PATH),
-                icon_image=str(MARK_PATH), size="large")
-    except Exception:               # noqa: BLE001 - a missing image must never stop the app
-        pass
-
+    logo_path = LOGO_LIGHT_PATH if ui_style.theme_name() == "light" else LOGO_PATH
     if pilot_mode():
+        # PAGE-LAYOUT-1 (fault 23 of the 2026-11-20 bug hunt): the pilot page has no sidebar, so st.logo put
+        # the small "A" icon in the top bar, which the stylesheet makes zero-height: it was drawn 32px high
+        # with its top half above the window. The full logo is drawn in the page's own column instead.
+        try:
+            st.markdown(ui_style.pilot_page_style(), unsafe_allow_html=True)
+            st.markdown(ui_style.logo_html(logo_path.read_text(encoding="utf-8")), unsafe_allow_html=True)
+        except Exception:           # noqa: BLE001 - a missing image must never stop the app
+            pass
         # PILOT-STRIP-1 (items 1 to 3): no asset-type switch, no Display section, no Scoreboard tab. One page.
         render_run_tab()
         return
+    try:                            # the logo; st.logo exists from Streamlit 1.35
+        st.logo(str(logo_path), icon_image=str(MARK_PATH), size="large")
+    except Exception:               # noqa: BLE001 - a missing image must never stop the app
+        pass
 
     with st.sidebar:
         # ASSET-MODE-1 — the one control that decides what every picker offers. In the
